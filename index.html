@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>牙材庫存管理系統</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -389,9 +388,37 @@ tr.low-stock:hover { background: #fed7d7; }
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
-const SUPABASE_URL = 'https://kvnwfesbnxzoqpdgauov.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_PEW2Ev6PCeRfd_V_kRZf9g_Y20b9yBE';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const API_URL = "https://kvnwfesbnxzoqpdgauov.supabase.co/rest/v1";
+const API_KEY = "sb_publishable_PEW2Ev6PCeRfd_V_kRZf9g_Y20b9yBE";
+const headers = {
+  "apikey": API_KEY,
+  "Authorization": "Bearer " + API_KEY,
+  "Content-Type": "application/json",
+  "Prefer": "return=representation"
+};
+
+async function dbSelect(table, query) {
+  var res = await fetch(API_URL + "/" + table + "?select=*" + (query ? "&" + query : ""), {headers: headers});
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function dbInsert(table, data) {
+  var res = await fetch(API_URL + "/" + table, {method: "POST", headers: headers, body: JSON.stringify(data)});
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function dbUpdate(table, id, data) {
+  var res = await fetch(API_URL + "/" + table + "?id=eq." + id, {method: "PATCH", headers: headers, body: JSON.stringify(data)});
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function dbDelete(table, id) {
+  var res = await fetch(API_URL + "/" + table + "?id=eq." + id, {method: "DELETE", headers: headers});
+  if (!res.ok) throw new Error(await res.text());
+}
 
 let materials = [];
 let suppliers = [];
@@ -429,9 +456,7 @@ function openModal(id) {
 // ===== Materials =====
 async function loadMaterials() {
   try {
-    var resp = await supabase.from('materials').select('*').order('name');
-    if (resp.error) throw resp.error;
-    materials = resp.data || [];
+    materials = await dbSelect('materials', 'order=name');
     renderMaterials(materials);
   } catch (e) {
     showToast('載入品項失敗：' + e.message, 'error');
@@ -521,13 +546,11 @@ async function saveMaterial() {
 
   try {
     var id = document.getElementById('materialId').value;
-    var resp;
     if (id) {
-      resp = await supabase.from('materials').update(data).eq('id', parseInt(id));
+      await dbUpdate('materials', parseInt(id), data);
     } else {
-      resp = await supabase.from('materials').insert(data);
+      await dbInsert('materials', data);
     }
-    if (resp.error) throw resp.error;
     showToast(id ? '品項已更新' : '品項已新增', 'success');
     closeModal('materialModal');
     await loadMaterials();
@@ -545,8 +568,7 @@ function confirmDeleteMaterial(id) {
 
 async function deleteMaterial(id) {
   try {
-    var resp = await supabase.from('materials').delete().eq('id', id);
-    if (resp.error) throw resp.error;
+    await dbDelete('materials', id);
     showToast('品項已刪除', 'success');
     closeModal('deleteModal');
     await loadMaterials();
@@ -601,17 +623,15 @@ async function saveStock() {
   var newStock = type === 'in' ? m.current_stock + qty : m.current_stock - qty;
 
   try {
-    var logResp = await supabase.from('inventory_logs').insert({
+    await dbInsert('inventory_logs', {
       material_id: materialId,
       type: type,
       quantity: qty,
       operator: operator,
       notes: document.getElementById('stockNotes').value.trim()
     });
-    if (logResp.error) throw logResp.error;
 
-    var updateResp = await supabase.from('materials').update({ current_stock: newStock }).eq('id', materialId);
-    if (updateResp.error) throw updateResp.error;
+    await dbUpdate('materials', materialId, { current_stock: newStock });
 
     showToast((type === 'in' ? '進貨' : '領料') + '成功', 'success');
     closeModal('stockModal');
@@ -627,24 +647,24 @@ async function loadLogs() {
   body.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>';
 
   try {
-    var query = supabase.from('inventory_logs').select('*, materials(name)').order('created_at', { ascending: false });
+    var params = 'select=*,materials(name)&order=created_at.desc';
 
     var materialFilter = document.getElementById('logMaterialFilter').value;
-    if (materialFilter) query = query.eq('material_id', parseInt(materialFilter));
+    if (materialFilter) params += '&material_id=eq.' + parseInt(materialFilter);
 
     var typeFilter = document.getElementById('logTypeFilter').value;
-    if (typeFilter) query = query.eq('type', typeFilter);
+    if (typeFilter) params += '&type=eq.' + typeFilter;
 
     var dateFrom = document.getElementById('logDateFrom').value;
-    if (dateFrom) query = query.gte('created_at', dateFrom + 'T00:00:00');
+    if (dateFrom) params += '&created_at=gte.' + dateFrom + 'T00:00:00';
 
     var dateTo = document.getElementById('logDateTo').value;
-    if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59');
+    if (dateTo) params += '&created_at=lte.' + dateTo + 'T23:59:59';
 
-    var resp = await query;
-    if (resp.error) throw resp.error;
+    var res = await fetch(API_URL + "/inventory_logs?" + params, {headers: headers});
+    if (!res.ok) throw new Error(await res.text());
 
-    var logs = resp.data || [];
+    var logs = await res.json();
     if (logs.length === 0) {
       body.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">📋</div><p>尚無進出紀錄</p></div></td></tr>';
       return;
@@ -687,9 +707,7 @@ async function loadSuppliers() {
   var body = document.getElementById('suppliersBody');
   body.innerHTML = '<tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr>';
   try {
-    var resp = await supabase.from('suppliers').select('*').order('name');
-    if (resp.error) throw resp.error;
-    suppliers = resp.data || [];
+    suppliers = await dbSelect('suppliers', 'order=name');
     if (suppliers.length === 0) {
       body.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">🏢</div><p>尚無供應商資料</p></div></td></tr>';
       return;
@@ -746,13 +764,11 @@ async function saveSupplier() {
 
   try {
     var id = document.getElementById('supplierId').value;
-    var resp;
     if (id) {
-      resp = await supabase.from('suppliers').update(data).eq('id', parseInt(id));
+      await dbUpdate('suppliers', parseInt(id), data);
     } else {
-      resp = await supabase.from('suppliers').insert(data);
+      await dbInsert('suppliers', data);
     }
-    if (resp.error) throw resp.error;
     showToast(id ? '供應商已更新' : '供應商已新增', 'success');
     closeModal('supplierModal');
     await loadSuppliers();
@@ -770,8 +786,7 @@ function confirmDeleteSupplier(id) {
 
 async function deleteSupplier(id) {
   try {
-    var resp = await supabase.from('suppliers').delete().eq('id', id);
-    if (resp.error) throw resp.error;
+    await dbDelete('suppliers', id);
     showToast('供應商已刪除', 'success');
     closeModal('deleteModal');
     await loadSuppliers();
@@ -782,12 +797,11 @@ async function deleteSupplier(id) {
 
 async function loadSupplierOptions(selectId) {
   try {
-    var resp = await supabase.from('suppliers').select('id,name').order('name');
-    if (resp.error) throw resp.error;
+    var supList = await dbSelect('suppliers', 'order=name');
     var sel = document.getElementById(selectId);
     var current = sel.value;
     sel.innerHTML = '<option value="">請選擇</option>' +
-      (resp.data || []).map(function(s) { return '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>'; }).join('');
+      supList.map(function(s) { return '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>'; }).join('');
     sel.value = current;
   } catch (e) { /* ignore */ }
 }

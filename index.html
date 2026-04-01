@@ -823,8 +823,16 @@ document.querySelectorAll('.modal-overlay').forEach(function(el) {
 
 // Init
 (async function() {
-  await loadMaterials();
-  populateLogMaterialFilter();
+  try {
+    console.log('Init: loading materials...');
+    await loadMaterials();
+    console.log('Init: materials loaded, populating filter...');
+    populateLogMaterialFilter();
+    console.log('Init: done');
+  } catch(e) {
+    console.error('Init error:', e);
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:red"><h2>載入失敗</h2><p>' + e.message + '</p></div>';
+  }
 })();
 </script>
 </body>

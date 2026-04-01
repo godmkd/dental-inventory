@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>牙材庫存管理系統</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #1a365d;
+  --primary-light: #2a4a7f;
+  --primary-dark: #0f2440;
+  --accent: #3182ce;
+  --danger: #e53e3e;
+  --danger-bg: #fff5f5;
+  --success: #38a169;
+  --warning: #dd6b20;
+  --bg: #f7fafc;
+  --card: #ffffff;
+  --text: #2d3748;
+  --text-light: #718096;
+  --border: #e2e8f0;
+  --radius: 8px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* Header */
+.header { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: white; padding: 16px 24px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+.header-inner { max-width: 1200px; margin: 0 auto; }
+.header h1 { font-size: 1.4rem; margin-bottom: 12px; }
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 8px 20px; border: none; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95rem; transition: all 0.2s; }
+.tab:hover { background: rgba(255,255,255,0.2); }
+.tab.active { background: var(--bg); color: var(--primary); font-weight: 600; }
+
+/* Main */
+.main { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* Toolbar */
+.toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.search-box { flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+.search-box:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(49,130,206,0.1); }
+.btn { padding: 10px 18px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #2b6cb0; }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { background: #2f855a; }
+.btn-warning { background: var(--warning); color: white; }
+.btn-warning:hover { background: #c05621; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { background: #c53030; }
+.btn-sm { padding: 6px 12px; font-size: 0.82rem; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { background: var(--bg); }
+
+/* Table */
+.table-wrap { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { background: var(--primary); color: white; padding: 12px 14px; text-align: left; font-size: 0.85rem; font-weight: 600; white-space: nowrap; position: sticky; top: 0; }
+td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+tr:hover { background: #edf2f7; }
+tr.low-stock { background: var(--danger-bg); }
+tr.low-stock:hover { background: #fed7d7; }
+.status-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
+.status-ok { background: #c6f6d5; color: #22543d; }
+.status-low { background: #fed7d7; color: #9b2c2c; }
+.actions-cell { display: flex; gap: 4px; flex-wrap: nowrap; }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; padding: 20px; }
+.modal-overlay.show { display: flex; }
+.modal { background: var(--card); border-radius: 12px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.modal-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { font-size: 1.1rem; color: var(--primary); }
+.modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-light); padding: 4px; }
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; margin-bottom: 6px; font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(49,130,206,0.1); }
+.form-group textarea { resize: vertical; min-height: 60px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Log filters */
+.filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.filter-bar select, .filter-bar input { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.9rem; outline: none; }
+.filter-bar select:focus, .filter-bar input:focus { border-color: var(--accent); }
+
+/* Toast */
+.toast-container { position: fixed; top: 80px; right: 20px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 12px 20px; border-radius: var(--radius); color: white; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideIn 0.3s ease; max-width: 360px; }
+.toast-success { background: var(--success); }
+.toast-error { background: var(--danger); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* Loading */
+.loading { text-align: center; padding: 40px; color: var(--text-light); }
+.spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Empty state */
+.empty { text-align: center; padding: 60px 20px; color: var(--text-light); }
+.empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+/* Log type badge */
+.log-in { color: var(--success); font-weight: 600; }
+.log-out { color: var(--danger); font-weight: 600; }
+
+/* RWD */
+@media (max-width: 768px) {
+  .header h1 { font-size: 1.1rem; }
+  .tab { padding: 6px 14px; font-size: 0.85rem; }
+  .main { padding: 12px; }
+  .toolbar { flex-direction: column; }
+  .search-box { min-width: 100%; }
+  .btn { padding: 8px 14px; font-size: 0.85rem; }
+  .form-row { grid-template-columns: 1fr; }
+  .filter-bar { flex-direction: column; }
+  .filter-bar select, .filter-bar input { width: 100%; }
+  th, td { padding: 8px 10px; font-size: 0.8rem; }
+  .actions-cell { flex-direction: column; gap: 4px; }
+  .actions-cell .btn-sm { width: 100%; justify-content: center; }
+  .hide-mobile { display: none; }
+}
+@media (max-width: 480px) {
+  .tabs { overflow-x: auto; }
+  .tab { flex-shrink: 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <h1>🦷 牙材庫存管理系統</h1>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('inventory')">庫存總覽</button>
+      <button class="tab" onclick="switchTab('logs')">進出紀錄</button>
+      <button class="tab" onclick="switchTab('suppliers')">供應商</button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- 庫存總覽 -->
+  <div id="page-inventory" class="page active">
+    <div class="toolbar">
+      <input type="text" class="search-box" id="searchInput" placeholder="搜尋品項名稱..." oninput="filterMaterials()">
+      <button class="btn btn-primary" onclick="openMaterialModal()">＋ 新增品項</button>
+      <button class="btn btn-success" onclick="openStockModal('in')">📥 進貨</button>
+      <button class="btn btn-warning" onclick="openStockModal('out')">📤 領料</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>名稱</th>
+            <th>類別</th>
+            <th class="hide-mobile">規格</th>
+            <th>單位</th>
+            <th>庫存</th>
+            <th>安全庫存</th>
+            <th>狀態</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="materialsBody">
+          <tr><td colspan="8"><div class="loading"><div class="spinner"></div><p>載入中...</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 進出紀錄 -->
+  <div id="page-logs" class="page">
+    <div class="filter-bar">
+      <select id="logMaterialFilter" onchange="loadLogs()">
+        <option value="">全部品項</option>
+      </select>
+      <select id="logTypeFilter" onchange="loadLogs()">
+        <option value="">全部類型</option>
+        <option value="in">進貨</option>
+        <option value="out">領料</option>
+      </select>
+      <input type="date" id="logDateFrom" onchange="loadLogs()">
+      <input type="date" id="logDateTo" onchange="loadLogs()">
+      <button class="btn btn-outline btn-sm" onclick="clearLogFilters()">清除篩選</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>時間</th>
+            <th>品項</th>
+            <th>類型</th>
+            <th>數量</th>
+            <th>操作人</th>
+            <th class="hide-mobile">備註</th>
+          </tr>
+        </thead>
+        <tbody id="logsBody">
+          <tr><td colspan="6"><div class="loading"><div class="spinner"></div><p>載入中...</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 供應商 -->
+  <div id="page-suppliers" class="page">
+    <div class="toolbar">
+      <div style="flex:1"></div>
+      <button class="btn btn-primary" onclick="openSupplierModal()">＋ 新增供應商</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>名稱</th>
+            <th>聯絡人</th>
+            <th>電話</th>
+            <th class="hide-mobile">備註</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="suppliersBody">
+          <tr><td colspan="5"><div class="loading"><div class="spinner"></div><p>載入中...</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Material Modal -->
+<div class="modal-overlay" id="materialModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="materialModalTitle">新增品項</h3>
+      <button class="modal-close" onclick="closeModal('materialModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="materialId">
+      <div class="form-group">
+        <label>名稱 *</label>
+        <input type="text" id="matName" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>類別</label>
+          <input type="text" id="matCategory" placeholder="如：印模材、填充物">
+        </div>
+        <div class="form-group">
+          <label>規格</label>
+          <input type="text" id="matSpec">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>單位</label>
+          <input type="text" id="matUnit" placeholder="如：盒、支、包">
+        </div>
+        <div class="form-group">
+          <label>單價</label>
+          <input type="number" id="matPrice" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>目前庫存</label>
+          <input type="number" id="matStock" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label>安全庫存</label>
+          <input type="number" id="matSafetyStock" min="0" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>供應商</label>
+        <select id="matSupplier">
+          <option value="">請選擇</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <textarea id="matNotes"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('materialModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveMaterial()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Modal -->
+<div class="modal-overlay" id="stockModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="stockModalTitle">進貨</h3>
+      <button class="modal-close" onclick="closeModal('stockModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="stockType">
+      <div class="form-group">
+        <label>品項 *</label>
+        <select id="stockMaterial">
+          <option value="">請選擇品項</option>
+        </select>
+      </div>
+      <div class="form-group" id="stockCurrentInfo" style="display:none;">
+        <div style="padding:10px;background:var(--bg);border-radius:var(--radius);font-size:0.88rem;color:var(--text-light);">
+          目前庫存：<strong id="stockCurrentQty">0</strong>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>數量 *</label>
+        <input type="number" id="stockQty" min="1" value="1">
+      </div>
+      <div class="form-group">
+        <label>操作人 *</label>
+        <input type="text" id="stockOperator">
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <textarea id="stockNotes"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('stockModal')">取消</button>
+      <button class="btn btn-primary" id="stockSubmitBtn" onclick="saveStock()">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- Supplier Modal -->
+<div class="modal-overlay" id="supplierModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="supplierModalTitle">新增供應商</h3>
+      <button class="modal-close" onclick="closeModal('supplierModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="supplierId">
+      <div class="form-group">
+        <label>名稱 *</label>
+        <input type="text" id="supName" required>
+      </div>
+      <div class="form-group">
+        <label>聯絡人</label>
+        <input type="text" id="supContact">
+      </div>
+      <div class="form-group">
+        <label>電話</label>
+        <input type="text" id="supPhone">
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <textarea id="supNotes"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('supplierModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveSupplier()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3>確認刪除</h3>
+      <button class="modal-close" onclick="closeModal('deleteModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="deleteMessage">確定要刪除此項目嗎？此操作無法復原。</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('deleteModal')">取消</button>
+      <button class="btn btn-danger" id="deleteConfirmBtn">確認刪除</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const SUPABASE_URL = 'https://kvnwfesbnxzoqpdgauov.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PEW2Ev6PCeRfd_V_kRZf9g_Y20b9yBE';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let materials = [];
+let suppliers = [];
+
+// Toast
+function showToast(msg, type) {
+  var container = document.getElementById('toastContainer');
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(function() { toast.remove(); }, 3500);
+}
+
+// Tab switching
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+  var tabs = document.querySelectorAll('.tab');
+  var map = { inventory: 0, logs: 1, suppliers: 2 };
+  tabs[map[name]].classList.add('active');
+  document.getElementById('page-' + name).classList.add('active');
+  if (name === 'logs') loadLogs();
+  if (name === 'suppliers') loadSuppliers();
+}
+
+// Modal
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+function openModal(id) {
+  document.getElementById(id).classList.add('show');
+}
+
+// ===== Materials =====
+async function loadMaterials() {
+  try {
+    var resp = await supabase.from('materials').select('*').order('name');
+    if (resp.error) throw resp.error;
+    materials = resp.data || [];
+    renderMaterials(materials);
+  } catch (e) {
+    showToast('載入品項失敗：' + e.message, 'error');
+  }
+}
+
+function renderMaterials(list) {
+  var body = document.getElementById('materialsBody');
+  if (list.length === 0) {
+    body.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">📦</div><p>尚無品項資料</p></div></td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(function(m) {
+    var isLow = m.current_stock < m.safety_stock;
+    return '<tr class="' + (isLow ? 'low-stock' : '') + '">' +
+      '<td><strong>' + esc(m.name) + '</strong></td>' +
+      '<td>' + esc(m.category || '') + '</td>' +
+      '<td class="hide-mobile">' + esc(m.spec || '') + '</td>' +
+      '<td>' + esc(m.unit || '') + '</td>' +
+      '<td><strong>' + m.current_stock + '</strong></td>' +
+      '<td>' + m.safety_stock + '</td>' +
+      '<td><span class="status-badge ' + (isLow ? 'status-low' : 'status-ok') + '">' + (isLow ? '不足' : '正常') + '</span></td>' +
+      '<td><div class="actions-cell">' +
+        '<button class="btn btn-primary btn-sm" onclick="openMaterialModal(' + m.id + ')">編輯</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="confirmDeleteMaterial(' + m.id + ')">刪除</button>' +
+      '</div></td></tr>';
+  }).join('');
+}
+
+function filterMaterials() {
+  var q = document.getElementById('searchInput').value.trim().toLowerCase();
+  if (!q) { renderMaterials(materials); return; }
+  renderMaterials(materials.filter(function(m) {
+    return m.name.toLowerCase().includes(q);
+  }));
+}
+
+function openMaterialModal(id) {
+  document.getElementById('materialId').value = '';
+  document.getElementById('matName').value = '';
+  document.getElementById('matCategory').value = '';
+  document.getElementById('matSpec').value = '';
+  document.getElementById('matUnit').value = '';
+  document.getElementById('matPrice').value = '';
+  document.getElementById('matStock').value = '0';
+  document.getElementById('matSafetyStock').value = '0';
+  document.getElementById('matSupplier').value = '';
+  document.getElementById('matNotes').value = '';
+  loadSupplierOptions('matSupplier');
+
+  if (id) {
+    var m = materials.find(function(x) { return x.id === id; });
+    if (m) {
+      document.getElementById('materialModalTitle').textContent = '編輯品項';
+      document.getElementById('materialId').value = m.id;
+      document.getElementById('matName').value = m.name || '';
+      document.getElementById('matCategory').value = m.category || '';
+      document.getElementById('matSpec').value = m.spec || '';
+      document.getElementById('matUnit').value = m.unit || '';
+      document.getElementById('matPrice').value = m.unit_price || '';
+      document.getElementById('matStock').value = m.current_stock || 0;
+      document.getElementById('matSafetyStock').value = m.safety_stock || 0;
+      document.getElementById('matSupplier').value = m.supplier || '';
+      document.getElementById('matNotes').value = m.notes || '';
+    }
+  } else {
+    document.getElementById('materialModalTitle').textContent = '新增品項';
+  }
+  openModal('materialModal');
+}
+
+async function saveMaterial() {
+  var name = document.getElementById('matName').value.trim();
+  if (!name) { showToast('請輸入品項名稱', 'error'); return; }
+
+  var data = {
+    name: name,
+    category: document.getElementById('matCategory').value.trim(),
+    spec: document.getElementById('matSpec').value.trim(),
+    unit: document.getElementById('matUnit').value.trim(),
+    unit_price: parseFloat(document.getElementById('matPrice').value) || 0,
+    current_stock: parseInt(document.getElementById('matStock').value) || 0,
+    safety_stock: parseInt(document.getElementById('matSafetyStock').value) || 0,
+    supplier: document.getElementById('matSupplier').value.trim(),
+    notes: document.getElementById('matNotes').value.trim()
+  };
+
+  try {
+    var id = document.getElementById('materialId').value;
+    var resp;
+    if (id) {
+      resp = await supabase.from('materials').update(data).eq('id', parseInt(id));
+    } else {
+      resp = await supabase.from('materials').insert(data);
+    }
+    if (resp.error) throw resp.error;
+    showToast(id ? '品項已更新' : '品項已新增', 'success');
+    closeModal('materialModal');
+    await loadMaterials();
+  } catch (e) {
+    showToast('儲存失敗：' + e.message, 'error');
+  }
+}
+
+function confirmDeleteMaterial(id) {
+  var m = materials.find(function(x) { return x.id === id; });
+  document.getElementById('deleteMessage').textContent = '確定要刪除「' + (m ? m.name : '') + '」嗎？此操作無法復原。';
+  document.getElementById('deleteConfirmBtn').onclick = function() { deleteMaterial(id); };
+  openModal('deleteModal');
+}
+
+async function deleteMaterial(id) {
+  try {
+    var resp = await supabase.from('materials').delete().eq('id', id);
+    if (resp.error) throw resp.error;
+    showToast('品項已刪除', 'success');
+    closeModal('deleteModal');
+    await loadMaterials();
+  } catch (e) {
+    showToast('刪除失敗：' + e.message, 'error');
+  }
+}
+
+// ===== Stock In/Out =====
+function openStockModal(type) {
+  document.getElementById('stockType').value = type;
+  document.getElementById('stockModalTitle').textContent = type === 'in' ? '進貨' : '領料';
+  document.getElementById('stockSubmitBtn').textContent = type === 'in' ? '確認進貨' : '確認領料';
+  document.getElementById('stockSubmitBtn').className = type === 'in' ? 'btn btn-success' : 'btn btn-warning';
+  document.getElementById('stockMaterial').innerHTML = '<option value="">請選擇品項</option>' +
+    materials.map(function(m) { return '<option value="' + m.id + '">' + esc(m.name) + ' (' + m.current_stock + ' ' + esc(m.unit || '') + ')</option>'; }).join('');
+  document.getElementById('stockQty').value = '1';
+  document.getElementById('stockOperator').value = '';
+  document.getElementById('stockNotes').value = '';
+  document.getElementById('stockCurrentInfo').style.display = 'none';
+  document.getElementById('stockMaterial').onchange = function() {
+    var mid = parseInt(this.value);
+    var m = materials.find(function(x) { return x.id === mid; });
+    if (m) {
+      document.getElementById('stockCurrentQty').textContent = m.current_stock + ' ' + (m.unit || '');
+      document.getElementById('stockCurrentInfo').style.display = 'block';
+    } else {
+      document.getElementById('stockCurrentInfo').style.display = 'none';
+    }
+  };
+  openModal('stockModal');
+}
+
+async function saveStock() {
+  var type = document.getElementById('stockType').value;
+  var materialId = parseInt(document.getElementById('stockMaterial').value);
+  var qty = parseInt(document.getElementById('stockQty').value);
+  var operator = document.getElementById('stockOperator').value.trim();
+
+  if (!materialId) { showToast('請選擇品項', 'error'); return; }
+  if (!qty || qty <= 0) { showToast('請輸入有效數量', 'error'); return; }
+  if (!operator) { showToast('請輸入操作人', 'error'); return; }
+
+  var m = materials.find(function(x) { return x.id === materialId; });
+  if (!m) { showToast('找不到品項', 'error'); return; }
+
+  if (type === 'out' && m.current_stock < qty) {
+    showToast('庫存不足！目前庫存 ' + m.current_stock + '，無法領取 ' + qty, 'error');
+    return;
+  }
+
+  var newStock = type === 'in' ? m.current_stock + qty : m.current_stock - qty;
+
+  try {
+    var logResp = await supabase.from('inventory_logs').insert({
+      material_id: materialId,
+      type: type,
+      quantity: qty,
+      operator: operator,
+      notes: document.getElementById('stockNotes').value.trim()
+    });
+    if (logResp.error) throw logResp.error;
+
+    var updateResp = await supabase.from('materials').update({ current_stock: newStock }).eq('id', materialId);
+    if (updateResp.error) throw updateResp.error;
+
+    showToast((type === 'in' ? '進貨' : '領料') + '成功', 'success');
+    closeModal('stockModal');
+    await loadMaterials();
+  } catch (e) {
+    showToast('操作失敗：' + e.message, 'error');
+  }
+}
+
+// ===== Logs =====
+async function loadLogs() {
+  var body = document.getElementById('logsBody');
+  body.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>';
+
+  try {
+    var query = supabase.from('inventory_logs').select('*, materials(name)').order('created_at', { ascending: false });
+
+    var materialFilter = document.getElementById('logMaterialFilter').value;
+    if (materialFilter) query = query.eq('material_id', parseInt(materialFilter));
+
+    var typeFilter = document.getElementById('logTypeFilter').value;
+    if (typeFilter) query = query.eq('type', typeFilter);
+
+    var dateFrom = document.getElementById('logDateFrom').value;
+    if (dateFrom) query = query.gte('created_at', dateFrom + 'T00:00:00');
+
+    var dateTo = document.getElementById('logDateTo').value;
+    if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59');
+
+    var resp = await query;
+    if (resp.error) throw resp.error;
+
+    var logs = resp.data || [];
+    if (logs.length === 0) {
+      body.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">📋</div><p>尚無進出紀錄</p></div></td></tr>';
+      return;
+    }
+    body.innerHTML = logs.map(function(l) {
+      var dt = new Date(l.created_at);
+      var timeStr = dt.getFullYear() + '/' + pad(dt.getMonth() + 1) + '/' + pad(dt.getDate()) + ' ' + pad(dt.getHours()) + ':' + pad(dt.getMinutes());
+      var matName = l.materials ? l.materials.name : '(已刪除)';
+      return '<tr>' +
+        '<td>' + timeStr + '</td>' +
+        '<td>' + esc(matName) + '</td>' +
+        '<td><span class="log-' + l.type + '">' + (l.type === 'in' ? '📥 進貨' : '📤 領料') + '</span></td>' +
+        '<td><strong>' + l.quantity + '</strong></td>' +
+        '<td>' + esc(l.operator || '') + '</td>' +
+        '<td class="hide-mobile">' + esc(l.notes || '') + '</td></tr>';
+    }).join('');
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="6"><div class="empty">載入失敗：' + esc(e.message) + '</div></td></tr>';
+  }
+}
+
+function clearLogFilters() {
+  document.getElementById('logMaterialFilter').value = '';
+  document.getElementById('logTypeFilter').value = '';
+  document.getElementById('logDateFrom').value = '';
+  document.getElementById('logDateTo').value = '';
+  loadLogs();
+}
+
+function populateLogMaterialFilter() {
+  var sel = document.getElementById('logMaterialFilter');
+  var val = sel.value;
+  sel.innerHTML = '<option value="">全部品項</option>' +
+    materials.map(function(m) { return '<option value="' + m.id + '">' + esc(m.name) + '</option>'; }).join('');
+  sel.value = val;
+}
+
+// ===== Suppliers =====
+async function loadSuppliers() {
+  var body = document.getElementById('suppliersBody');
+  body.innerHTML = '<tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr>';
+  try {
+    var resp = await supabase.from('suppliers').select('*').order('name');
+    if (resp.error) throw resp.error;
+    suppliers = resp.data || [];
+    if (suppliers.length === 0) {
+      body.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">🏢</div><p>尚無供應商資料</p></div></td></tr>';
+      return;
+    }
+    body.innerHTML = suppliers.map(function(s) {
+      return '<tr>' +
+        '<td><strong>' + esc(s.name) + '</strong></td>' +
+        '<td>' + esc(s.contact || '') + '</td>' +
+        '<td>' + esc(s.phone || '') + '</td>' +
+        '<td class="hide-mobile">' + esc(s.notes || '') + '</td>' +
+        '<td><div class="actions-cell">' +
+          '<button class="btn btn-primary btn-sm" onclick="openSupplierModal(' + s.id + ')">編輯</button>' +
+          '<button class="btn btn-danger btn-sm" onclick="confirmDeleteSupplier(' + s.id + ')">刪除</button>' +
+        '</div></td></tr>';
+    }).join('');
+  } catch (e) {
+    showToast('載入供應商失敗：' + e.message, 'error');
+  }
+}
+
+function openSupplierModal(id) {
+  document.getElementById('supplierId').value = '';
+  document.getElementById('supName').value = '';
+  document.getElementById('supContact').value = '';
+  document.getElementById('supPhone').value = '';
+  document.getElementById('supNotes').value = '';
+
+  if (id) {
+    var s = suppliers.find(function(x) { return x.id === id; });
+    if (s) {
+      document.getElementById('supplierModalTitle').textContent = '編輯供應商';
+      document.getElementById('supplierId').value = s.id;
+      document.getElementById('supName').value = s.name || '';
+      document.getElementById('supContact').value = s.contact || '';
+      document.getElementById('supPhone').value = s.phone || '';
+      document.getElementById('supNotes').value = s.notes || '';
+    }
+  } else {
+    document.getElementById('supplierModalTitle').textContent = '新增供應商';
+  }
+  openModal('supplierModal');
+}
+
+async function saveSupplier() {
+  var name = document.getElementById('supName').value.trim();
+  if (!name) { showToast('請輸入供應商名稱', 'error'); return; }
+
+  var data = {
+    name: name,
+    contact: document.getElementById('supContact').value.trim(),
+    phone: document.getElementById('supPhone').value.trim(),
+    notes: document.getElementById('supNotes').value.trim()
+  };
+
+  try {
+    var id = document.getElementById('supplierId').value;
+    var resp;
+    if (id) {
+      resp = await supabase.from('suppliers').update(data).eq('id', parseInt(id));
+    } else {
+      resp = await supabase.from('suppliers').insert(data);
+    }
+    if (resp.error) throw resp.error;
+    showToast(id ? '供應商已更新' : '供應商已新增', 'success');
+    closeModal('supplierModal');
+    await loadSuppliers();
+  } catch (e) {
+    showToast('儲存失敗：' + e.message, 'error');
+  }
+}
+
+function confirmDeleteSupplier(id) {
+  var s = suppliers.find(function(x) { return x.id === id; });
+  document.getElementById('deleteMessage').textContent = '確定要刪除供應商「' + (s ? s.name : '') + '」嗎？';
+  document.getElementById('deleteConfirmBtn').onclick = function() { deleteSupplier(id); };
+  openModal('deleteModal');
+}
+
+async function deleteSupplier(id) {
+  try {
+    var resp = await supabase.from('suppliers').delete().eq('id', id);
+    if (resp.error) throw resp.error;
+    showToast('供應商已刪除', 'success');
+    closeModal('deleteModal');
+    await loadSuppliers();
+  } catch (e) {
+    showToast('刪除失敗：' + e.message, 'error');
+  }
+}
+
+async function loadSupplierOptions(selectId) {
+  try {
+    var resp = await supabase.from('suppliers').select('id,name').order('name');
+    if (resp.error) throw resp.error;
+    var sel = document.getElementById(selectId);
+    var current = sel.value;
+    sel.innerHTML = '<option value="">請選擇</option>' +
+      (resp.data || []).map(function(s) { return '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>'; }).join('');
+    sel.value = current;
+  } catch (e) { /* ignore */ }
+}
+
+// ===== Helpers =====
+function esc(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(function(el) {
+  el.addEventListener('click', function(e) {
+    if (e.target === el) el.classList.remove('show');
+  });
+});
+
+// Init
+(async function() {
+  await loadMaterials();
+  populateLogMaterialFilter();
+})();
+</script>
+</body>
+</html>

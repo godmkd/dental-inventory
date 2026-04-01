@@ -3,837 +3,1540 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>牙材庫存管理系統</title>
+<title>牙材集中採購管理系統</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-:root {
-  --primary: #1a365d;
-  --primary-light: #2a4a7f;
-  --primary-dark: #0f2440;
-  --accent: #3182ce;
-  --danger: #e53e3e;
-  --danger-bg: #fff5f5;
-  --success: #38a169;
-  --warning: #dd6b20;
-  --bg: #f7fafc;
-  --card: #ffffff;
-  --text: #2d3748;
-  --text-light: #718096;
-  --border: #e2e8f0;
-  --radius: 8px;
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --primary:#1a365d;--primary-light:#2a4a7f;--primary-dark:#0f2440;
+  --accent:#3182ce;--accent-hover:#2b6cb0;
+  --danger:#e53e3e;--danger-bg:#fff5f5;--danger-hover:#c53030;
+  --success:#38a169;--success-hover:#2f855a;
+  --warning:#dd6b20;--warning-hover:#c05621;
+  --bg:#f7fafc;--card:#fff;--text:#2d3748;--text-light:#718096;--text-lighter:#a0aec0;
+  --border:#e2e8f0;--border-light:#edf2f7;--radius:8px;--shadow:0 1px 3px rgba(0,0,0,.1);
 }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
 
-/* Header */
-.header { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: white; padding: 16px 24px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-.header-inner { max-width: 1200px; margin: 0 auto; }
-.header h1 { font-size: 1.4rem; margin-bottom: 12px; }
-.tabs { display: flex; gap: 4px; }
-.tab { padding: 8px 20px; border: none; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95rem; transition: all 0.2s; }
-.tab:hover { background: rgba(255,255,255,0.2); }
-.tab.active { background: var(--bg); color: var(--primary); font-weight: 600; }
+/* === Login Page === */
+.login-page{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--primary),var(--primary-light))}
+.login-card{background:var(--card);border-radius:16px;padding:48px 40px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:400px;width:90%}
+.login-card h1{font-size:1.8rem;color:var(--primary);margin-bottom:8px}
+.login-card p{color:var(--text-light);margin-bottom:32px}
+.login-logo{font-size:3rem;margin-bottom:16px}
+.btn-line{background:#06C755;color:#fff;border:none;padding:14px 32px;border-radius:var(--radius);font-size:1.1rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:10px;transition:background .2s;width:100%;justify-content:center}
+.btn-line:hover{background:#05a648}
+.login-loading{display:none;text-align:center;padding:40px;color:#fff;font-size:1.1rem}
+.spinner{width:40px;height:40px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.waiting-msg{background:#fefcbf;color:#744210;padding:20px;border-radius:var(--radius);margin-top:20px;line-height:1.6}
 
-/* Main */
-.main { max-width: 1200px; margin: 0 auto; padding: 20px; }
-.page { display: none; }
-.page.active { display: block; }
+/* === App Shell === */
+.app{display:none}
+.header{background:linear-gradient(135deg,var(--primary),var(--primary-light));color:#fff;padding:12px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.header h1{font-size:1.2rem;white-space:nowrap}
+.header-right{display:flex;align-items:center;gap:12px}
+.header-user{font-size:.85rem;opacity:.9}
+.btn-logout{background:rgba(255,255,255,.15);color:#fff;border:none;padding:6px 14px;border-radius:var(--radius);cursor:pointer;font-size:.85rem}
+.btn-logout:hover{background:rgba(255,255,255,.25)}
 
-/* Toolbar */
-.toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-.search-box { flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
-.search-box:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(49,130,206,0.1); }
-.btn { padding: 10px 18px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.btn-primary { background: var(--accent); color: white; }
-.btn-primary:hover { background: #2b6cb0; }
-.btn-success { background: var(--success); color: white; }
-.btn-success:hover { background: #2f855a; }
-.btn-warning { background: var(--warning); color: white; }
-.btn-warning:hover { background: #c05621; }
-.btn-danger { background: var(--danger); color: white; }
-.btn-danger:hover { background: #c53030; }
-.btn-sm { padding: 6px 12px; font-size: 0.82rem; }
-.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
-.btn-outline:hover { background: var(--bg); }
+/* Sidebar */
+.app-body{display:flex;max-width:1400px;margin:0 auto;min-height:calc(100vh - 56px)}
+.sidebar{width:220px;background:var(--card);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0}
+.sidebar .nav-item{display:flex;align-items:center;gap:10px;padding:12px 20px;cursor:pointer;font-size:.92rem;color:var(--text);transition:all .15s;border-left:3px solid transparent}
+.sidebar .nav-item:hover{background:var(--border-light);color:var(--accent)}
+.sidebar .nav-item.active{background:#ebf8ff;color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .nav-section{font-size:.75rem;color:var(--text-lighter);text-transform:uppercase;padding:16px 20px 6px;letter-spacing:.5px;font-weight:600}
+.content{flex:1;padding:20px;overflow-y:auto;min-width:0}
 
-/* Table */
-.table-wrap { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
-th { background: var(--primary); color: white; padding: 12px 14px; text-align: left; font-size: 0.85rem; font-weight: 600; white-space: nowrap; position: sticky; top: 0; }
-td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-tr:hover { background: #edf2f7; }
-tr.low-stock { background: var(--danger-bg); }
-tr.low-stock:hover { background: #fed7d7; }
-.status-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
-.status-ok { background: #c6f6d5; color: #22543d; }
-.status-low { background: #fed7d7; color: #9b2c2c; }
-.actions-cell { display: flex; gap: 4px; flex-wrap: nowrap; }
+/* Bottom nav for mobile */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);z-index:100;padding:4px 0 env(safe-area-inset-bottom)}
+.bottom-nav-inner{display:flex;justify-content:space-around}
+.bottom-nav .bnav-item{display:flex;flex-direction:column;align-items:center;padding:6px 4px;font-size:.65rem;color:var(--text-light);cursor:pointer;min-width:0;flex:1}
+.bottom-nav .bnav-item.active{color:var(--accent)}
+.bottom-nav .bnav-item span:first-child{font-size:1.3rem;margin-bottom:2px}
+.bottom-nav .bnav-more{position:relative}
+.more-menu{display:none;position:absolute;bottom:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 -4px 12px rgba(0,0,0,.1);min-width:160px;padding:6px 0;margin-bottom:8px}
+.more-menu.show{display:block}
+.more-menu .mm-item{padding:10px 16px;cursor:pointer;font-size:.9rem;display:flex;align-items:center;gap:8px}
+.more-menu .mm-item:hover{background:var(--border-light)}
 
-/* Modal */
-.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; padding: 20px; }
-.modal-overlay.show { display: flex; }
-.modal { background: var(--card); border-radius: 12px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-.modal-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-.modal-header h3 { font-size: 1.1rem; color: var(--primary); }
-.modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-light); padding: 4px; }
-.modal-close:hover { color: var(--text); }
-.modal-body { padding: 24px; }
-.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
-.form-group { margin-bottom: 16px; }
-.form-group label { display: block; margin-bottom: 6px; font-size: 0.85rem; font-weight: 600; color: var(--text); }
-.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
-.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(49,130,206,0.1); }
-.form-group textarea { resize: vertical; min-height: 60px; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media(max-width:768px){
+  .sidebar{display:none}
+  .bottom-nav{display:block}
+  .content{padding:12px;padding-bottom:80px}
+  .app-body{min-height:calc(100vh - 56px - 60px)}
+  .header h1{font-size:1rem}
+}
 
-/* Log filters */
-.filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-.filter-bar select, .filter-bar input { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.9rem; outline: none; }
-.filter-bar select:focus, .filter-bar input:focus { border-color: var(--accent); }
+/* === Common === */
+.page{display:none}.page.active{display:block}
+.page-title{font-size:1.3rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.search-box{flex:1;min-width:180px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);font-size:.92rem;outline:none;transition:border-color .2s}
+.search-box:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(49,130,206,.1)}
+.btn{padding:10px 18px;border:none;border-radius:var(--radius);cursor:pointer;font-size:.88rem;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{background:var(--success-hover)}
+.btn-warning{background:var(--warning);color:#fff}.btn-warning:hover{background:var(--warning-hover)}
+.btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{background:var(--danger-hover)}
+.btn-ghost{background:transparent;color:var(--text-light);border:1px solid var(--border)}.btn-ghost:hover{background:var(--border-light)}
+.btn-sm{padding:6px 12px;font-size:.82rem}
+.btn-xs{padding:4px 8px;font-size:.78rem}
+
+/* Card & Table */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+.card-title{font-size:1.05rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{background:var(--border-light);padding:10px 12px;text-align:left;font-weight:600;white-space:nowrap;position:sticky;top:0}
+td{padding:10px 12px;border-bottom:1px solid var(--border-light)}
+tr:hover td{background:#fafcff}
+.stock-danger{background:var(--danger-bg);color:var(--danger);font-weight:700}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.78rem;font-weight:500}
+.badge-pending{background:#fefcbf;color:#744210}
+.badge-confirmed{background:#c6f6d5;color:#22543d}
+.badge-shipped{background:#bee3f8;color:#2a4365}
+.badge-delivered{background:#e9d8fd;color:#44337a}
+.text-danger{color:var(--danger)}
+.text-success{color:var(--success)}
+.text-muted{color:var(--text-light)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-light)}
+.empty-state span{font-size:2.5rem;display:block;margin-bottom:12px}
+
+/* Form & Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border-radius:12px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1;border-radius:12px 12px 0 0}
+.modal-header h3{font-size:1.1rem}
+.modal-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-light);padding:4px}
+.modal-body{padding:20px}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:.85rem;font-weight:500;margin-bottom:5px;color:var(--text)}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:.92rem;outline:none;transition:border-color .2s;font-family:inherit}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(49,130,206,.1)}
+.form-group textarea{resize:vertical;min-height:70px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.form-row{grid-template-columns:1fr}}
+
+/* Filter chips */
+.filter-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{padding:6px 14px;border-radius:20px;font-size:.82rem;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);transition:all .15s}
+.chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);text-align:center}
+.stat-card .stat-value{font-size:1.8rem;font-weight:700;color:var(--primary)}
+.stat-card .stat-label{font-size:.82rem;color:var(--text-light);margin-top:4px}
 
 /* Toast */
-.toast-container { position: fixed; top: 80px; right: 20px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
-.toast { padding: 12px 20px; border-radius: var(--radius); color: white; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideIn 0.3s ease; max-width: 360px; }
-.toast-success { background: var(--success); }
-.toast-error { background: var(--danger); }
-@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.toast-container{position:fixed;top:72px;right:20px;z-index:300;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:.9rem;box-shadow:0 4px 12px rgba(0,0,0,.15);animation:slideIn .3s ease;max-width:360px}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-info{background:var(--accent)}
+@keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
 
-/* Loading */
-.loading { text-align: center; padding: 40px; color: var(--text-light); }
-.spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* Confirm dialog */
+.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:250;align-items:center;justify-content:center;padding:20px}
+.confirm-overlay.show{display:flex}
+.confirm-box{background:var(--card);border-radius:12px;padding:24px;max-width:400px;width:100%;text-align:center}
+.confirm-box h3{margin-bottom:12px}
+.confirm-box p{color:var(--text-light);margin-bottom:20px;line-height:1.5}
+.confirm-btns{display:flex;gap:10px;justify-content:center}
 
-/* Empty state */
-.empty { text-align: center; padding: 60px 20px; color: var(--text-light); }
-.empty-icon { font-size: 3rem; margin-bottom: 12px; }
+/* Image preview */
+.img-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid var(--border)}
+.img-upload-preview{max-width:120px;max-height:120px;object-fit:cover;border-radius:var(--radius);margin-top:8px}
 
-/* Log type badge */
-.log-in { color: var(--success); font-weight: 600; }
-.log-out { color: var(--danger); font-weight: 600; }
+/* Order detail panel */
+.order-detail{background:var(--border-light);border-radius:var(--radius);padding:16px;margin-top:12px}
+.order-group{margin-bottom:16px}
+.order-group h4{font-size:.95rem;color:var(--primary);margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid var(--accent)}
 
-/* RWD */
-@media (max-width: 768px) {
-  .header h1 { font-size: 1.1rem; }
-  .tab { padding: 6px 14px; font-size: 0.85rem; }
-  .main { padding: 12px; }
-  .toolbar { flex-direction: column; }
-  .search-box { min-width: 100%; }
-  .btn { padding: 8px 14px; font-size: 0.85rem; }
-  .form-row { grid-template-columns: 1fr; }
-  .filter-bar { flex-direction: column; }
-  .filter-bar select, .filter-bar input { width: 100%; }
-  th, td { padding: 8px 10px; font-size: 0.8rem; }
-  .actions-cell { flex-direction: column; gap: 4px; }
-  .actions-cell .btn-sm { width: 100%; justify-content: center; }
-  .hide-mobile { display: none; }
-}
-@media (max-width: 480px) {
-  .tabs { overflow-x: auto; }
-  .tab { flex-shrink: 0; }
+/* Tab sub-nav */
+.sub-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:0}
+.sub-tab{padding:8px 16px;cursor:pointer;font-size:.88rem;color:var(--text-light);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.sub-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+
+/* Select2-like multi-select */
+.checkbox-list{max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px}
+.checkbox-list label{display:flex;align-items:center;gap:8px;padding:6px;cursor:pointer;border-radius:4px}
+.checkbox-list label:hover{background:var(--border-light)}
+
+/* Responsive table cards */
+@media(max-width:640px){
+  .responsive-cards thead{display:none}
+  .responsive-cards tbody tr{display:block;background:var(--card);border-radius:var(--radius);padding:12px;margin-bottom:8px;box-shadow:var(--shadow)}
+  .responsive-cards td{display:flex;justify-content:space-between;padding:6px 0;border:none}
+  .responsive-cards td::before{content:attr(data-label);font-weight:600;color:var(--text-light);margin-right:12px}
 }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-inner">
-    <h1>🦷 牙材庫存管理系統</h1>
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('inventory')">庫存總覽</button>
-      <button class="tab" onclick="switchTab('logs')">進出紀錄</button>
-      <button class="tab" onclick="switchTab('suppliers')">供應商</button>
+<!-- ========== Login Page ========== -->
+<div id="loginPage" class="login-page">
+  <div>
+    <div class="login-card">
+      <div class="login-logo">🦷</div>
+      <h1>牙材集中採購管理系統</h1>
+      <p>多診所庫存與採購一站管理</p>
+      <button class="btn-line" onclick="doLogin()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+        LINE 登入
+      </button>
+    </div>
+    <div class="login-loading" id="loginLoading">
+      <div class="spinner"></div>
+      <div>登入中，請稍候...</div>
     </div>
   </div>
 </div>
 
-<div class="main">
-  <!-- 庫存總覽 -->
-  <div id="page-inventory" class="page active">
-    <div class="toolbar">
-      <input type="text" class="search-box" id="searchInput" placeholder="搜尋品項名稱..." oninput="filterMaterials()">
-      <button class="btn btn-primary" onclick="openMaterialModal()">＋ 新增品項</button>
-      <button class="btn btn-success" onclick="openStockModal('in')">📥 進貨</button>
-      <button class="btn btn-warning" onclick="openStockModal('out')">📤 領料</button>
+<!-- Waiting for role assignment -->
+<div id="waitingPage" style="display:none" class="login-page">
+  <div class="login-card">
+    <div class="login-logo">⏳</div>
+    <h1>等待角色指派</h1>
+    <div class="waiting-msg">
+      您已成功登入，但尚未被管理者指派角色與診所。<br>請聯繫管理者完成設定後重新整理頁面。
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>名稱</th>
-            <th>類別</th>
-            <th class="hide-mobile">規格</th>
-            <th>單位</th>
-            <th>庫存</th>
-            <th>安全庫存</th>
-            <th>狀態</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="materialsBody">
-          <tr><td colspan="8"><div class="loading"><div class="spinner"></div><p>載入中...</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 進出紀錄 -->
-  <div id="page-logs" class="page">
-    <div class="filter-bar">
-      <select id="logMaterialFilter" onchange="loadLogs()">
-        <option value="">全部品項</option>
-      </select>
-      <select id="logTypeFilter" onchange="loadLogs()">
-        <option value="">全部類型</option>
-        <option value="in">進貨</option>
-        <option value="out">領料</option>
-      </select>
-      <input type="date" id="logDateFrom" onchange="loadLogs()">
-      <input type="date" id="logDateTo" onchange="loadLogs()">
-      <button class="btn btn-outline btn-sm" onclick="clearLogFilters()">清除篩選</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>時間</th>
-            <th>品項</th>
-            <th>類型</th>
-            <th>數量</th>
-            <th>操作人</th>
-            <th class="hide-mobile">備註</th>
-          </tr>
-        </thead>
-        <tbody id="logsBody">
-          <tr><td colspan="6"><div class="loading"><div class="spinner"></div><p>載入中...</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 供應商 -->
-  <div id="page-suppliers" class="page">
-    <div class="toolbar">
-      <div style="flex:1"></div>
-      <button class="btn btn-primary" onclick="openSupplierModal()">＋ 新增供應商</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>名稱</th>
-            <th>聯絡人</th>
-            <th>電話</th>
-            <th class="hide-mobile">備註</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="suppliersBody">
-          <tr><td colspan="5"><div class="loading"><div class="spinner"></div><p>載入中...</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
+    <button class="btn btn-ghost" style="margin-top:16px" onclick="doLogout()">登出</button>
   </div>
 </div>
 
-<!-- Material Modal -->
-<div class="modal-overlay" id="materialModal">
-  <div class="modal">
+<!-- ========== App ========== -->
+<div id="app" class="app">
+  <header class="header">
+    <div class="header-inner">
+      <h1>🦷 牙材採購系統</h1>
+      <div class="header-right">
+        <span class="header-user" id="headerUser"></span>
+        <button class="btn-logout" onclick="doLogout()">登出</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="content" id="mainContent"></main>
+  </div>
+
+  <nav class="bottom-nav" id="bottomNav">
+    <div class="bottom-nav-inner" id="bottomNavInner"></div>
+  </nav>
+</div>
+
+<!-- ========== Modal ========== -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalBox">
     <div class="modal-header">
-      <h3 id="materialModalTitle">新增品項</h3>
-      <button class="modal-close" onclick="closeModal('materialModal')">&times;</button>
+      <h3 id="modalTitle"></h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
     </div>
-    <div class="modal-body">
-      <input type="hidden" id="materialId">
-      <div class="form-group">
-        <label>名稱 *</label>
-        <input type="text" id="matName" required>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>類別</label>
-          <input type="text" id="matCategory" placeholder="如：印模材、填充物">
-        </div>
-        <div class="form-group">
-          <label>規格</label>
-          <input type="text" id="matSpec">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>單位</label>
-          <input type="text" id="matUnit" placeholder="如：盒、支、包">
-        </div>
-        <div class="form-group">
-          <label>單價</label>
-          <input type="number" id="matPrice" min="0" step="0.01">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>目前庫存</label>
-          <input type="number" id="matStock" min="0" value="0">
-        </div>
-        <div class="form-group">
-          <label>安全庫存</label>
-          <input type="number" id="matSafetyStock" min="0" value="0">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>供應商</label>
-        <select id="matSupplier">
-          <option value="">請選擇</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>備註</label>
-        <textarea id="matNotes"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('materialModal')">取消</button>
-      <button class="btn btn-primary" onclick="saveMaterial()">儲存</button>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3 id="confirmTitle">確認</h3>
+    <p id="confirmMsg"></p>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeConfirm(false)">取消</button>
+      <button class="btn btn-primary" onclick="closeConfirm(true)">確認</button>
     </div>
   </div>
 </div>
 
-<!-- Stock Modal -->
-<div class="modal-overlay" id="stockModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 id="stockModalTitle">進貨</h3>
-      <button class="modal-close" onclick="closeModal('stockModal')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="stockType">
-      <div class="form-group">
-        <label>品項 *</label>
-        <select id="stockMaterial">
-          <option value="">請選擇品項</option>
-        </select>
-      </div>
-      <div class="form-group" id="stockCurrentInfo" style="display:none;">
-        <div style="padding:10px;background:var(--bg);border-radius:var(--radius);font-size:0.88rem;color:var(--text-light);">
-          目前庫存：<strong id="stockCurrentQty">0</strong>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>數量 *</label>
-        <input type="number" id="stockQty" min="1" value="1">
-      </div>
-      <div class="form-group">
-        <label>操作人 *</label>
-        <input type="text" id="stockOperator">
-      </div>
-      <div class="form-group">
-        <label>備註</label>
-        <textarea id="stockNotes"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('stockModal')">取消</button>
-      <button class="btn btn-primary" id="stockSubmitBtn" onclick="saveStock()">確認</button>
-    </div>
-  </div>
-</div>
-
-<!-- Supplier Modal -->
-<div class="modal-overlay" id="supplierModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 id="supplierModalTitle">新增供應商</h3>
-      <button class="modal-close" onclick="closeModal('supplierModal')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="supplierId">
-      <div class="form-group">
-        <label>名稱 *</label>
-        <input type="text" id="supName" required>
-      </div>
-      <div class="form-group">
-        <label>聯絡人</label>
-        <input type="text" id="supContact">
-      </div>
-      <div class="form-group">
-        <label>電話</label>
-        <input type="text" id="supPhone">
-      </div>
-      <div class="form-group">
-        <label>備註</label>
-        <textarea id="supNotes"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('supplierModal')">取消</button>
-      <button class="btn btn-primary" onclick="saveSupplier()">儲存</button>
-    </div>
-  </div>
-</div>
-
-<!-- Delete Confirm Modal -->
-<div class="modal-overlay" id="deleteModal">
-  <div class="modal" style="max-width:400px;">
-    <div class="modal-header">
-      <h3>確認刪除</h3>
-      <button class="modal-close" onclick="closeModal('deleteModal')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p id="deleteMessage">確定要刪除此項目嗎？此操作無法復原。</p>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('deleteModal')">取消</button>
-      <button class="btn btn-danger" id="deleteConfirmBtn">確認刪除</button>
-    </div>
-  </div>
-</div>
-
+<!-- Toast container -->
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
-const API_URL = "https://kvnwfesbnxzoqpdgauov.supabase.co/rest/v1";
-const API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2bndmZXNibnh6b3FwZGdhdW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTAwMjIsImV4cCI6MjA5MDYyNjAyMn0.wpf9rUcPiaTUkDVhVgUaxBJ2rA4WaAMHG7tgSv9BOOQ";
-const headers = {
-  "apikey": API_KEY,
-  "Authorization": "Bearer " + API_KEY,
-  "Content-Type": "application/json",
-  "Prefer": "return=representation"
-};
+// ===================== CONFIG =====================
+const SUPABASE_URL = 'https://kvnwfesbnxzoqpdgauov.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2bndmZXNibnh6b3FwZGdhdW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTAwMjIsImV4cCI6MjA5MDYyNjAyMn0.wpf9rUcPiaTUkDVhVgUaxBJ2rA4WaAMHG7tgSv9BOOQ';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-async function dbSelect(table, query) {
-  var res = await fetch(API_URL + "/" + table + "?select=*" + (query ? "&" + query : ""), {headers: headers});
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
+// ===================== STATE =====================
+let currentUser = null;   // auth user
+let userProfile = null;   // user_profiles row
+let allClinics = [];
+let allCategories = [];
+let allSuppliers = [];
+let allMaterials = [];
+let allUsers = [];
+let currentPage = '';
+let confirmResolve = null;
 
-async function dbInsert(table, data) {
-  var res = await fetch(API_URL + "/" + table, {method: "POST", headers: headers, body: JSON.stringify(data)});
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
-async function dbUpdate(table, id, data) {
-  var res = await fetch(API_URL + "/" + table + "?id=eq." + id, {method: "PATCH", headers: headers, body: JSON.stringify(data)});
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
-async function dbDelete(table, id) {
-  var res = await fetch(API_URL + "/" + table + "?id=eq." + id, {method: "DELETE", headers: headers});
-  if (!res.ok) throw new Error(await res.text());
-}
-
-let materials = [];
-let suppliers = [];
-
-// Toast
-function showToast(msg, type) {
-  var container = document.getElementById('toastContainer');
-  var toast = document.createElement('div');
-  toast.className = 'toast toast-' + type;
-  toast.textContent = msg;
-  container.appendChild(toast);
-  setTimeout(function() { toast.remove(); }, 3500);
-}
-
-// Tab switching
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
-  var tabs = document.querySelectorAll('.tab');
-  var map = { inventory: 0, logs: 1, suppliers: 2 };
-  tabs[map[name]].classList.add('active');
-  document.getElementById('page-' + name).classList.add('active');
-  if (name === 'logs') loadLogs();
-  if (name === 'suppliers') loadSuppliers();
-}
-
-// Modal
-function closeModal(id) {
-  document.getElementById(id).classList.remove('show');
-}
-function openModal(id) {
-  document.getElementById(id).classList.add('show');
-}
-
-// ===== Materials =====
-async function loadMaterials() {
-  try {
-    materials = await dbSelect('materials', 'order=name');
-    renderMaterials(materials);
-  } catch (e) {
-    showToast('載入品項失敗：' + e.message, 'error');
-  }
-}
-
-function renderMaterials(list) {
-  var body = document.getElementById('materialsBody');
-  if (list.length === 0) {
-    body.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">📦</div><p>尚無品項資料</p></div></td></tr>';
-    return;
-  }
-  body.innerHTML = list.map(function(m) {
-    var isLow = m.current_stock < m.safety_stock;
-    return '<tr class="' + (isLow ? 'low-stock' : '') + '">' +
-      '<td><strong>' + esc(m.name) + '</strong></td>' +
-      '<td>' + esc(m.category || '') + '</td>' +
-      '<td class="hide-mobile">' + esc(m.spec || '') + '</td>' +
-      '<td>' + esc(m.unit || '') + '</td>' +
-      '<td><strong>' + m.current_stock + '</strong></td>' +
-      '<td>' + m.safety_stock + '</td>' +
-      '<td><span class="status-badge ' + (isLow ? 'status-low' : 'status-ok') + '">' + (isLow ? '不足' : '正常') + '</span></td>' +
-      '<td><div class="actions-cell">' +
-        '<button class="btn btn-primary btn-sm" onclick="openMaterialModal(' + m.id + ')">編輯</button>' +
-        '<button class="btn btn-danger btn-sm" onclick="confirmDeleteMaterial(' + m.id + ')">刪除</button>' +
-      '</div></td></tr>';
-  }).join('');
-}
-
-function filterMaterials() {
-  var q = document.getElementById('searchInput').value.trim().toLowerCase();
-  if (!q) { renderMaterials(materials); return; }
-  renderMaterials(materials.filter(function(m) {
-    return m.name.toLowerCase().includes(q);
-  }));
-}
-
-function openMaterialModal(id) {
-  document.getElementById('materialId').value = '';
-  document.getElementById('matName').value = '';
-  document.getElementById('matCategory').value = '';
-  document.getElementById('matSpec').value = '';
-  document.getElementById('matUnit').value = '';
-  document.getElementById('matPrice').value = '';
-  document.getElementById('matStock').value = '0';
-  document.getElementById('matSafetyStock').value = '0';
-  document.getElementById('matSupplier').value = '';
-  document.getElementById('matNotes').value = '';
-  loadSupplierOptions('matSupplier');
-
-  if (id) {
-    var m = materials.find(function(x) { return x.id === id; });
-    if (m) {
-      document.getElementById('materialModalTitle').textContent = '編輯品項';
-      document.getElementById('materialId').value = m.id;
-      document.getElementById('matName').value = m.name || '';
-      document.getElementById('matCategory').value = m.category || '';
-      document.getElementById('matSpec').value = m.spec || '';
-      document.getElementById('matUnit').value = m.unit || '';
-      document.getElementById('matPrice').value = m.unit_price || '';
-      document.getElementById('matStock').value = m.current_stock || 0;
-      document.getElementById('matSafetyStock').value = m.safety_stock || 0;
-      document.getElementById('matSupplier').value = m.supplier || '';
-      document.getElementById('matNotes').value = m.notes || '';
-    }
+// ===================== INIT =====================
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    await loadProfile();
   } else {
-    document.getElementById('materialModalTitle').textContent = '新增品項';
+    showLogin();
   }
-  openModal('materialModal');
-}
-
-async function saveMaterial() {
-  var name = document.getElementById('matName').value.trim();
-  if (!name) { showToast('請輸入品項名稱', 'error'); return; }
-
-  var data = {
-    name: name,
-    category: document.getElementById('matCategory').value.trim(),
-    spec: document.getElementById('matSpec').value.trim(),
-    unit: document.getElementById('matUnit').value.trim(),
-    unit_price: parseFloat(document.getElementById('matPrice').value) || 0,
-    current_stock: parseInt(document.getElementById('matStock').value) || 0,
-    safety_stock: parseInt(document.getElementById('matSafetyStock').value) || 0,
-    supplier: document.getElementById('matSupplier').value.trim(),
-    notes: document.getElementById('matNotes').value.trim()
-  };
-
-  try {
-    var id = document.getElementById('materialId').value;
-    if (id) {
-      await dbUpdate('materials', parseInt(id), data);
-    } else {
-      await dbInsert('materials', data);
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      document.getElementById('loginLoading').style.display = 'block';
+      await loadProfile();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      userProfile = null;
+      showLogin();
     }
-    showToast(id ? '品項已更新' : '品項已新增', 'success');
-    closeModal('materialModal');
-    await loadMaterials();
-  } catch (e) {
-    showToast('儲存失敗：' + e.message, 'error');
+  });
+}
+
+function showLogin() {
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('waitingPage').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginLoading').style.display = 'none';
+}
+
+async function doLogin() {
+  document.getElementById('loginLoading').style.display = 'block';
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'custom:line' });
+  if (error) { toast('登入失敗: ' + error.message, 'error'); document.getElementById('loginLoading').style.display = 'none'; }
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  showLogin();
+}
+
+async function loadProfile() {
+  const { data, error } = await sb.from('user_profiles').select('*').eq('id', currentUser.id).single();
+  if (error && error.code === 'PGRST116') {
+    // No profile, create one
+    const meta = currentUser.user_metadata || {};
+    const displayName = meta.full_name || meta.name || meta.preferred_username || currentUser.email || '新使用者';
+    const lineId = meta.provider_id || meta.sub || '';
+    const { data: newP, error: e2 } = await sb.from('user_profiles').insert({
+      id: currentUser.id,
+      display_name: displayName,
+      role: 'clinic_manager',
+      line_user_id: lineId,
+      is_active: true
+    }).select().single();
+    if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }
+    userProfile = newP;
+    // Show waiting page - new user without clinic
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('waitingPage').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    return;
   }
-}
+  if (error) { toast('載入資料失敗: ' + error.message, 'error'); showLogin(); return; }
+  userProfile = data;
 
-function confirmDeleteMaterial(id) {
-  var m = materials.find(function(x) { return x.id === id; });
-  document.getElementById('deleteMessage').textContent = '確定要刪除「' + (m ? m.name : '') + '」嗎？此操作無法復原。';
-  document.getElementById('deleteConfirmBtn').onclick = function() { deleteMaterial(id); };
-  openModal('deleteModal');
-}
-
-async function deleteMaterial(id) {
-  try {
-    await dbDelete('materials', id);
-    showToast('品項已刪除', 'success');
-    closeModal('deleteModal');
-    await loadMaterials();
-  } catch (e) {
-    showToast('刪除失敗：' + e.message, 'error');
-  }
-}
-
-// ===== Stock In/Out =====
-function openStockModal(type) {
-  document.getElementById('stockType').value = type;
-  document.getElementById('stockModalTitle').textContent = type === 'in' ? '進貨' : '領料';
-  document.getElementById('stockSubmitBtn').textContent = type === 'in' ? '確認進貨' : '確認領料';
-  document.getElementById('stockSubmitBtn').className = type === 'in' ? 'btn btn-success' : 'btn btn-warning';
-  document.getElementById('stockMaterial').innerHTML = '<option value="">請選擇品項</option>' +
-    materials.map(function(m) { return '<option value="' + m.id + '">' + esc(m.name) + ' (' + m.current_stock + ' ' + esc(m.unit || '') + ')</option>'; }).join('');
-  document.getElementById('stockQty').value = '1';
-  document.getElementById('stockOperator').value = '';
-  document.getElementById('stockNotes').value = '';
-  document.getElementById('stockCurrentInfo').style.display = 'none';
-  document.getElementById('stockMaterial').onchange = function() {
-    var mid = parseInt(this.value);
-    var m = materials.find(function(x) { return x.id === mid; });
-    if (m) {
-      document.getElementById('stockCurrentQty').textContent = m.current_stock + ' ' + (m.unit || '');
-      document.getElementById('stockCurrentInfo').style.display = 'block';
-    } else {
-      document.getElementById('stockCurrentInfo').style.display = 'none';
-    }
-  };
-  openModal('stockModal');
-}
-
-async function saveStock() {
-  var type = document.getElementById('stockType').value;
-  var materialId = parseInt(document.getElementById('stockMaterial').value);
-  var qty = parseInt(document.getElementById('stockQty').value);
-  var operator = document.getElementById('stockOperator').value.trim();
-
-  if (!materialId) { showToast('請選擇品項', 'error'); return; }
-  if (!qty || qty <= 0) { showToast('請輸入有效數量', 'error'); return; }
-  if (!operator) { showToast('請輸入操作人', 'error'); return; }
-
-  var m = materials.find(function(x) { return x.id === materialId; });
-  if (!m) { showToast('找不到品項', 'error'); return; }
-
-  if (type === 'out' && m.current_stock < qty) {
-    showToast('庫存不足！目前庫存 ' + m.current_stock + '，無法領取 ' + qty, 'error');
+  if (!data.is_active) {
+    toast('您的帳號已被停用', 'error');
+    await sb.auth.signOut();
+    showLogin();
     return;
   }
 
-  var newStock = type === 'in' ? m.current_stock + qty : m.current_stock - qty;
+  // owner/admin can proceed without clinic_id
+  if (data.role === 'clinic_manager' && !data.clinic_id) {
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('waitingPage').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    return;
+  }
 
-  try {
-    await dbInsert('inventory_logs', {
-      material_id: materialId,
-      type: type,
-      quantity: qty,
-      operator: operator,
-      notes: document.getElementById('stockNotes').value.trim()
+  await enterApp();
+}
+
+async function enterApp() {
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('waitingPage').style.display = 'none';
+  document.getElementById('loginLoading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  document.getElementById('headerUser').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role)})`;
+
+  // Load base data
+  await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers()]);
+  buildNav();
+  // Navigate to first page
+  const firstNav = getNavItems()[0];
+  if (firstNav) navigateTo(firstNav.id);
+}
+
+function roleLabel(r) { return { owner: '老闆', admin: '總管理者', clinic_manager: '診所管理者' }[r] || r; }
+function isOwner() { return userProfile.role === 'owner'; }
+function isAdmin() { return userProfile.role === 'admin'; }
+function isManager() { return userProfile.role === 'clinic_manager'; }
+function canSeePrice() { return isOwner() || isAdmin(); }
+
+// ===================== DATA LOADERS =====================
+async function loadClinics() { const { data } = await sb.from('clinics').select('*').order('id'); allClinics = data || []; }
+async function loadCategories() { const { data } = await sb.from('categories').select('*').order('sort_order'); allCategories = data || []; }
+async function loadSuppliers() { const { data } = await sb.from('suppliers').select('*').order('name'); allSuppliers = data || []; }
+async function loadMaterials() { const { data } = await sb.from('materials').select('*').order('name'); allMaterials = data || []; }
+async function loadUsers() { const { data } = await sb.from('user_profiles').select('*').order('created_at'); allUsers = data || []; }
+
+function clinicName(id) { return allClinics.find(c => c.id === id)?.name || '-'; }
+function categoryName(id) { return allCategories.find(c => c.id === id)?.name || '-'; }
+function supplierName(id) { return allSuppliers.find(s => s.id === id)?.name || '-'; }
+function materialName(id) { return allMaterials.find(m => m.id === id)?.name || '-'; }
+function materialObj(id) { return allMaterials.find(m => m.id === id); }
+function userName(id) { return allUsers.find(u => u.id === id)?.display_name || '-'; }
+
+// ===================== NAV =====================
+function getNavItems() {
+  const items = [];
+  if (isOwner()) {
+    items.push(
+      { id: 'dashboard', icon: '📊', label: '總覽' },
+      { id: 'clinics', icon: '🏥', label: '診所管理' },
+      { id: 'users', icon: '👥', label: '人員管理' },
+      { id: 'categories', icon: '📁', label: '類別管理' },
+      { id: 'suppliers', icon: '🏭', label: '廠商管理' },
+      { id: 'materials', icon: '📦', label: '品項管理' },
+      { id: 'inventory', icon: '📋', label: '庫存總覽' },
+      { id: 'daily', icon: '⚡', label: '日常操作' },
+      { id: 'orders', icon: '🛒', label: '叫貨管理' },
+      { id: 'reports', icon: '📈', label: '月報表' }
+    );
+  } else if (isAdmin()) {
+    items.push(
+      { id: 'dashboard', icon: '📊', label: '總覽' },
+      { id: 'categories', icon: '📁', label: '類別管理' },
+      { id: 'suppliers', icon: '🏭', label: '廠商管理' },
+      { id: 'materials', icon: '📦', label: '品項管理' },
+      { id: 'inventory', icon: '📋', label: '庫存總覽' },
+      { id: 'daily', icon: '⚡', label: '日常操作' },
+      { id: 'orders', icon: '🛒', label: '叫貨管理' }
+    );
+  } else {
+    items.push(
+      { id: 'my-inventory', icon: '📋', label: '我的庫存' },
+      { id: 'consume', icon: '➖', label: '消耗牙材' },
+      { id: 'request', icon: '📝', label: '提交叫貨' },
+      { id: 'receive', icon: '📥', label: '確認收貨' }
+    );
+  }
+  return items;
+}
+
+function buildNav() {
+  const items = getNavItems();
+  // Sidebar
+  let sidebarHTML = `<div class="nav-section">${roleLabel(userProfile.role)}</div>`;
+  items.forEach(it => {
+    sidebarHTML += `<div class="nav-item" data-page="${it.id}" onclick="navigateTo('${it.id}')">${it.icon} ${it.label}</div>`;
+  });
+  document.getElementById('sidebar').innerHTML = sidebarHTML;
+
+  // Bottom nav - show up to 4 items + more
+  const bottomInner = document.getElementById('bottomNavInner');
+  const maxBottom = 4;
+  let bhtml = '';
+  const shown = items.slice(0, maxBottom);
+  const hidden = items.slice(maxBottom);
+  shown.forEach(it => {
+    bhtml += `<div class="bnav-item" data-page="${it.id}" onclick="navigateTo('${it.id}')"><span>${it.icon}</span><span>${it.label}</span></div>`;
+  });
+  if (hidden.length > 0) {
+    let moreHtml = '';
+    hidden.forEach(it => {
+      moreHtml += `<div class="mm-item" data-page="${it.id}" onclick="navigateTo('${it.id}');closeMoreMenu()">${it.icon} ${it.label}</div>`;
     });
-
-    await dbUpdate('materials', materialId, { current_stock: newStock });
-
-    showToast((type === 'in' ? '進貨' : '領料') + '成功', 'success');
-    closeModal('stockModal');
-    await loadMaterials();
-  } catch (e) {
-    showToast('操作失敗：' + e.message, 'error');
+    bhtml += `<div class="bnav-item bnav-more" onclick="toggleMoreMenu(event)"><span>⋯</span><span>更多</span><div class="more-menu" id="moreMenu">${moreHtml}</div></div>`;
   }
+  bottomInner.innerHTML = bhtml;
 }
 
-// ===== Logs =====
-async function loadLogs() {
-  var body = document.getElementById('logsBody');
-  body.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>';
-
-  try {
-    var params = 'select=*,materials(name)&order=created_at.desc';
-
-    var materialFilter = document.getElementById('logMaterialFilter').value;
-    if (materialFilter) params += '&material_id=eq.' + parseInt(materialFilter);
-
-    var typeFilter = document.getElementById('logTypeFilter').value;
-    if (typeFilter) params += '&type=eq.' + typeFilter;
-
-    var dateFrom = document.getElementById('logDateFrom').value;
-    if (dateFrom) params += '&created_at=gte.' + dateFrom + 'T00:00:00';
-
-    var dateTo = document.getElementById('logDateTo').value;
-    if (dateTo) params += '&created_at=lte.' + dateTo + 'T23:59:59';
-
-    var res = await fetch(API_URL + "/inventory_logs?" + params, {headers: headers});
-    if (!res.ok) throw new Error(await res.text());
-
-    var logs = await res.json();
-    if (logs.length === 0) {
-      body.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">📋</div><p>尚無進出紀錄</p></div></td></tr>';
-      return;
-    }
-    body.innerHTML = logs.map(function(l) {
-      var dt = new Date(l.created_at);
-      var timeStr = dt.getFullYear() + '/' + pad(dt.getMonth() + 1) + '/' + pad(dt.getDate()) + ' ' + pad(dt.getHours()) + ':' + pad(dt.getMinutes());
-      var matName = l.materials ? l.materials.name : '(已刪除)';
-      return '<tr>' +
-        '<td>' + timeStr + '</td>' +
-        '<td>' + esc(matName) + '</td>' +
-        '<td><span class="log-' + l.type + '">' + (l.type === 'in' ? '📥 進貨' : '📤 領料') + '</span></td>' +
-        '<td><strong>' + l.quantity + '</strong></td>' +
-        '<td>' + esc(l.operator || '') + '</td>' +
-        '<td class="hide-mobile">' + esc(l.notes || '') + '</td></tr>';
-    }).join('');
-  } catch (e) {
-    body.innerHTML = '<tr><td colspan="6"><div class="empty">載入失敗：' + esc(e.message) + '</div></td></tr>';
-  }
+function toggleMoreMenu(e) {
+  e.stopPropagation();
+  const m = document.getElementById('moreMenu');
+  m.classList.toggle('show');
+  const close = () => { m.classList.remove('show'); document.removeEventListener('click', close); };
+  if (m.classList.contains('show')) setTimeout(() => document.addEventListener('click', close), 0);
 }
+function closeMoreMenu() { const m = document.getElementById('moreMenu'); if (m) m.classList.remove('show'); }
 
-function clearLogFilters() {
-  document.getElementById('logMaterialFilter').value = '';
-  document.getElementById('logTypeFilter').value = '';
-  document.getElementById('logDateFrom').value = '';
-  document.getElementById('logDateTo').value = '';
-  loadLogs();
-}
+function navigateTo(pageId) {
+  currentPage = pageId;
+  // Update sidebar active
+  document.querySelectorAll('.sidebar .nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === pageId));
+  // Update bottom nav
+  document.querySelectorAll('.bottom-nav .bnav-item').forEach(n => n.classList.toggle('active', n.dataset.page === pageId));
 
-function populateLogMaterialFilter() {
-  var sel = document.getElementById('logMaterialFilter');
-  var val = sel.value;
-  sel.innerHTML = '<option value="">全部品項</option>' +
-    materials.map(function(m) { return '<option value="' + m.id + '">' + esc(m.name) + '</option>'; }).join('');
-  sel.value = val;
-}
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent)"></div></div>';
 
-// ===== Suppliers =====
-async function loadSuppliers() {
-  var body = document.getElementById('suppliersBody');
-  body.innerHTML = '<tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr>';
-  try {
-    suppliers = await dbSelect('suppliers', 'order=name');
-    if (suppliers.length === 0) {
-      body.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">🏢</div><p>尚無供應商資料</p></div></td></tr>';
-      return;
-    }
-    body.innerHTML = suppliers.map(function(s) {
-      return '<tr>' +
-        '<td><strong>' + esc(s.name) + '</strong></td>' +
-        '<td>' + esc(s.contact || '') + '</td>' +
-        '<td>' + esc(s.phone || '') + '</td>' +
-        '<td class="hide-mobile">' + esc(s.notes || '') + '</td>' +
-        '<td><div class="actions-cell">' +
-          '<button class="btn btn-primary btn-sm" onclick="openSupplierModal(' + s.id + ')">編輯</button>' +
-          '<button class="btn btn-danger btn-sm" onclick="confirmDeleteSupplier(' + s.id + ')">刪除</button>' +
-        '</div></td></tr>';
-    }).join('');
-  } catch (e) {
-    showToast('載入供應商失敗：' + e.message, 'error');
-  }
-}
-
-function openSupplierModal(id) {
-  document.getElementById('supplierId').value = '';
-  document.getElementById('supName').value = '';
-  document.getElementById('supContact').value = '';
-  document.getElementById('supPhone').value = '';
-  document.getElementById('supNotes').value = '';
-
-  if (id) {
-    var s = suppliers.find(function(x) { return x.id === id; });
-    if (s) {
-      document.getElementById('supplierModalTitle').textContent = '編輯供應商';
-      document.getElementById('supplierId').value = s.id;
-      document.getElementById('supName').value = s.name || '';
-      document.getElementById('supContact').value = s.contact || '';
-      document.getElementById('supPhone').value = s.phone || '';
-      document.getElementById('supNotes').value = s.notes || '';
-    }
-  } else {
-    document.getElementById('supplierModalTitle').textContent = '新增供應商';
-  }
-  openModal('supplierModal');
-}
-
-async function saveSupplier() {
-  var name = document.getElementById('supName').value.trim();
-  if (!name) { showToast('請輸入供應商名稱', 'error'); return; }
-
-  var data = {
-    name: name,
-    contact: document.getElementById('supContact').value.trim(),
-    phone: document.getElementById('supPhone').value.trim(),
-    notes: document.getElementById('supNotes').value.trim()
+  const renderers = {
+    'dashboard': renderDashboard,
+    'clinics': renderClinics,
+    'users': renderUsers,
+    'categories': renderCategories,
+    'suppliers': renderSuppliers,
+    'materials': renderMaterials,
+    'inventory': renderInventory,
+    'daily': renderDaily,
+    'orders': renderOrders,
+    'reports': renderReports,
+    'my-inventory': renderMyInventory,
+    'consume': renderConsume,
+    'request': renderRequest,
+    'receive': renderReceive
   };
 
-  try {
-    var id = document.getElementById('supplierId').value;
-    if (id) {
-      await dbUpdate('suppliers', parseInt(id), data);
-    } else {
-      await dbInsert('suppliers', data);
-    }
-    showToast(id ? '供應商已更新' : '供應商已新增', 'success');
-    closeModal('supplierModal');
-    await loadSuppliers();
-  } catch (e) {
-    showToast('儲存失敗：' + e.message, 'error');
-  }
+  const fn = renderers[pageId];
+  if (fn) fn();
+  else mc.innerHTML = '<div class="empty-state"><span>🚧</span>頁面建置中</div>';
 }
 
-function confirmDeleteSupplier(id) {
-  var s = suppliers.find(function(x) { return x.id === id; });
-  document.getElementById('deleteMessage').textContent = '確定要刪除供應商「' + (s ? s.name : '') + '」嗎？';
-  document.getElementById('deleteConfirmBtn').onclick = function() { deleteSupplier(id); };
-  openModal('deleteModal');
+// ===================== TOAST =====================
+function toast(msg, type = 'success') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// ===================== MODAL =====================
+function openModal(title, bodyHtml, footerHtml = '') {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = bodyHtml;
+  document.getElementById('modalFooter').innerHTML = footerHtml;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+
+// ===================== CONFIRM =====================
+function showConfirm(title, msg) {
+  return new Promise(resolve => {
+    confirmResolve = resolve;
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').innerHTML = msg;
+    document.getElementById('confirmOverlay').classList.add('show');
+  });
+}
+function closeConfirm(result) {
+  document.getElementById('confirmOverlay').classList.remove('show');
+  if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
+}
+
+// ===================== HELPERS =====================
+function optionsHTML(arr, valKey, labelKey, selected) {
+  return '<option value="">-- 請選擇 --</option>' +
+    arr.map(a => `<option value="${a[valKey]}"${a[valKey] == selected ? ' selected' : ''}>${a[labelKey]}</option>`).join('');
+}
+function fmtDate(d) { if (!d) return '-'; const dt = new Date(d); return dt.toLocaleDateString('zh-TW') + ' ' + dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }); }
+function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString(); }
+function statusLabel(s) {
+  const map = { pending: '待確認', confirmed: '已確認', shipped: '已出貨', delivered: '已到貨' };
+  return `<span class="badge badge-${s}">${map[s] || s}</span>`;
+}
+
+// ===================== DASHBOARD =====================
+async function renderDashboard() {
+  const mc = document.getElementById('mainContent');
+  const { data: inv } = await sb.from('clinic_inventory').select('*, materials(name, unit_price)');
+  const lowStock = (inv || []).filter(i => i.current_stock <= i.safety_stock);
+  const { data: pendingOrders } = await sb.from('orders').select('id').eq('status', 'pending');
+  const { data: recentLogs } = await sb.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(10);
+
+  mc.innerHTML = `
+    <div class="page-title">📊 系統總覽</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value">${allClinics.length}</div><div class="stat-label">診所數</div></div>
+      <div class="stat-card"><div class="stat-value">${allMaterials.length}</div><div class="stat-label">品項數</div></div>
+      <div class="stat-card"><div class="stat-value text-danger">${lowStock.length}</div><div class="stat-label">低庫存警告</div></div>
+      <div class="stat-card"><div class="stat-value">${(pendingOrders || []).length}</div><div class="stat-label">待處理叫貨</div></div>
+    </div>
+    ${lowStock.length > 0 ? `
+    <div class="card">
+      <div class="card-title">⚠️ 低庫存警告</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>診所</th><th>品項</th><th>現有</th><th>安全量</th></tr></thead>
+        <tbody>${lowStock.map(i => `<tr class="stock-danger"><td>${clinicName(i.clinic_id)}</td><td>${i.materials?.name || materialName(i.material_id)}</td><td>${i.current_stock}</td><td>${i.safety_stock}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>` : ''}
+    <div class="card">
+      <div class="card-title">📝 最近異動</div>
+      ${(recentLogs && recentLogs.length) ? `<div class="table-wrap"><table>
+        <thead><tr><th>時間</th><th>診所</th><th>品項</th><th>類型</th><th>數量</th><th>操作人</th></tr></thead>
+        <tbody>${recentLogs.map(l => `<tr>
+          <td>${fmtDate(l.created_at)}</td><td>${clinicName(l.clinic_id)}</td><td>${materialName(l.material_id)}</td>
+          <td>${{in:'入庫',out:'消耗',receive:'收貨'}[l.type]||l.type}</td><td>${l.quantity}</td><td>${l.operator_name||'-'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty-state">尚無異動紀錄</div>'}
+    </div>`;
+}
+
+// ===================== CLINICS (owner) =====================
+async function renderClinics() {
+  await loadClinics();
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+    <div class="page-title">🏥 診所管理</div>
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="editClinic()">＋ 新增診所</button>
+    </div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>名稱</th><th>地址</th><th>電話</th><th>備註</th><th>操作</th></tr></thead>
+      <tbody>${allClinics.map(c => `<tr>
+        <td>${c.name}</td><td>${c.address||'-'}</td><td>${c.phone||'-'}</td><td>${c.notes||'-'}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="editClinic(${c.id})">編輯</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteClinic(${c.id})">刪除</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function editClinic(id) {
+  const c = id ? allClinics.find(x => x.id === id) : {};
+  openModal(id ? '編輯診所' : '新增診所', `
+    <div class="form-group"><label>名稱 *</label><input id="fClinicName" value="${c.name || ''}"></div>
+    <div class="form-group"><label>地址</label><input id="fClinicAddr" value="${c.address || ''}"></div>
+    <div class="form-group"><label>電話</label><input id="fClinicPhone" value="${c.phone || ''}"></div>
+    <div class="form-group"><label>備註</label><textarea id="fClinicNotes">${c.notes || ''}</textarea></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveClinic(${id || 'null'})">儲存</button>`);
+}
+
+async function saveClinic(id) {
+  const obj = { name: document.getElementById('fClinicName').value.trim(), address: document.getElementById('fClinicAddr').value.trim(), phone: document.getElementById('fClinicPhone').value.trim(), notes: document.getElementById('fClinicNotes').value.trim() };
+  if (!obj.name) { toast('請輸入診所名稱', 'error'); return; }
+  let err;
+  if (id) { ({ error: err } = await sb.from('clinics').update(obj).eq('id', id)); }
+  else { ({ error: err } = await sb.from('clinics').insert(obj)); }
+  if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
+  toast(id ? '已更新' : '已新增');
+  closeModal();
+  await loadClinics();
+  renderClinics();
+}
+
+async function deleteClinic(id) {
+  if (!await showConfirm('刪除診所', '確定要刪除此診所？相關庫存資料也會一併刪除。')) return;
+  const { error } = await sb.from('clinics').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除');
+  await loadClinics();
+  renderClinics();
+}
+
+// ===================== USERS (owner) =====================
+async function renderUsers() {
+  await loadUsers();
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+    <div class="page-title">👥 人員管理</div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>姓名</th><th>角色</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
+      <tbody>${allUsers.map(u => `<tr>
+        <td>${u.display_name}</td>
+        <td>${roleLabel(u.role)}</td>
+        <td>${u.clinic_id ? clinicName(u.clinic_id) : '<span class="text-muted">未指派</span>'}</td>
+        <td>${u.is_active ? '<span class="text-success">啟用</span>' : '<span class="text-danger">停用</span>'}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">編輯</button>
+          <button class="btn ${u.is_active ? 'btn-warning' : 'btn-success'} btn-sm" onclick="toggleUserActive('${u.id}',${!u.is_active})">${u.is_active ? '停用' : '啟用'}</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function editUser(id) {
+  const u = allUsers.find(x => x.id === id);
+  if (!u) return;
+  openModal('編輯人員', `
+    <div class="form-group"><label>姓名</label><input id="fUserName" value="${u.display_name}"></div>
+    <div class="form-row">
+      <div class="form-group"><label>角色</label><select id="fUserRole">
+        <option value="owner"${u.role === 'owner' ? ' selected' : ''}>老闆</option>
+        <option value="admin"${u.role === 'admin' ? ' selected' : ''}>總管理者</option>
+        <option value="clinic_manager"${u.role === 'clinic_manager' ? ' selected' : ''}>診所管理者</option>
+      </select></div>
+      <div class="form-group"><label>所屬診所</label><select id="fUserClinic">${optionsHTML(allClinics, 'id', 'name', u.clinic_id)}</select></div>
+    </div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveUser('${id}')">儲存</button>`);
+}
+
+async function saveUser(id) {
+  const obj = {
+    display_name: document.getElementById('fUserName').value.trim(),
+    role: document.getElementById('fUserRole').value,
+    clinic_id: document.getElementById('fUserClinic').value || null
+  };
+  const { error } = await sb.from('user_profiles').update(obj).eq('id', id);
+  if (error) { toast('儲存失敗: ' + error.message, 'error'); return; }
+  toast('已更新');
+  closeModal();
+  await loadUsers();
+  renderUsers();
+}
+
+async function toggleUserActive(id, active) {
+  const { error } = await sb.from('user_profiles').update({ is_active: active }).eq('id', id);
+  if (error) { toast('操作失敗: ' + error.message, 'error'); return; }
+  toast(active ? '已啟用' : '已停用');
+  await loadUsers();
+  renderUsers();
+}
+
+// ===================== CATEGORIES =====================
+async function renderCategories() {
+  await loadCategories();
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+    <div class="page-title">📁 類別管理</div>
+    <div class="toolbar"><button class="btn btn-primary" onclick="editCategory()">＋ 新增類別</button></div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>排序</th><th>名稱</th><th>操作</th></tr></thead>
+      <tbody>${allCategories.map(c => `<tr>
+        <td>${c.sort_order}</td><td>${c.name}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="editCategory(${c.id})">編輯</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCategory(${c.id})">刪除</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function editCategory(id) {
+  const c = id ? allCategories.find(x => x.id === id) : {};
+  openModal(id ? '編輯類別' : '新增類別', `
+    <div class="form-group"><label>名稱 *</label><input id="fCatName" value="${c.name || ''}"></div>
+    <div class="form-group"><label>排序</label><input id="fCatSort" type="number" value="${c.sort_order || 0}"></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveCategory(${id || 'null'})">儲存</button>`);
+}
+
+async function saveCategory(id) {
+  const obj = { name: document.getElementById('fCatName').value.trim(), sort_order: parseInt(document.getElementById('fCatSort').value) || 0 };
+  if (!obj.name) { toast('請輸入名稱', 'error'); return; }
+  let err;
+  if (id) { ({ error: err } = await sb.from('categories').update(obj).eq('id', id)); }
+  else { ({ error: err } = await sb.from('categories').insert(obj)); }
+  if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
+  toast('已儲存'); closeModal(); await loadCategories(); renderCategories();
+}
+
+async function deleteCategory(id) {
+  if (!await showConfirm('刪除類別', '確定刪除此類別？')) return;
+  const { error } = await sb.from('categories').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除'); await loadCategories(); renderCategories();
+}
+
+// ===================== SUPPLIERS =====================
+async function renderSuppliers() {
+  await loadSuppliers();
+  const mc = document.getElementById('mainContent');
+  // Group materials by supplier
+  const supplierMats = {};
+  allMaterials.forEach(m => { if (m.supplier_id) { if (!supplierMats[m.supplier_id]) supplierMats[m.supplier_id] = []; supplierMats[m.supplier_id].push(m); } });
+
+  mc.innerHTML = `
+    <div class="page-title">🏭 廠商管理</div>
+    <div class="toolbar"><button class="btn btn-primary" onclick="editSupplier()">＋ 新增廠商</button></div>
+    ${allSuppliers.map(s => `
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between">
+          <span>🏭 ${s.name}</span>
+          <span>
+            <button class="btn btn-ghost btn-sm" onclick="editSupplier(${s.id})">編輯</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${s.id})">刪除</button>
+          </span>
+        </div>
+        <div style="font-size:.85rem;color:var(--text-light);margin-bottom:10px">
+          ${s.contact ? '聯絡人: ' + s.contact : ''} ${s.phone ? ' | 電話: ' + s.phone : ''} ${s.notes ? ' | ' + s.notes : ''}
+        </div>
+        ${(supplierMats[s.id] && supplierMats[s.id].length) ? `
+        <div class="table-wrap"><table>
+          <thead><tr><th>品項</th><th>規格</th><th>單位</th>${canSeePrice() ? '<th>單價</th>' : ''}<th>操作</th></tr></thead>
+          <tbody>${supplierMats[s.id].map(m => `<tr>
+            <td>${m.name}</td><td>${m.spec||'-'}</td><td>${m.unit}</td>
+            ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}
+            <td><button class="btn btn-success btn-xs" onclick="quickOrder(${m.id})">🛒 叫貨</button></td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<div style="color:var(--text-light);font-size:.85rem">此廠商尚無品項</div>'}
+      </div>
+    `).join('')}`;
+}
+
+function editSupplier(id) {
+  const s = id ? allSuppliers.find(x => x.id === id) : {};
+  openModal(id ? '編輯廠商' : '新增廠商', `
+    <div class="form-group"><label>名稱 *</label><input id="fSupName" value="${s.name || ''}"></div>
+    <div class="form-row">
+      <div class="form-group"><label>聯絡人</label><input id="fSupContact" value="${s.contact || ''}"></div>
+      <div class="form-group"><label>電話</label><input id="fSupPhone" value="${s.phone || ''}"></div>
+    </div>
+    <div class="form-group"><label>備註</label><textarea id="fSupNotes">${s.notes || ''}</textarea></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveSupplier(${id || 'null'})">儲存</button>`);
+}
+
+async function saveSupplier(id) {
+  const obj = { name: document.getElementById('fSupName').value.trim(), contact: document.getElementById('fSupContact').value.trim(), phone: document.getElementById('fSupPhone').value.trim(), notes: document.getElementById('fSupNotes').value.trim() };
+  if (!obj.name) { toast('請輸入名稱', 'error'); return; }
+  let err;
+  if (id) { ({ error: err } = await sb.from('suppliers').update(obj).eq('id', id)); }
+  else { ({ error: err } = await sb.from('suppliers').insert(obj)); }
+  if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
+  toast('已儲存'); closeModal(); await loadSuppliers(); renderSuppliers();
 }
 
 async function deleteSupplier(id) {
-  try {
-    await dbDelete('suppliers', id);
-    showToast('供應商已刪除', 'success');
-    closeModal('deleteModal');
-    await loadSuppliers();
-  } catch (e) {
-    showToast('刪除失敗：' + e.message, 'error');
-  }
+  if (!await showConfirm('刪除廠商', '確定刪除此廠商？')) return;
+  const { error } = await sb.from('suppliers').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除'); await loadSuppliers(); renderSuppliers();
 }
 
-async function loadSupplierOptions(selectId) {
-  try {
-    var supList = await dbSelect('suppliers', 'order=name');
-    var sel = document.getElementById(selectId);
-    var current = sel.value;
-    sel.innerHTML = '<option value="">請選擇</option>' +
-      supList.map(function(s) { return '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>'; }).join('');
-    sel.value = current;
-  } catch (e) { /* ignore */ }
+// ===================== MATERIALS =====================
+async function renderMaterials() {
+  await loadMaterials();
+  const mc = document.getElementById('mainContent');
+  let filterCat = 0;
+  const render = () => {
+    const filtered = filterCat ? allMaterials.filter(m => m.category_id === filterCat) : allMaterials;
+    mc.innerHTML = `
+      <div class="page-title">📦 品項管理</div>
+      <div class="toolbar">
+        <input class="search-box" placeholder="搜尋品項..." oninput="filterMaterials(this.value)">
+        <button class="btn btn-primary" onclick="editMaterial()">＋ 新增品項</button>
+      </div>
+      <div class="filter-chips">
+        <span class="chip ${!filterCat ? 'active' : ''}" onclick="matFilterCat=0;renderMaterials()">全部</span>
+        ${allCategories.map(c => `<span class="chip ${filterCat === c.id ? 'active' : ''}" onclick="matFilterCat=${c.id};renderMaterials()">${c.name}</span>`).join('')}
+      </div>
+      <div class="card"><div class="table-wrap"><table id="matTable">
+        <thead><tr><th>圖片</th><th>名稱</th><th>類別</th><th>規格</th><th>單位</th><th>廠商</th>${canSeePrice() ? '<th>單價</th>' : ''}<th>操作</th></tr></thead>
+        <tbody>${filtered.map(m => `<tr data-name="${m.name}">
+          <td>${m.image_url ? `<img class="img-thumb" src="${m.image_url}" onclick="window.open('${m.image_url}')">` : '-'}</td>
+          <td><strong>${m.name}</strong></td><td>${categoryName(m.category_id)}</td><td>${m.spec||'-'}</td><td>${m.unit}</td>
+          <td>${supplierName(m.supplier_id)}</td>
+          ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="editMaterial(${m.id})">編輯</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteMaterial(${m.id})">刪除</button>
+          </td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>`;
+  };
+  window.matFilterCat = filterCat;
+  render();
 }
 
-// ===== Helpers =====
-function esc(str) {
-  var div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-function pad(n) { return n < 10 ? '0' + n : '' + n; }
-
-// Close modal on overlay click
-document.querySelectorAll('.modal-overlay').forEach(function(el) {
-  el.addEventListener('click', function(e) {
-    if (e.target === el) el.classList.remove('show');
+window.filterMaterials = function(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#matTable tbody tr').forEach(tr => {
+    tr.style.display = tr.dataset.name.toLowerCase().includes(q) ? '' : 'none';
   });
-});
+};
 
-// Init
-(async function() {
-  try {
-    console.log('Init: loading materials...');
-    await loadMaterials();
-    console.log('Init: materials loaded, populating filter...');
-    populateLogMaterialFilter();
-    console.log('Init: done');
-  } catch(e) {
-    console.error('Init error:', e);
-    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:red"><h2>載入失敗</h2><p>' + e.message + '</p></div>';
+function editMaterial(id) {
+  const m = id ? allMaterials.find(x => x.id === id) : {};
+  openModal(id ? '編輯品項' : '新增品項', `
+    <div class="form-group"><label>名稱 *</label><input id="fMatName" value="${m.name || ''}"></div>
+    <div class="form-row">
+      <div class="form-group"><label>類別</label><select id="fMatCat">${optionsHTML(allCategories, 'id', 'name', m.category_id)}</select></div>
+      <div class="form-group"><label>廠商</label><select id="fMatSup">${optionsHTML(allSuppliers, 'id', 'name', m.supplier_id)}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>規格</label><input id="fMatSpec" value="${m.spec || ''}"></div>
+      <div class="form-group"><label>單位</label><input id="fMatUnit" value="${m.unit || '個'}"></div>
+    </div>
+    <div class="form-group"><label>單價</label><input id="fMatPrice" type="number" step="0.01" value="${m.unit_price || 0}"></div>
+    <div class="form-group"><label>圖片</label>
+      <input id="fMatImage" type="file" accept="image/*" onchange="previewMatImage(this)">
+      ${m.image_url ? `<img class="img-upload-preview" id="matImgPreview" src="${m.image_url}">` : '<img class="img-upload-preview" id="matImgPreview" style="display:none">'}
+      <input type="hidden" id="fMatImageUrl" value="${m.image_url || ''}">
+    </div>
+    <div class="form-group"><label>備註</label><textarea id="fMatNotes">${m.notes || ''}</textarea></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" id="btnSaveMat" onclick="saveMaterial(${id || 'null'})">儲存</button>`);
+}
+
+function previewMatImage(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const prev = document.getElementById('matImgPreview');
+      prev.src = e.target.result;
+      prev.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
   }
-})();
+}
+
+async function saveMaterial(id) {
+  const btn = document.getElementById('btnSaveMat');
+  btn.disabled = true; btn.textContent = '儲存中...';
+  try {
+    let imageUrl = document.getElementById('fMatImageUrl').value;
+    const fileInput = document.getElementById('fMatImage');
+    if (fileInput.files && fileInput.files[0]) {
+      const file = fileInput.files[0];
+      const ext = file.name.split('.').pop();
+      const path = `materials/${Date.now()}.${ext}`;
+      const { error: upErr } = await sb.storage.from('material-images').upload(path, file);
+      if (upErr) { toast('圖片上傳失敗: ' + upErr.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
+      const { data: urlData } = sb.storage.from('material-images').getPublicUrl(path);
+      imageUrl = urlData.publicUrl;
+    }
+    const obj = {
+      name: document.getElementById('fMatName').value.trim(),
+      category_id: document.getElementById('fMatCat').value || null,
+      supplier_id: document.getElementById('fMatSup').value || null,
+      spec: document.getElementById('fMatSpec').value.trim(),
+      unit: document.getElementById('fMatUnit').value.trim() || '個',
+      unit_price: parseFloat(document.getElementById('fMatPrice').value) || 0,
+      image_url: imageUrl,
+      notes: document.getElementById('fMatNotes').value.trim()
+    };
+    if (!obj.name) { toast('請輸入名稱', 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
+    let err;
+    if (id) { ({ error: err } = await sb.from('materials').update(obj).eq('id', id)); }
+    else { ({ error: err } = await sb.from('materials').insert(obj)); }
+    if (err) { toast('儲存失敗: ' + err.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
+    toast('已儲存'); closeModal(); await loadMaterials(); renderMaterials();
+  } catch (e) { toast('錯誤: ' + e.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; }
+}
+
+async function deleteMaterial(id) {
+  if (!await showConfirm('刪除品項', '確定刪除此品項？')) return;
+  const { error } = await sb.from('materials').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除'); await loadMaterials(); renderMaterials();
+}
+
+// ===================== INVENTORY OVERVIEW =====================
+async function renderInventory() {
+  const { data: inv } = await sb.from('clinic_inventory').select('*');
+  const mc = document.getElementById('mainContent');
+  // Build matrix: materials x clinics
+  const clinicsToShow = isAdmin() || isOwner() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  const invMap = {};
+  (inv || []).forEach(i => { invMap[`${i.clinic_id}_${i.material_id}`] = i; });
+
+  // Group by category
+  const matsByCat = {};
+  allMaterials.forEach(m => {
+    const catId = m.category_id || 0;
+    if (!matsByCat[catId]) matsByCat[catId] = [];
+    matsByCat[catId].push(m);
+  });
+
+  let html = `<div class="page-title">📋 庫存總覽</div>`;
+
+  for (const catId of Object.keys(matsByCat)) {
+    const catName = catId == 0 ? '未分類' : categoryName(parseInt(catId));
+    const mats = matsByCat[catId];
+    html += `<div class="card"><div class="card-title">${catName}</div><div class="table-wrap"><table>
+      <thead><tr><th>品項</th>${clinicsToShow.map(c => `<th>${c.name}</th>`).join('')}<th>合計</th>${canSeePrice() ? '<th>單價</th>' : ''}</tr></thead><tbody>`;
+    mats.forEach(m => {
+      let total = 0;
+      let cells = clinicsToShow.map(c => {
+        const rec = invMap[`${c.id}_${m.id}`];
+        const stock = rec ? rec.current_stock : 0;
+        const safety = rec ? rec.safety_stock : 5;
+        total += stock;
+        const cls = stock <= safety ? 'stock-danger' : '';
+        return `<td class="${cls}">${stock}</td>`;
+      }).join('');
+      html += `<tr><td><strong>${m.name}</strong><br><small class="text-muted">${m.spec || ''} ${m.unit}</small></td>${cells}<td><strong>${total}</strong></td>${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}</tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  }
+  mc.innerHTML = html;
+}
+
+// ===================== DAILY OPERATIONS (owner/admin) =====================
+async function renderDaily() {
+  const mc = document.getElementById('mainContent');
+  const myClinicId = userProfile.clinic_id;
+  const clinicsForOps = isOwner() ? allClinics : allClinics.filter(c => c.id === myClinicId);
+
+  mc.innerHTML = `
+    <div class="page-title">⚡ 日常操作</div>
+    <div class="sub-tabs">
+      <div class="sub-tab active" onclick="showDailySub('consume')">消耗</div>
+      <div class="sub-tab" onclick="showDailySub('order')">叫貨</div>
+      <div class="sub-tab" onclick="showDailySub('receive')">收貨</div>
+    </div>
+    <div id="dailyContent"></div>`;
+
+  window.showDailySub = (tab) => {
+    document.querySelectorAll('.sub-tab').forEach((t, i) => t.classList.toggle('active', ['consume', 'order', 'receive'][i] === tab));
+    if (tab === 'consume') renderDailyConsume(clinicsForOps);
+    else if (tab === 'order') renderDailyOrder(clinicsForOps);
+    else renderDailyReceive(clinicsForOps);
+  };
+  renderDailyConsume(clinicsForOps);
+}
+
+async function renderDailyConsume(clinics) {
+  const dc = document.getElementById('dailyContent');
+  dc.innerHTML = `
+    <div class="card">
+      <div class="form-row">
+        <div class="form-group"><label>診所</label><select id="dConsumeClinic">${clinics.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+        <div class="form-group"><label>品項</label><select id="dConsumeMat">${allMaterials.map(m => `<option value="${m.id}">${m.name} (${m.spec||''} ${m.unit})</option>`).join('')}</select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>數量</label><input id="dConsumeQty" type="number" min="1" value="1"></div>
+        <div class="form-group"><label>備註</label><input id="dConsumeNotes"></div>
+      </div>
+      <button class="btn btn-warning" onclick="doConsume()">確認消耗</button>
+    </div>`;
+}
+
+async function doConsume() {
+  const clinicId = parseInt(document.getElementById('dConsumeClinic').value);
+  const materialId = parseInt(document.getElementById('dConsumeMat').value);
+  const qty = parseInt(document.getElementById('dConsumeQty').value);
+  const notes = document.getElementById('dConsumeNotes').value.trim();
+  if (!qty || qty < 1) { toast('請輸入數量', 'error'); return; }
+
+  // Update inventory
+  const { data: inv } = await sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', materialId).single();
+  if (!inv) {
+    toast('此診所尚無此品項庫存紀錄', 'error'); return;
+  }
+  if (inv.current_stock < qty) { toast('庫存不足！目前: ' + inv.current_stock, 'error'); return; }
+  const { error: e1 } = await sb.from('clinic_inventory').update({ current_stock: inv.current_stock - qty }).eq('id', inv.id);
+  if (e1) { toast('更新庫存失敗: ' + e1.message, 'error'); return; }
+  const { error: e2 } = await sb.from('inventory_logs').insert({
+    clinic_id: clinicId, material_id: materialId, type: 'out', quantity: qty,
+    operator_id: currentUser.id, operator_name: userProfile.display_name, notes
+  });
+  if (e2) { toast('記錄失敗: ' + e2.message, 'error'); return; }
+  toast(`已消耗 ${materialName(materialId)} x${qty}`);
+  document.getElementById('dConsumeQty').value = 1;
+  document.getElementById('dConsumeNotes').value = '';
+}
+
+async function renderDailyOrder(clinics) {
+  const dc = document.getElementById('dailyContent');
+  dc.innerHTML = `
+    <div class="card">
+      <div class="card-title">建立叫貨需求</div>
+      <div class="form-group"><label>選擇品項（可多選）</label></div>
+      <div id="orderItemsList"></div>
+      <button class="btn btn-ghost btn-sm" onclick="addOrderItem()" style="margin-bottom:12px">＋ 新增一項</button>
+      <div class="form-group"><label>備註</label><textarea id="dOrderNotes"></textarea></div>
+      <button class="btn btn-primary" onclick="submitDailyOrder()">提交叫貨</button>
+    </div>`;
+  window._orderClinics = clinics;
+  addOrderItem();
+}
+
+function addOrderItem() {
+  const list = document.getElementById('orderItemsList');
+  const idx = list.children.length;
+  const clinics = window._orderClinics;
+  const div = document.createElement('div');
+  div.className = 'form-row';
+  div.style.marginBottom = '10px';
+  div.innerHTML = `
+    <div class="form-group"><label>診所</label><select class="oi-clinic">${clinics.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+    <div class="form-group"><label>品項</label><select class="oi-mat">${allMaterials.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}</select></div>
+    <div class="form-group"><label>數量</label><input class="oi-qty" type="number" min="1" value="1"></div>
+    <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-danger btn-sm" onclick="this.closest('.form-row').remove()">✕</button></div>`;
+  list.appendChild(div);
+}
+
+async function submitDailyOrder() {
+  const rows = document.querySelectorAll('#orderItemsList .form-row');
+  if (!rows.length) { toast('請至少新增一項', 'error'); return; }
+  const items = [];
+  for (const row of rows) {
+    const clinicId = parseInt(row.querySelector('.oi-clinic').value);
+    const matId = parseInt(row.querySelector('.oi-mat').value);
+    const qty = parseInt(row.querySelector('.oi-qty').value);
+    if (!qty || qty < 1) { toast('數量必須大於 0', 'error'); return; }
+    const mat = materialObj(matId);
+    items.push({ clinic_id: clinicId, material_id: matId, quantity: qty, unit_price: mat ? mat.unit_price : 0 });
+  }
+  const totalAmount = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+  const notes = document.getElementById('dOrderNotes').value.trim();
+
+  const { data: order, error: e1 } = await sb.from('orders').insert({
+    status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes
+  }).select().single();
+  if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
+
+  const orderItems = items.map(i => ({ order_id: order.id, ...i }));
+  const { error: e2 } = await sb.from('order_items').insert(orderItems);
+  if (e2) { toast('明細建立失敗: ' + e2.message, 'error'); return; }
+
+  toast('叫貨單已提交');
+  renderDailyOrder(window._orderClinics);
+}
+
+async function renderDailyReceive(clinics) {
+  const dc = document.getElementById('dailyContent');
+  const { data: dcs } = await sb.from('delivery_confirmations').select('*, orders(*)').eq('status', 'pending');
+  const myDcs = (dcs || []).filter(d => clinics.some(c => c.id === d.clinic_id));
+  if (!myDcs.length) {
+    dc.innerHTML = '<div class="card"><div class="empty-state"><span>📦</span>目前沒有待收貨的項目</div></div>';
+    return;
+  }
+  dc.innerHTML = `<div class="card"><div class="card-title">待收貨</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>叫貨單</th><th>診所</th><th>狀態</th><th>操作</th></tr></thead>
+      <tbody>${myDcs.map(d => `<tr>
+        <td>#${d.order_id}</td><td>${clinicName(d.clinic_id)}</td><td>${statusLabel(d.status)}</td>
+        <td><button class="btn btn-success btn-sm" onclick="confirmReceiveFromDaily(${d.id},${d.order_id},${d.clinic_id})">確認收貨</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+// ===================== ORDERS MANAGEMENT (admin/owner) =====================
+async function renderOrders() {
+  const { data: orders } = await sb.from('orders').select('*').order('created_at', { ascending: false });
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+    <div class="page-title">🛒 叫貨管理</div>
+    <div class="sub-tabs">
+      <div class="sub-tab active" data-os="all" onclick="filterOrders('all')">全部</div>
+      <div class="sub-tab" data-os="pending" onclick="filterOrders('pending')">待確認</div>
+      <div class="sub-tab" data-os="confirmed" onclick="filterOrders('confirmed')">已確認</div>
+      <div class="sub-tab" data-os="shipped" onclick="filterOrders('shipped')">已出貨</div>
+      <div class="sub-tab" data-os="delivered" onclick="filterOrders('delivered')">已到貨</div>
+    </div>
+    <div id="ordersList"></div>`;
+  window._allOrders = orders || [];
+  window.filterOrders = (status) => {
+    document.querySelectorAll('.sub-tab[data-os]').forEach(t => t.classList.toggle('active', t.dataset.os === status));
+    const filtered = status === 'all' ? window._allOrders : window._allOrders.filter(o => o.status === status);
+    renderOrdersList(filtered);
+  };
+  renderOrdersList(orders || []);
+}
+
+function renderOrdersList(orders) {
+  const el = document.getElementById('ordersList');
+  if (!orders.length) { el.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>沒有叫貨單</div></div>'; return; }
+  el.innerHTML = orders.map(o => `
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span>叫貨單 #${o.id} ${statusLabel(o.status)}</span>
+        <span class="text-muted" style="font-size:.82rem">${fmtDate(o.created_at)}</span>
+      </div>
+      <div style="font-size:.88rem;margin-bottom:8px">
+        建立者: ${userName(o.created_by)} | 金額: ${fmtMoney(o.total_amount)}
+        ${o.notes ? ' | 備註: ' + o.notes : ''}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="viewOrderDetail(${o.id})">查看明細</button>
+      ${o.status === 'pending' ? `<button class="btn btn-success btn-sm" onclick="confirmOrder(${o.id})">確認叫貨</button>` : ''}
+      ${o.status === 'confirmed' ? `<button class="btn btn-primary btn-sm" onclick="shipOrder(${o.id})">出貨</button>` : ''}
+      <div id="orderDetail_${o.id}"></div>
+    </div>`).join('');
+}
+
+async function viewOrderDetail(orderId) {
+  const el = document.getElementById('orderDetail_' + orderId);
+  if (el.innerHTML) { el.innerHTML = ''; return; }
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (!items || !items.length) { el.innerHTML = '<div class="order-detail">無明細</div>'; return; }
+
+  // Group by supplier
+  const groups = {};
+  items.forEach(it => {
+    const mat = materialObj(it.material_id);
+    const supId = mat?.supplier_id || 0;
+    const supName = supId ? supplierName(supId) : '無廠商';
+    if (!groups[supName]) groups[supName] = [];
+    groups[supName].push({ ...it, mat });
+  });
+
+  let html = '<div class="order-detail">';
+  for (const [sup, sitems] of Object.entries(groups)) {
+    html += `<div class="order-group"><h4>🏭 ${sup}</h4><table>
+      <thead><tr><th>品項</th><th>診所</th><th>數量</th><th>單價</th><th>小計</th></tr></thead><tbody>`;
+    let groupTotal = 0;
+    sitems.forEach(si => {
+      const price = si.is_custom_price && si.custom_price != null ? si.custom_price : si.unit_price;
+      const sub = price * si.quantity;
+      groupTotal += sub;
+      html += `<tr><td>${si.mat?.name || materialName(si.material_id)}</td><td>${clinicName(si.clinic_id)}</td><td>${si.quantity}</td>
+        <td>${si.is_custom_price ? '<span class="text-success">優惠</span> ' : ''}${fmtMoney(price)}</td><td>${fmtMoney(sub)}</td></tr>`;
+    });
+    html += `</tbody><tfoot><tr><td colspan="4" style="text-align:right"><strong>小計</strong></td><td><strong>${fmtMoney(groupTotal)}</strong></td></tr></tfoot></table></div>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+async function confirmOrder(orderId) {
+  // Show order items for price editing before confirm
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (!items || !items.length) { toast('此叫貨單無明細', 'error'); return; }
+
+  let body = '<p style="margin-bottom:12px">確認各品項價格後送出：</p>';
+  items.forEach((it, i) => {
+    const mat = materialObj(it.material_id);
+    body += `<div class="form-row" style="margin-bottom:8px;align-items:end">
+      <div><strong>${mat?.name || '?'}</strong><br><small>${clinicName(it.clinic_id)} x${it.quantity}</small></div>
+      <div class="form-group" style="margin:0"><label>單價</label><input id="oiPrice_${i}" type="number" step="0.01" value="${it.unit_price}"></div>
+      <div class="form-group" style="margin:0"><label><input type="checkbox" id="oiCustom_${i}" ${it.is_custom_price ? 'checked' : ''}> 優惠價</label></div>
+    </div>`;
+  });
+
+  openModal('確認叫貨 #' + orderId, body,
+    `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-success" onclick="doConfirmOrder(${orderId})">確認送出</button>`);
+  window._confirmItems = items;
+}
+
+async function doConfirmOrder(orderId) {
+  const items = window._confirmItems;
+  let totalAmount = 0;
+  for (let i = 0; i < items.length; i++) {
+    const price = parseFloat(document.getElementById('oiPrice_' + i).value) || 0;
+    const isCustom = document.getElementById('oiCustom_' + i).checked;
+    totalAmount += price * items[i].quantity;
+    await sb.from('order_items').update({
+      unit_price: isCustom ? items[i].unit_price : price,
+      custom_price: isCustom ? price : null,
+      is_custom_price: isCustom
+    }).eq('id', items[i].id);
+  }
+  await sb.from('orders').update({
+    status: 'confirmed', confirmed_by: currentUser.id, confirmed_at: new Date().toISOString(), total_amount: totalAmount
+  }).eq('id', orderId);
+  toast('已確認叫貨');
+  closeModal();
+  renderOrders();
+}
+
+async function shipOrder(orderId) {
+  if (!await showConfirm('確認出貨', '確定標記此叫貨單為已出貨？將為各診所建立收貨確認。')) return;
+
+  const { data: items } = await sb.from('order_items').select('clinic_id').eq('order_id', orderId);
+  const clinicIds = [...new Set((items || []).map(i => i.clinic_id))];
+
+  await sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId);
+
+  const dcs = clinicIds.map(cid => ({ order_id: orderId, clinic_id: cid, status: 'pending' }));
+  if (dcs.length) await sb.from('delivery_confirmations').insert(dcs);
+
+  toast('已出貨，等待各診所確認收貨');
+  renderOrders();
+}
+
+// ===================== QUICK ORDER (from supplier page) =====================
+function quickOrder(materialId) {
+  const mat = materialObj(materialId);
+  if (!mat) return;
+  const clinics = isOwner() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  openModal('快速叫貨: ' + mat.name, `
+    <div class="form-group"><label>診所</label><select id="qoClinic">${clinics.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+    <div class="form-group"><label>數量</label><input id="qoQty" type="number" min="1" value="1"></div>
+    <div class="form-group"><label>備註</label><input id="qoNotes"></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="doQuickOrder(${materialId})">提交</button>`);
+}
+
+async function doQuickOrder(materialId) {
+  const mat = materialObj(materialId);
+  const clinicId = parseInt(document.getElementById('qoClinic').value);
+  const qty = parseInt(document.getElementById('qoQty').value);
+  const notes = document.getElementById('qoNotes').value.trim();
+  if (!qty || qty < 1) { toast('數量需大於 0', 'error'); return; }
+
+  const { data: order, error: e1 } = await sb.from('orders').insert({
+    status: 'pending', created_by: currentUser.id, total_amount: mat.unit_price * qty, notes
+  }).select().single();
+  if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
+
+  const { error: e2 } = await sb.from('order_items').insert({
+    order_id: order.id, material_id: materialId, clinic_id: clinicId, quantity: qty, unit_price: mat.unit_price
+  });
+  if (e2) { toast('明細失敗: ' + e2.message, 'error'); return; }
+  toast('叫貨單已提交'); closeModal();
+}
+
+// ===================== REPORTS (owner) =====================
+async function renderReports() {
+  const mc = document.getElementById('mainContent');
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed
+  const startDate = new Date(year, month, 1).toISOString();
+  const endDate = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+
+  const { data: logs } = await sb.from('inventory_logs').select('*').gte('created_at', startDate).lte('created_at', endDate);
+  const { data: orders } = await sb.from('orders').select('*').gte('created_at', startDate).lte('created_at', endDate);
+
+  const totalOut = (logs || []).filter(l => l.type === 'out').reduce((s, l) => s + l.quantity, 0);
+  const totalIn = (logs || []).filter(l => l.type === 'in' || l.type === 'receive').reduce((s, l) => s + l.quantity, 0);
+  const totalOrderAmt = (orders || []).reduce((s, o) => s + parseFloat(o.total_amount || 0), 0);
+  const orderCount = (orders || []).length;
+
+  // By material consumption
+  const matConsume = {};
+  (logs || []).filter(l => l.type === 'out').forEach(l => {
+    matConsume[l.material_id] = (matConsume[l.material_id] || 0) + l.quantity;
+  });
+  const topConsumed = Object.entries(matConsume).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+  // By clinic consumption
+  const clinicConsume = {};
+  (logs || []).filter(l => l.type === 'out').forEach(l => {
+    clinicConsume[l.clinic_id] = (clinicConsume[l.clinic_id] || 0) + l.quantity;
+  });
+
+  mc.innerHTML = `
+    <div class="page-title">📈 月報表 - ${year}年${month + 1}月</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value">${totalOut}</div><div class="stat-label">消耗量</div></div>
+      <div class="stat-card"><div class="stat-value">${totalIn}</div><div class="stat-label">入庫量</div></div>
+      <div class="stat-card"><div class="stat-value">${orderCount}</div><div class="stat-label">叫貨單數</div></div>
+      <div class="stat-card"><div class="stat-value">${fmtMoney(totalOrderAmt)}</div><div class="stat-label">叫貨總額</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔥 消耗排行</div>
+      ${topConsumed.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>品項</th><th>消耗量</th></tr></thead>
+        <tbody>${topConsumed.map(([mid, qty]) => `<tr><td>${materialName(parseInt(mid))}</td><td>${qty}</td></tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty-state">本月尚無消耗紀錄</div>'}
+    </div>
+    <div class="card">
+      <div class="card-title">🏥 各診所消耗</div>
+      ${Object.keys(clinicConsume).length ? `<div class="table-wrap"><table>
+        <thead><tr><th>診所</th><th>消耗量</th></tr></thead>
+        <tbody>${Object.entries(clinicConsume).map(([cid, qty]) => `<tr><td>${clinicName(parseInt(cid))}</td><td>${qty}</td></tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty-state">本月尚無消耗</div>'}
+    </div>`;
+}
+
+// ===================== CLINIC MANAGER PAGES =====================
+
+// My Inventory
+async function renderMyInventory() {
+  const mc = document.getElementById('mainContent');
+  const { data: inv } = await sb.from('clinic_inventory').select('*, materials(name, spec, unit, category_id, image_url)').eq('clinic_id', userProfile.clinic_id);
+  mc.innerHTML = `
+    <div class="page-title">📋 ${clinicName(userProfile.clinic_id)} 庫存</div>
+    ${(inv && inv.length) ? `<div class="card"><div class="table-wrap"><table class="responsive-cards">
+      <thead><tr><th>品項</th><th>規格</th><th>庫存</th><th>安全量</th><th>狀態</th></tr></thead>
+      <tbody>${inv.map(i => {
+        const cls = i.current_stock <= i.safety_stock ? 'stock-danger' : '';
+        return `<tr class="${cls}">
+          <td data-label="品項">${i.materials?.name || materialName(i.material_id)}</td>
+          <td data-label="規格">${i.materials?.spec || '-'} ${i.materials?.unit || ''}</td>
+          <td data-label="庫存"><strong>${i.current_stock}</strong></td>
+          <td data-label="安全量">${i.safety_stock}</td>
+          <td data-label="狀態">${i.current_stock <= i.safety_stock ? '<span class="text-danger">⚠️ 不足</span>' : '<span class="text-success">✓ 正常</span>'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div></div>` : '<div class="card"><div class="empty-state"><span>📦</span>尚無庫存資料</div></div>'}`;
+}
+
+// Consume
+async function renderConsume() {
+  const mc = document.getElementById('mainContent');
+  const { data: inv } = await sb.from('clinic_inventory').select('*, materials(name, spec, unit)').eq('clinic_id', userProfile.clinic_id).gt('current_stock', 0);
+  mc.innerHTML = `
+    <div class="page-title">➖ 消耗牙材</div>
+    <div class="card">
+      <div class="form-group"><label>品項</label>
+        <select id="cmConsumeMat">${(inv || []).map(i => `<option value="${i.material_id}" data-stock="${i.current_stock}">${i.materials?.name || materialName(i.material_id)} (庫存: ${i.current_stock})</option>`).join('')}</select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>數量</label><input id="cmConsumeQty" type="number" min="1" value="1"></div>
+        <div class="form-group"><label>備註</label><input id="cmConsumeNotes" placeholder="選填"></div>
+      </div>
+      <button class="btn btn-warning" onclick="cmDoConsume()">確認消耗</button>
+    </div>`;
+}
+
+async function cmDoConsume() {
+  const matId = parseInt(document.getElementById('cmConsumeMat').value);
+  const qty = parseInt(document.getElementById('cmConsumeQty').value);
+  const notes = document.getElementById('cmConsumeNotes').value.trim();
+  if (!matId) { toast('請選擇品項', 'error'); return; }
+  if (!qty || qty < 1) { toast('請輸入數量', 'error'); return; }
+
+  const { data: inv } = await sb.from('clinic_inventory').select('*').eq('clinic_id', userProfile.clinic_id).eq('material_id', matId).single();
+  if (!inv || inv.current_stock < qty) { toast('庫存不足', 'error'); return; }
+
+  const { error: e1 } = await sb.from('clinic_inventory').update({ current_stock: inv.current_stock - qty }).eq('id', inv.id);
+  if (e1) { toast('更新失敗: ' + e1.message, 'error'); return; }
+  await sb.from('inventory_logs').insert({
+    clinic_id: userProfile.clinic_id, material_id: matId, type: 'out', quantity: qty,
+    operator_id: currentUser.id, operator_name: userProfile.display_name, notes
+  });
+  toast(`已消耗 ${materialName(matId)} x${qty}`);
+  renderConsume();
+}
+
+// Request order
+async function renderRequest() {
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+    <div class="page-title">📝 提交叫貨</div>
+    <div class="card">
+      <div id="cmOrderItems"></div>
+      <button class="btn btn-ghost btn-sm" onclick="cmAddItem()" style="margin-bottom:12px">＋ 新增一項</button>
+      <div class="form-group"><label>備註</label><textarea id="cmOrderNotes"></textarea></div>
+      <button class="btn btn-primary" onclick="cmSubmitOrder()">提交叫貨需求</button>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 我的叫貨紀錄</div>
+      <div id="cmMyOrders"></div>
+    </div>`;
+  cmAddItem();
+  loadMyOrders();
+}
+
+function cmAddItem() {
+  const list = document.getElementById('cmOrderItems');
+  const div = document.createElement('div');
+  div.className = 'form-row';
+  div.style.marginBottom = '8px';
+  div.innerHTML = `
+    <div class="form-group"><label>品項</label><select class="cmi-mat">${allMaterials.map(m => `<option value="${m.id}">${m.name} (${m.spec||''} ${m.unit})</option>`).join('')}</select></div>
+    <div class="form-group"><label>數量</label><input class="cmi-qty" type="number" min="1" value="1"></div>
+    <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-danger btn-sm" onclick="this.closest('.form-row').remove()">✕</button></div>`;
+  list.appendChild(div);
+}
+
+async function cmSubmitOrder() {
+  const rows = document.querySelectorAll('#cmOrderItems .form-row');
+  if (!rows.length) { toast('請至少新增一項', 'error'); return; }
+  const items = [];
+  for (const row of rows) {
+    const matId = parseInt(row.querySelector('.cmi-mat').value);
+    const qty = parseInt(row.querySelector('.cmi-qty').value);
+    if (!qty || qty < 1) { toast('數量需大於 0', 'error'); return; }
+    const mat = materialObj(matId);
+    items.push({ material_id: matId, clinic_id: userProfile.clinic_id, quantity: qty, unit_price: mat ? mat.unit_price : 0 });
+  }
+  const totalAmount = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+  const notes = document.getElementById('cmOrderNotes').value.trim();
+
+  const { data: order, error: e1 } = await sb.from('orders').insert({
+    status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes
+  }).select().single();
+  if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
+
+  const { error: e2 } = await sb.from('order_items').insert(items.map(i => ({ order_id: order.id, ...i })));
+  if (e2) { toast('明細失敗: ' + e2.message, 'error'); return; }
+  toast('叫貨需求已提交');
+  renderRequest();
+}
+
+async function loadMyOrders() {
+  const { data: orders } = await sb.from('orders').select('*').eq('created_by', currentUser.id).order('created_at', { ascending: false }).limit(20);
+  const el = document.getElementById('cmMyOrders');
+  if (!orders || !orders.length) { el.innerHTML = '<div class="empty-state">尚無叫貨紀錄</div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>日期</th><th>狀態</th><th>金額</th></tr></thead>
+    <tbody>${orders.map(o => `<tr><td>${o.id}</td><td>${fmtDate(o.created_at)}</td><td>${statusLabel(o.status)}</td><td>${fmtMoney(o.total_amount)}</td></tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+// Receive
+async function renderReceive() {
+  const mc = document.getElementById('mainContent');
+  const { data: dcs } = await sb.from('delivery_confirmations').select('*, orders(*)').eq('clinic_id', userProfile.clinic_id).eq('status', 'pending');
+  mc.innerHTML = `
+    <div class="page-title">📥 確認收貨</div>
+    ${(dcs && dcs.length) ? dcs.map(d => `
+      <div class="card">
+        <div class="card-title">叫貨單 #${d.order_id}</div>
+        <div style="font-size:.88rem;margin-bottom:12px">出貨時間: ${fmtDate(d.orders?.shipped_at)}</div>
+        <button class="btn btn-success" onclick="startReceiveConfirm(${d.id},${d.order_id})">確認收貨</button>
+      </div>
+    `).join('') : '<div class="card"><div class="empty-state"><span>📦</span>目前沒有待收貨項目</div></div>'}`;
+}
+
+async function startReceiveConfirm(dcId, orderId) {
+  // Double check: first show detail, then confirm
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', userProfile.clinic_id);
+  if (!items || !items.length) { toast('無明細', 'error'); return; }
+
+  let body = '<p style="margin-bottom:12px"><strong>第一步：請確認以下收貨明細</strong></p>';
+  body += '<table style="width:100%"><thead><tr><th>品項</th><th>數量</th></tr></thead><tbody>';
+  items.forEach(it => {
+    body += `<tr><td>${materialName(it.material_id)}</td><td>${it.quantity}</td></tr>`;
+  });
+  body += '</tbody></table>';
+
+  openModal('確認收貨 #' + orderId, body,
+    `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-warning" onclick="secondReceiveConfirm(${dcId},${orderId})">下一步 確認</button>`);
+
+  window._receiveItems = items;
+}
+
+async function secondReceiveConfirm(dcId, orderId) {
+  // Double check: show again with warning
+  const items = window._receiveItems;
+  let body = '<p style="margin-bottom:12px;color:var(--danger)"><strong>第二步：再次確認！收貨後庫存將自動增加。</strong></p>';
+  body += '<table style="width:100%"><thead><tr><th>品項</th><th>數量</th></tr></thead><tbody>';
+  items.forEach(it => {
+    body += `<tr><td>${materialName(it.material_id)}</td><td>+${it.quantity}</td></tr>`;
+  });
+  body += '</tbody></table>';
+
+  document.getElementById('modalBody').innerHTML = body;
+  document.getElementById('modalFooter').innerHTML =
+    `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-success" onclick="finalReceive(${dcId},${orderId})">✓ 確認收貨</button>`;
+}
+
+async function finalReceive(dcId, orderId) {
+  const items = window._receiveItems;
+  // Add to inventory
+  for (const it of items) {
+    const { data: inv } = await sb.from('clinic_inventory').select('*').eq('clinic_id', it.clinic_id).eq('material_id', it.material_id).single();
+    if (inv) {
+      await sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id);
+    } else {
+      await sb.from('clinic_inventory').insert({ clinic_id: it.clinic_id, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 });
+    }
+    await sb.from('inventory_logs').insert({
+      clinic_id: it.clinic_id, material_id: it.material_id, type: 'receive', quantity: it.quantity,
+      operator_id: currentUser.id, operator_name: userProfile.display_name, notes: '叫貨單#' + orderId
+    });
+  }
+  // Update delivery confirmation
+  await sb.from('delivery_confirmations').update({ status: 'confirmed', confirmed_by: currentUser.id, confirmed_at: new Date().toISOString() }).eq('id', dcId);
+
+  // Check if all clinics confirmed → mark order delivered
+  const { data: allDcs } = await sb.from('delivery_confirmations').select('status').eq('order_id', orderId);
+  if (allDcs && allDcs.every(d => d.status === 'confirmed')) {
+    await sb.from('orders').update({ status: 'delivered', delivered_at: new Date().toISOString() }).eq('id', orderId);
+  }
+
+  toast('收貨完成，庫存已更新');
+  closeModal();
+  renderReceive();
+}
+
+async function confirmReceiveFromDaily(dcId, orderId, clinicId) {
+  // Similar to startReceiveConfirm but for daily operations
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  if (!items || !items.length) { toast('無明細', 'error'); return; }
+  window._receiveItems = items;
+  startReceiveConfirm(dcId, orderId);
+}
+
+// ===================== INIT =====================
+init();
 </script>
 </body>
 </html>

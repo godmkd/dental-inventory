@@ -276,9 +276,18 @@ let confirmResolve = null;
 
 // ===================== INIT =====================
 async function init() {
+  // Handle OAuth callback - check URL for tokens
+  if (window.location.hash && window.location.hash.includes('access_token')) {
+    // Let supabase handle the hash
+    const { data, error } = await sb.auth.getSession();
+    if (error) console.error('Session error:', error);
+  }
+  
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     currentUser = session.user;
+    // Clean URL hash after login
+    if (window.location.hash) history.replaceState(null, '', window.location.pathname);
     await loadProfile();
   } else {
     showLogin();

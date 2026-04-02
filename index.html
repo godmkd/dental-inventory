@@ -305,7 +305,10 @@ function showLogin() {
 
 async function doLogin() {
   document.getElementById('loginLoading').style.display = 'block';
-  const { error } = await sb.auth.signInWithOAuth({ provider: 'custom:line' });
+  const { error } = await sb.auth.signInWithOAuth({ 
+    provider: 'custom:line',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
   if (error) { toast('登入失敗: ' + error.message, 'error'); document.getElementById('loginLoading').style.display = 'none'; }
 }
 

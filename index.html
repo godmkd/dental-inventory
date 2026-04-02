@@ -318,15 +318,12 @@ async function doLogin() {
     provider: 'custom:line',
     options: { 
       redirectTo: window.location.origin + window.location.pathname,
-      skipBrowserRedirect: true
+      queryParams: { prompt: 'consent' }
     }
   });
   if (error) { 
     toast('登入失敗: ' + error.message, 'error'); 
     document.getElementById('loginLoading').style.display = 'none'; 
-  } else if (data && data.url) {
-    // Manual redirect for Safari compatibility
-    window.location.href = data.url;
   }
 }
 

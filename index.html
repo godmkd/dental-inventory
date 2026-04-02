@@ -256,6 +256,25 @@ tr:hover td{background:#fafcff}
 .bottom-change-panel .bcp-item-remove:hover{background:var(--danger-bg);color:var(--danger)}
 .bottom-change-panel .bcp-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--card)}
 .bottom-change-panel.collapsed .bcp-footer{display:none}
+.confirmed-panel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin-top:16px;overflow:hidden}
+.confirmed-panel .cp-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border-light)}
+.confirmed-panel .cp-header:hover{background:var(--border-light)}
+.confirmed-panel .cp-title{font-weight:700;font-size:.95rem;color:var(--text)}
+.confirmed-panel .cp-arrow{font-size:.85rem;color:var(--text-light);transition:transform .3s}
+.confirmed-panel.collapsed .cp-arrow{transform:rotate(180deg)}
+.confirmed-panel .cp-body{max-height:50vh;overflow-y:auto}
+.confirmed-panel.collapsed .cp-body{display:none}
+.confirmed-panel .cp-empty{padding:20px;text-align:center;color:var(--text-light);font-size:.9rem}
+.confirmed-panel .cp-item{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid var(--border-light);font-size:.88rem}
+.confirmed-panel .cp-item:last-child{border-bottom:none}
+.confirmed-panel .cp-item-left{flex:1;display:flex;align-items:center;gap:8px}
+.confirmed-panel .cp-item-name{font-weight:500}
+.confirmed-panel .cp-item-qty{font-weight:700;min-width:50px}
+.confirmed-panel .cp-item-qty.positive{color:var(--success)}
+.confirmed-panel .cp-item-qty.negative{color:var(--danger)}
+.confirmed-panel .cp-item-time{color:var(--text-light);font-size:.8rem;min-width:50px}
+.confirmed-panel .cp-item-cancel{background:none;border:1px solid var(--danger);color:var(--danger);cursor:pointer;font-size:.78rem;padding:3px 10px;border-radius:4px;transition:all .15s}
+.confirmed-panel .cp-item-cancel:hover{background:var(--danger);color:#fff}
 .btn-reset-item{background:none;border:none;cursor:pointer;font-size:.85rem;color:var(--text-light);padding:2px 4px;line-height:1;transition:color .15s}
 .btn-reset-item:hover{color:var(--danger)}
 
@@ -802,6 +821,13 @@ async function renderDailyChange() {
       </div>
       <div class="bcp-body" id="dailyPanelBody"></div>
       <div class="bcp-footer" id="dailyPanelFooter"></div>
+    </div>
+    <div class="confirmed-panel" id="dailyConfirmedPanel">
+      <div class="cp-header" onclick="toggleDailyConfirmedPanel()">
+        <span class="cp-title" id="dailyConfirmedTitle">✅ 已確認變動 (0)</span>
+        <span class="cp-arrow">▲</span>
+      </div>
+      <div class="cp-body" id="dailyConfirmedBody"><div class="cp-empty">載入中...</div></div>
     </div>`;
 
   let chipHtml = `<span class="chip active" onclick="dailyFilterCat(0,this)">全部</span>`;
@@ -811,6 +837,7 @@ async function renderDailyChange() {
   window._dailyFilterCatId = 0;
   dailyQtyMap = {};
   renderDailyContent();
+  loadDailyConfirmedLogs();
 }
 
 window.switchDailyView = function(mode) {
@@ -989,11 +1016,86 @@ async function submitDailyChanges() {
       });
     }
     toast('所有變動已送出');
-    renderDailyChange();
+    dailyQtyMap = {};
+    // Reload inventory
+    const { data: invData } = await sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId);
+    dailyInvMap = {};
+    (invData || []).forEach(i => { dailyInvMap[i.material_id] = i; });
+    renderDailyContent();
+    loadDailyConfirmedLogs();
   } catch (e) {
     toast('送出失敗: ' + e.message, 'error');
   }
 }
+
+window.toggleDailyConfirmedPanel = function() {
+  const panel = document.getElementById('dailyConfirmedPanel');
+  if (panel) panel.classList.toggle('collapsed');
+};
+
+async function loadDailyConfirmedLogs() {
+  const titleEl = document.getElementById('dailyConfirmedTitle');
+  const bodyEl = document.getElementById('dailyConfirmedBody');
+  if (!titleEl || !bodyEl) return;
+  if (!dailyClinicId) { bodyEl.innerHTML = '<div class="cp-empty">請選擇診所</div>'; return; }
+
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+
+  const { data: logs } = await sb.from('inventory_logs').select('*')
+    .eq('clinic_id', dailyClinicId)
+    .gte('created_at', todayStart.toISOString())
+    .lte('created_at', todayEnd.toISOString())
+    .order('created_at', { ascending: false });
+
+  const items = logs || [];
+  titleEl.textContent = `✅ 已確認變動 (${items.length})`;
+
+  if (!items.length) {
+    bodyEl.innerHTML = '<div class="cp-empty">今天尚無已確認變動</div>';
+    return;
+  }
+  bodyEl.innerHTML = items.map(log => {
+    const isIn = log.type === 'in';
+    const time = new Date(log.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="cp-item">
+      <div class="cp-item-left">
+        <span class="cp-item-name">${escHtml(materialName(log.material_id))}</span>
+        <span class="cp-item-qty ${isIn ? 'positive' : 'negative'}">${isIn ? '+' : '-'}${log.quantity}</span>
+        <span class="cp-item-time">${time}</span>
+      </div>
+      <button class="cp-item-cancel" onclick="cancelDailyLog(${log.id})">取消</button>
+    </div>`;
+  }).join('');
+}
+
+window.cancelDailyLog = async function(logId) {
+  if (!await showConfirm('取消變動', '確定要取消這筆變動？庫存將反向調整。')) return;
+  try {
+    const { data: log, error: e1 } = await sb.from('inventory_logs').select('*').eq('id', logId).single();
+    if (e1 || !log) { toast('找不到該筆紀錄', 'error'); return; }
+
+    const { data: inv } = await sb.from('clinic_inventory').select('*')
+      .eq('clinic_id', log.clinic_id).eq('material_id', log.material_id).single();
+
+    if (inv) {
+      const newStock = log.type === 'out' ? inv.current_stock + log.quantity : inv.current_stock - log.quantity;
+      await sb.from('clinic_inventory').update({ current_stock: Math.max(0, newStock) }).eq('id', inv.id);
+    }
+
+    await sb.from('inventory_logs').delete().eq('id', logId);
+    toast('變動已取消，庫存已調整');
+
+    // Reload inventory map and confirmed logs
+    const { data: invData } = await sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId);
+    dailyInvMap = {};
+    (invData || []).forEach(i => { dailyInvMap[i.material_id] = i; });
+    renderDailyContent();
+    loadDailyConfirmedLogs();
+  } catch (e) {
+    toast('取消失敗: ' + e.message, 'error');
+  }
+};
 
 // ============================================================
 // 3. 叫貨
@@ -1029,6 +1131,13 @@ async function renderOrdering() {
       </div>
       <div class="bcp-body" id="orderPanelBody"></div>
       <div class="bcp-footer" id="orderPanelFooter"></div>
+    </div>
+    <div class="confirmed-panel" id="orderConfirmedPanel">
+      <div class="cp-header" onclick="toggleOrderConfirmedPanel()">
+        <span class="cp-title" id="orderConfirmedTitle">✅ 已送出叫貨單 (0)</span>
+        <span class="cp-arrow">▲</span>
+      </div>
+      <div class="cp-body" id="orderConfirmedBody"><div class="cp-empty">載入中...</div></div>
     </div>`;
 
   let chipHtml = `<span class="chip active" onclick="orderFilterCat(0,this)">全部</span>`;
@@ -1039,6 +1148,7 @@ async function renderOrdering() {
 
   renderOrderContent();
   updateOrderConfirmArea();
+  loadConfirmedOrders();
 }
 
 window.switchOrderView = function(mode) {
@@ -1241,11 +1351,73 @@ async function submitOrdering() {
 
     toast('叫貨單已送出');
     orderConfirmItems = [];
-    renderOrdering();
+    orderQtyMap = {};
+    updateOrderConfirmArea();
+    updateOrderSubmitBar();
+    loadConfirmedOrders();
   } catch (e) {
     toast('錯誤: ' + e.message, 'error');
   }
 }
+
+window.toggleOrderConfirmedPanel = function() {
+  const panel = document.getElementById('orderConfirmedPanel');
+  if (panel) panel.classList.toggle('collapsed');
+};
+
+async function loadConfirmedOrders() {
+  const titleEl = document.getElementById('orderConfirmedTitle');
+  const bodyEl = document.getElementById('orderConfirmedBody');
+  if (!titleEl || !bodyEl) return;
+
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+
+  const { data: orders } = await sb.from('orders').select('*')
+    .gte('created_at', todayStart.toISOString())
+    .lte('created_at', todayEnd.toISOString())
+    .eq('created_by', currentUser.id)
+    .order('created_at', { ascending: false });
+
+  const items = orders || [];
+  titleEl.textContent = `✅ 已送出叫貨單 (${items.length})`;
+
+  if (!items.length) {
+    bodyEl.innerHTML = '<div class="cp-empty">今天尚無已送出叫貨單</div>';
+    return;
+  }
+
+  // Load order_items for each order
+  const orderIds = items.map(o => o.id);
+  const { data: allOI } = await sb.from('order_items').select('*').in('order_id', orderIds);
+  const oiMap = {};
+  (allOI || []).forEach(oi => { if (!oiMap[oi.order_id]) oiMap[oi.order_id] = []; oiMap[oi.order_id].push(oi); });
+
+  bodyEl.innerHTML = items.map(o => {
+    const ois = oiMap[o.id] || [];
+    const time = new Date(o.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    const summary = ois.map(oi => `${materialName(oi.material_id)} x${oi.quantity}`).join('、');
+    return `<div class="cp-item">
+      <div class="cp-item-left" style="flex-direction:column;align-items:flex-start;gap:2px">
+        <span class="cp-item-name">#${o.id} ${statusBadge(o.status)} <span class="cp-item-time">${time}</span></span>
+        <span style="font-size:.82rem;color:var(--text-light)">${escHtml(summary)}</span>
+      </div>
+      ${o.status === 'pending' ? `<button class="cp-item-cancel" onclick="cancelOrder(${o.id})">取消</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+window.cancelOrder = async function(orderId) {
+  if (!await showConfirm('取消叫貨單', '確定要取消整張叫貨單？')) return;
+  try {
+    await sb.from('order_items').delete().eq('order_id', orderId);
+    await sb.from('orders').delete().eq('id', orderId);
+    toast('叫貨單已取消');
+    loadConfirmedOrders();
+  } catch (e) {
+    toast('取消失敗: ' + e.message, 'error');
+  }
+};
 
 // ============================================================
 // 4. 叫貨管理 (admin/owner)

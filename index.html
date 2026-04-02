@@ -276,18 +276,27 @@ let confirmResolve = null;
 
 // ===================== INIT =====================
 async function init() {
-  // Handle OAuth callback - check URL for tokens
+  // Handle OAuth callback - PKCE flow returns ?code= in URL
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (code) {
+    try {
+      const { data, error } = await sb.auth.exchangeCodeForSession(code);
+      if (error) console.error('Code exchange error:', error);
+    } catch(e) { console.error('Exchange error:', e); }
+    // Clean URL
+    history.replaceState(null, '', window.location.pathname);
+  }
+  
+  // Also handle hash-based tokens (implicit flow)
   if (window.location.hash && window.location.hash.includes('access_token')) {
-    // Let supabase handle the hash
-    const { data, error } = await sb.auth.getSession();
-    if (error) console.error('Session error:', error);
+    await sb.auth.getSession();
+    history.replaceState(null, '', window.location.pathname);
   }
   
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     currentUser = session.user;
-    // Clean URL hash after login
-    if (window.location.hash) history.replaceState(null, '', window.location.pathname);
     await loadProfile();
   } else {
     showLogin();

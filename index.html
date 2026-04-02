@@ -259,7 +259,7 @@ tr:hover td{background:#fafcff}
 
 <script>
 // ===================== CONFIG =====================
-const SUPABASE_URL = 'https://kvnwfesbnxzoqpdgauov.supabase.co';
+const SUPABASE_URL = 'https://hwsurukhjpetebyomsyh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2bndmZXNibnh6b3FwZGdhdW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTAwMjIsImV4cCI6MjA5MDYyNjAyMn0.wpf9rUcPiaTUkDVhVgUaxBJ2rA4WaAMHG7tgSv9BOOQ';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -314,11 +314,20 @@ function showLogin() {
 
 async function doLogin() {
   document.getElementById('loginLoading').style.display = 'block';
-  const { error } = await sb.auth.signInWithOAuth({ 
+  const { data, error } = await sb.auth.signInWithOAuth({ 
     provider: 'custom:line',
-    options: { redirectTo: window.location.origin + window.location.pathname }
+    options: { 
+      redirectTo: window.location.origin + window.location.pathname,
+      skipBrowserRedirect: true
+    }
   });
-  if (error) { toast('登入失敗: ' + error.message, 'error'); document.getElementById('loginLoading').style.display = 'none'; }
+  if (error) { 
+    toast('登入失敗: ' + error.message, 'error'); 
+    document.getElementById('loginLoading').style.display = 'none'; 
+  } else if (data && data.url) {
+    // Manual redirect for Safari compatibility
+    window.location.href = data.url;
+  }
 }
 
 async function doLogout() {

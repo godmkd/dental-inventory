@@ -234,6 +234,28 @@ tr:hover td{background:#fafcff}
 .submit-bar[disabled]{opacity:.5;pointer-events:none}
 .btn-clear-all{background:var(--danger);color:#fff;border:none;padding:14px 16px;border-radius:var(--radius);cursor:pointer;font-weight:600;font-size:.9rem;white-space:nowrap;transition:background .2s}
 .btn-clear-all:hover{background:var(--danger-hover)}
+
+/* Bottom change panel */
+.bottom-change-panel{position:sticky;bottom:0;left:0;right:0;background:var(--card);box-shadow:0 -4px 16px rgba(0,0,0,.12);z-index:80;border-radius:12px 12px 0 0;overflow:hidden;margin:0 -20px;transition:all .3s ease}
+@media(max-width:768px){.bottom-change-panel{margin:0 -12px}}
+.bottom-change-panel .bcp-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;cursor:pointer;user-select:none;background:var(--card);border-bottom:1px solid var(--border-light)}
+.bottom-change-panel .bcp-header:hover{background:var(--border-light)}
+.bottom-change-panel .bcp-title{font-weight:700;font-size:.95rem;color:var(--text)}
+.bottom-change-panel .bcp-arrow{font-size:.85rem;color:var(--text-light);transition:transform .3s}
+.bottom-change-panel.collapsed .bcp-arrow{transform:rotate(180deg)}
+.bottom-change-panel .bcp-body{max-height:40vh;overflow-y:auto;padding:0}
+.bottom-change-panel.collapsed .bcp-body{display:none}
+.bottom-change-panel .bcp-empty{padding:20px;text-align:center;color:var(--text-light);font-size:.9rem}
+.bottom-change-panel .bcp-item{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid var(--border-light);font-size:.88rem}
+.bottom-change-panel .bcp-item:last-child{border-bottom:none}
+.bottom-change-panel .bcp-item-name{flex:1;font-weight:500}
+.bottom-change-panel .bcp-item-qty{margin:0 12px;font-weight:700;min-width:40px;text-align:center}
+.bottom-change-panel .bcp-item-qty.positive{color:var(--success)}
+.bottom-change-panel .bcp-item-qty.negative{color:var(--danger)}
+.bottom-change-panel .bcp-item-remove{background:none;border:none;color:var(--text-light);cursor:pointer;font-size:1rem;padding:4px 8px;border-radius:4px;transition:all .15s}
+.bottom-change-panel .bcp-item-remove:hover{background:var(--danger-bg);color:var(--danger)}
+.bottom-change-panel .bcp-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--card)}
+.bottom-change-panel.collapsed .bcp-footer{display:none}
 .btn-reset-item{background:none;border:none;cursor:pointer;font-size:.85rem;color:var(--text-light);padding:2px 4px;line-height:1;transition:color .15s}
 .btn-reset-item:hover{color:var(--danger)}
 
@@ -772,8 +794,15 @@ async function renderDailyChange() {
       </div>
     </div>
     <div class="filter-chips" id="dailyCatChips"></div>
-    <div id="dailySubmitBar"></div>
-    <div id="dailyContent"></div>`;
+    <div id="dailyContent"></div>
+    <div class="bottom-change-panel collapsed" id="dailyChangePanel">
+      <div class="bcp-header" onclick="toggleDailyPanel()">
+        <span class="bcp-title" id="dailyPanelTitle">📋 變動清單 (0)</span>
+        <span class="bcp-arrow">▲</span>
+      </div>
+      <div class="bcp-body" id="dailyPanelBody"></div>
+      <div class="bcp-footer" id="dailyPanelFooter"></div>
+    </div>`;
 
   let chipHtml = `<span class="chip active" onclick="dailyFilterCat(0,this)">全部</span>`;
   allCategories.forEach(c => { chipHtml += `<span class="chip" onclick="dailyFilterCat(${c.id},this)">${escHtml(c.name)}</span>`; });
@@ -887,18 +916,36 @@ function getDailyChangedItems() {
 }
 
 function updateDailySubmitBar() {
-  const bar = document.getElementById('dailySubmitBar');
-  if (!bar) return;
+  const panel = document.getElementById('dailyChangePanel');
+  if (!panel) return;
   const items = getDailyChangedItems();
-  if (items.length > 0) {
-    bar.innerHTML = `<div class="submit-bar-row">
-      <div class="submit-bar" onclick="submitDailyChanges()">確定送出<span class="submit-count">${items.length} 項變動</span></div>
-      <button class="btn-clear-all" onclick="clearAllDailyQty()">全部清除</button>
-    </div>`;
+  const titleEl = document.getElementById('dailyPanelTitle');
+  const bodyEl = document.getElementById('dailyPanelBody');
+  const footerEl = document.getElementById('dailyPanelFooter');
+
+  titleEl.textContent = `📋 變動清單 (${items.length})`;
+
+  if (items.length === 0) {
+    bodyEl.innerHTML = '<div class="bcp-empty">尚無變動</div>';
+    footerEl.innerHTML = '';
   } else {
-    bar.innerHTML = `<div class="submit-bar" disabled>確定送出<span class="submit-count">請調整數量</span></div>`;
+    bodyEl.innerHTML = items.map(it => `
+      <div class="bcp-item">
+        <span class="bcp-item-name">${escHtml(it.name)}</span>
+        <span class="bcp-item-qty ${it.changeType === 'in' ? 'positive' : 'negative'}">${it.changeType === 'in' ? '+' : '-'}${it.quantity}</span>
+        <button class="bcp-item-remove" onclick="resetDailyQty(${it.material_id})" title="取消">✕</button>
+      </div>`).join('');
+    footerEl.innerHTML = `
+      <button class="btn btn-ghost btn-sm" onclick="clearAllDailyQty()">全部清除</button>
+      <button class="btn btn-primary btn-sm" onclick="submitDailyChanges()">確定送出 (${items.length})</button>`;
   }
 }
+
+window.toggleDailyPanel = function() {
+  const panel = document.getElementById('dailyChangePanel');
+  if (!panel) return;
+  panel.classList.toggle('collapsed');
+};
 
 window.filterDailyItems = function(q) {
   q = q.toLowerCase();
@@ -973,9 +1020,16 @@ async function renderOrdering() {
       </div>
     </div>
     <div class="filter-chips" id="orderCatChips"></div>
-    <div id="orderSubmitBar"></div>
     <div id="orderContent"></div>
-    <div id="orderConfirmArea"></div>`;
+    <div id="orderConfirmArea"></div>
+    <div class="bottom-change-panel collapsed" id="orderChangePanel">
+      <div class="bcp-header" onclick="toggleOrderPanel()">
+        <span class="bcp-title" id="orderPanelTitle">📦 叫貨清單 (0)</span>
+        <span class="bcp-arrow">▲</span>
+      </div>
+      <div class="bcp-body" id="orderPanelBody"></div>
+      <div class="bcp-footer" id="orderPanelFooter"></div>
+    </div>`;
 
   let chipHtml = `<span class="chip active" onclick="orderFilterCat(0,this)">全部</span>`;
   allCategories.forEach(c => { chipHtml += `<span class="chip" onclick="orderFilterCat(${c.id},this)">${escHtml(c.name)}</span>`; });
@@ -1086,18 +1140,36 @@ function getOrderSelectedItems() {
 }
 
 function updateOrderSubmitBar() {
-  const bar = document.getElementById('orderSubmitBar');
-  if (!bar) return;
+  const panel = document.getElementById('orderChangePanel');
+  if (!panel) return;
   const items = getOrderSelectedItems();
-  if (items.length > 0) {
-    bar.innerHTML = `<div class="submit-bar-row">
-      <div class="submit-bar" onclick="confirmOrderList()">確認叫貨清單<span class="submit-count">${items.length} 項品項</span></div>
-      <button class="btn-clear-all" onclick="clearAllOrderQty()">全部清除</button>
-    </div>`;
+  const titleEl = document.getElementById('orderPanelTitle');
+  const bodyEl = document.getElementById('orderPanelBody');
+  const footerEl = document.getElementById('orderPanelFooter');
+
+  titleEl.textContent = `📦 叫貨清單 (${items.length})`;
+
+  if (items.length === 0) {
+    bodyEl.innerHTML = '<div class="bcp-empty">尚無叫貨項目</div>';
+    footerEl.innerHTML = '';
   } else {
-    bar.innerHTML = `<div class="submit-bar" disabled>確認叫貨清單<span class="submit-count">請選擇數量</span></div>`;
+    bodyEl.innerHTML = items.map(it => `
+      <div class="bcp-item">
+        <span class="bcp-item-name">${escHtml(it.name)}</span>
+        <span class="bcp-item-qty positive">x${it.quantity}</span>
+        <button class="bcp-item-remove" onclick="resetOrderQty(${it.material_id})" title="取消">✕</button>
+      </div>`).join('');
+    footerEl.innerHTML = `
+      <button class="btn btn-ghost btn-sm" onclick="clearAllOrderQty()">全部清除</button>
+      <button class="btn btn-primary btn-sm" onclick="confirmOrderList()">送出叫貨 (${items.length})</button>`;
   }
 }
+
+window.toggleOrderPanel = function() {
+  const panel = document.getElementById('orderChangePanel');
+  if (!panel) return;
+  panel.classList.toggle('collapsed');
+};
 
 window.filterOrderItems = function(q) {
   q = q.toLowerCase();

@@ -227,10 +227,15 @@ tr:hover td{background:#fafcff}
 @media(max-width:400px){.mat-card{width:calc(33.333% - 6px)}}
 
 /* Submit bar */
-.submit-bar{background:var(--accent);color:#fff;padding:14px 20px;border-radius:var(--radius);margin-bottom:12px;text-align:center;cursor:pointer;font-weight:700;font-size:1.05rem;box-shadow:0 2px 8px rgba(49,130,206,.3);transition:background .2s}
+.submit-bar-row{display:flex;gap:10px;margin-bottom:12px;align-items:stretch}
+.submit-bar{flex:1;background:var(--accent);color:#fff;padding:14px 20px;border-radius:var(--radius);text-align:center;cursor:pointer;font-weight:700;font-size:1.05rem;box-shadow:0 2px 8px rgba(49,130,206,.3);transition:background .2s}
 .submit-bar:hover{background:var(--accent-hover)}
 .submit-bar .submit-count{background:rgba(255,255,255,.25);padding:2px 10px;border-radius:12px;font-size:.85rem;margin-left:8px}
 .submit-bar[disabled]{opacity:.5;pointer-events:none}
+.btn-clear-all{background:var(--danger);color:#fff;border:none;padding:14px 16px;border-radius:var(--radius);cursor:pointer;font-weight:600;font-size:.9rem;white-space:nowrap;transition:background .2s}
+.btn-clear-all:hover{background:var(--danger-hover)}
+.btn-reset-item{background:none;border:none;cursor:pointer;font-size:.85rem;color:var(--text-light);padding:2px 4px;line-height:1;transition:color .15s}
+.btn-reset-item:hover{color:var(--danger)}
 
 /* Order confirm area */
 .order-confirm-area{background:#f0fff4;border:2px solid var(--success);border-radius:var(--radius);padding:16px;margin-top:16px}
@@ -355,6 +360,10 @@ let floatPanelMode = ''; // 'daily' or 'order'
 let dailyViewMode = 'icon'; // 'icon' or 'list'
 let orderViewMode = 'icon';
 let orderConfirmItems = []; // confirmed order items for 2-step ordering
+
+// Persistent qty maps (survive view mode switches)
+let dailyQtyMap = {}; // { materialId: qty }
+let orderQtyMap = {}; // { materialId: qty }
 
 // ===================== INIT =====================
 async function init() {
@@ -757,9 +766,9 @@ async function renderDailyChange() {
         ${myClinics.map(c => `<option value="${c.id}"${c.id === dailyClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(dailyClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterDailyItems(this.value)" id="dailySearch">
-      <div class="view-toggle">
-        <button class="btn btn-ghost btn-sm ${dailyViewMode==='icon'?'active':''}" onclick="dailyViewMode='icon';renderDailyContent()">🖼</button>
-        <button class="btn btn-ghost btn-sm ${dailyViewMode==='list'?'active':''}" onclick="dailyViewMode='list';renderDailyContent()">☰</button>
+      <div class="view-toggle" id="dailyViewToggle">
+        <button class="btn btn-ghost btn-sm ${dailyViewMode==='icon'?'active':''}" onclick="switchDailyView('icon')">🖼</button>
+        <button class="btn btn-ghost btn-sm ${dailyViewMode==='list'?'active':''}" onclick="switchDailyView('list')">☰</button>
       </div>
     </div>
     <div class="filter-chips" id="dailyCatChips"></div>
@@ -771,8 +780,20 @@ async function renderDailyChange() {
   document.getElementById('dailyCatChips').innerHTML = chipHtml;
 
   window._dailyFilterCatId = 0;
+  dailyQtyMap = {};
   renderDailyContent();
 }
+
+window.switchDailyView = function(mode) {
+  dailyViewMode = mode;
+  const toggle = document.getElementById('dailyViewToggle');
+  if (toggle) {
+    toggle.querySelectorAll('.btn').forEach((btn, i) => {
+      btn.classList.toggle('active', (i === 0 && mode === 'icon') || (i === 1 && mode === 'list'));
+    });
+  }
+  renderDailyContent();
+};
 
 window.dailyFilterCat = function(catId, el) {
   window._dailyFilterCatId = catId;
@@ -793,21 +814,24 @@ function renderDailyContent() {
     container.innerHTML = `<div class="mat-grid">${mats.map(m => {
       const inv = dailyInvMap[m.id];
       const stock = inv ? inv.current_stock : 0;
+      const qty = dailyQtyMap[m.id] || 0;
       return `<div class="mat-card" data-name="${m.name.toLowerCase()}">
         ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
         <div class="mat-card-name">${escHtml(m.name)}</div>
         <div class="mat-card-stock">庫存: ${stock}</div>
         <div class="inline-adjuster">
           <button class="adj-btn" onclick="adjDailyQty(${m.id},-1)">−</button>
-          <input type="number" id="daily_${m.id}" value="0" onchange="updateDailySubmitBar()">
+          <input type="number" id="daily_${m.id}" value="${qty}" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
           <button class="adj-btn" onclick="adjDailyQty(${m.id},1)">+</button>
         </div>
+        <button class="btn-reset-item" onclick="resetDailyQty(${m.id})" title="重置">↺</button>
       </div>`;
     }).join('')}</div>`;
   } else {
     container.innerHTML = `<div class="card">${mats.map(m => {
       const inv = dailyInvMap[m.id];
       const stock = inv ? inv.current_stock : 0;
+      const qty = dailyQtyMap[m.id] || 0;
       return `<div class="item-row" data-name="${m.name.toLowerCase()}">
         <div class="item-row-left">
           <div class="item-name">${escHtml(m.name)}</div>
@@ -816,9 +840,10 @@ function renderDailyContent() {
         <div class="item-row-right">
           <div class="inline-adjuster">
             <button class="adj-btn" onclick="adjDailyQty(${m.id},-1)">−</button>
-            <input type="number" id="daily_${m.id}" value="0" onchange="updateDailySubmitBar()">
+            <input type="number" id="daily_${m.id}" value="${qty}" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
             <button class="adj-btn" onclick="adjDailyQty(${m.id},1)">+</button>
           </div>
+          <button class="btn-reset-item" onclick="resetDailyQty(${m.id})" title="重置">↺</button>
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -828,16 +853,32 @@ function renderDailyContent() {
 window.adjDailyQty = function(matId, delta) {
   const el = document.getElementById('daily_' + matId);
   if (!el) return;
-  el.value = parseInt(el.value || 0) + delta;
+  const val = parseInt(el.value || 0) + delta;
+  el.value = val;
+  dailyQtyMap[matId] = val;
+  updateDailySubmitBar();
+};
+
+window.resetDailyQty = function(matId) {
+  dailyQtyMap[matId] = 0;
+  const el = document.getElementById('daily_' + matId);
+  if (el) el.value = 0;
+  updateDailySubmitBar();
+};
+
+window.clearAllDailyQty = function() {
+  dailyQtyMap = {};
+  allMaterials.forEach(m => {
+    const el = document.getElementById('daily_' + m.id);
+    if (el) el.value = 0;
+  });
   updateDailySubmitBar();
 };
 
 function getDailyChangedItems() {
   const items = [];
   allMaterials.forEach(m => {
-    const el = document.getElementById('daily_' + m.id);
-    if (!el) return;
-    const val = parseInt(el.value || 0);
+    const val = dailyQtyMap[m.id] || 0;
     if (val !== 0) {
       items.push({ material_id: m.id, name: m.name, quantity: Math.abs(val), changeType: val > 0 ? 'in' : 'out' });
     }
@@ -850,7 +891,10 @@ function updateDailySubmitBar() {
   if (!bar) return;
   const items = getDailyChangedItems();
   if (items.length > 0) {
-    bar.innerHTML = `<div class="submit-bar" onclick="submitDailyChanges()">確定送出<span class="submit-count">${items.length} 項變動</span></div>`;
+    bar.innerHTML = `<div class="submit-bar-row">
+      <div class="submit-bar" onclick="submitDailyChanges()">確定送出<span class="submit-count">${items.length} 項變動</span></div>
+      <button class="btn-clear-all" onclick="clearAllDailyQty()">全部清除</button>
+    </div>`;
   } else {
     bar.innerHTML = `<div class="submit-bar" disabled>確定送出<span class="submit-count">請調整數量</span></div>`;
   }
@@ -923,9 +967,9 @@ async function renderOrdering() {
         ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(orderClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderItems(this.value)">
-      <div class="view-toggle">
-        <button class="btn btn-ghost btn-sm ${orderViewMode==='icon'?'active':''}" onclick="orderViewMode='icon';renderOrderContent()">🖼</button>
-        <button class="btn btn-ghost btn-sm ${orderViewMode==='list'?'active':''}" onclick="orderViewMode='list';renderOrderContent()">☰</button>
+      <div class="view-toggle" id="orderViewToggle">
+        <button class="btn btn-ghost btn-sm ${orderViewMode==='icon'?'active':''}" onclick="switchOrderView('icon')">🖼</button>
+        <button class="btn btn-ghost btn-sm ${orderViewMode==='list'?'active':''}" onclick="switchOrderView('list')">☰</button>
       </div>
     </div>
     <div class="filter-chips" id="orderCatChips"></div>
@@ -937,10 +981,22 @@ async function renderOrdering() {
   allCategories.forEach(c => { chipHtml += `<span class="chip" onclick="orderFilterCat(${c.id},this)">${escHtml(c.name)}</span>`; });
   document.getElementById('orderCatChips').innerHTML = chipHtml;
   window._orderFilterCatId = 0;
+  orderQtyMap = {};
 
   renderOrderContent();
   updateOrderConfirmArea();
 }
+
+window.switchOrderView = function(mode) {
+  orderViewMode = mode;
+  const toggle = document.getElementById('orderViewToggle');
+  if (toggle) {
+    toggle.querySelectorAll('.btn').forEach((btn, i) => {
+      btn.classList.toggle('active', (i === 0 && mode === 'icon') || (i === 1 && mode === 'list'));
+    });
+  }
+  renderOrderContent();
+};
 
 window.orderFilterCat = function(catId, el) {
   window._orderFilterCatId = catId;
@@ -958,19 +1014,22 @@ function renderOrderContent() {
 
   if (orderViewMode === 'icon') {
     container.innerHTML = `<div class="mat-grid">${mats.map(m => {
+      const qty = orderQtyMap[m.id] || 0;
       return `<div class="mat-card" data-name="${m.name.toLowerCase()}">
         ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
         <div class="mat-card-name">${escHtml(m.name)}</div>
         <div class="mat-card-stock">${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
         <div class="inline-adjuster">
           <button class="adj-btn" onclick="adjOrderQty(${m.id},-1)">−</button>
-          <input type="number" id="order_${m.id}" value="0" min="0" onchange="if(this.value<0)this.value=0;updateOrderSubmitBar()">
+          <input type="number" id="order_${m.id}" value="${qty}" min="0" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
           <button class="adj-btn" onclick="adjOrderQty(${m.id},1)">+</button>
         </div>
+        <button class="btn-reset-item" onclick="resetOrderQty(${m.id})" title="重置">↺</button>
       </div>`;
     }).join('')}</div>`;
   } else {
     container.innerHTML = `<div class="card">${mats.map(m => {
+      const qty = orderQtyMap[m.id] || 0;
       return `<div class="item-row" data-name="${m.name.toLowerCase()}">
         <div class="item-row-left">
           <div class="item-name">${escHtml(m.name)}</div>
@@ -979,9 +1038,10 @@ function renderOrderContent() {
         <div class="item-row-right">
           <div class="inline-adjuster">
             <button class="adj-btn" onclick="adjOrderQty(${m.id},-1)">−</button>
-            <input type="number" id="order_${m.id}" value="0" min="0" onchange="if(this.value<0)this.value=0;updateOrderSubmitBar()">
+            <input type="number" id="order_${m.id}" value="${qty}" min="0" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
             <button class="adj-btn" onclick="adjOrderQty(${m.id},1)">+</button>
           </div>
+          <button class="btn-reset-item" onclick="resetOrderQty(${m.id})" title="重置">↺</button>
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -994,15 +1054,30 @@ window.adjOrderQty = function(matId, delta) {
   let val = parseInt(el.value || 0) + delta;
   if (val < 0) val = 0;
   el.value = val;
+  orderQtyMap[matId] = val;
+  updateOrderSubmitBar();
+};
+
+window.resetOrderQty = function(matId) {
+  orderQtyMap[matId] = 0;
+  const el = document.getElementById('order_' + matId);
+  if (el) el.value = 0;
+  updateOrderSubmitBar();
+};
+
+window.clearAllOrderQty = function() {
+  orderQtyMap = {};
+  allMaterials.forEach(m => {
+    const el = document.getElementById('order_' + m.id);
+    if (el) el.value = 0;
+  });
   updateOrderSubmitBar();
 };
 
 function getOrderSelectedItems() {
   const items = [];
   allMaterials.forEach(m => {
-    const el = document.getElementById('order_' + m.id);
-    if (!el) return;
-    const val = parseInt(el.value || 0);
+    const val = orderQtyMap[m.id] || 0;
     if (val > 0) {
       items.push({ material_id: m.id, name: m.name, quantity: val, unit_price: m.unit_price || 0, unit: m.unit });
     }
@@ -1015,7 +1090,10 @@ function updateOrderSubmitBar() {
   if (!bar) return;
   const items = getOrderSelectedItems();
   if (items.length > 0) {
-    bar.innerHTML = `<div class="submit-bar" onclick="confirmOrderList()">確認叫貨清單<span class="submit-count">${items.length} 項品項</span></div>`;
+    bar.innerHTML = `<div class="submit-bar-row">
+      <div class="submit-bar" onclick="confirmOrderList()">確認叫貨清單<span class="submit-count">${items.length} 項品項</span></div>
+      <button class="btn-clear-all" onclick="clearAllOrderQty()">全部清除</button>
+    </div>`;
   } else {
     bar.innerHTML = `<div class="submit-bar" disabled>確認叫貨清單<span class="submit-count">請選擇數量</span></div>`;
   }
@@ -1034,7 +1112,8 @@ function confirmOrderList() {
   const items = getOrderSelectedItems();
   if (!items.length) { toast('請先選擇品項數量', 'error'); return; }
   orderConfirmItems = items;
-  // Reset inputs
+  // Reset inputs and qty map
+  orderQtyMap = {};
   items.forEach(it => {
     const el = document.getElementById('order_' + it.material_id);
     if (el) el.value = 0;

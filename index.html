@@ -204,6 +204,40 @@ tr:hover td{background:#fafcff}
 .qty-adjuster input{width:80px;text-align:center;font-size:1.4rem;font-weight:700;border:2px solid var(--border);border-radius:var(--radius);padding:8px}
 .qty-type-toggle{display:flex;gap:8px;justify-content:center;margin-bottom:12px}
 .qty-type-toggle .btn.active{box-shadow:0 0 0 3px rgba(49,130,206,.3)}
+
+/* View toggle */
+.view-toggle{display:flex;gap:4px}
+.view-toggle .btn.active{background:var(--accent);color:#fff}
+
+/* Mat card grid */
+.mat-grid{display:flex;flex-wrap:wrap;gap:8px;padding:4px 0}
+.mat-card{width:calc(33.333% - 6px);background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:10px 6px 8px;text-align:center}
+.mat-card .mat-card-img{width:56px;height:56px;object-fit:cover;border-radius:6px;margin-bottom:4px}
+.mat-card .mat-card-icon{font-size:2rem;margin-bottom:4px}
+.mat-card .mat-card-name{font-size:.75rem;font-weight:600;line-height:1.2;margin-bottom:2px;word-break:break-all;max-height:2.4em;overflow:hidden}
+.mat-card .mat-card-stock{font-size:.68rem;color:var(--text-light);margin-bottom:6px}
+.mat-card .inline-adjuster .adj-btn{width:28px;height:28px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:.95rem;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .15s;color:var(--text)}
+.mat-card .inline-adjuster .adj-btn:first-child{border-radius:var(--radius) 0 0 var(--radius)}
+.mat-card .inline-adjuster .adj-btn:last-child{border-radius:0 var(--radius) var(--radius) 0}
+.mat-card .inline-adjuster .adj-btn:hover{background:var(--border-light)}
+.mat-card .inline-adjuster .adj-btn:active{background:var(--accent);color:#fff}
+.mat-card .inline-adjuster input{width:40px;height:28px;text-align:center;border:1px solid var(--border);border-left:none;border-right:none;font-size:.82rem;font-weight:600;outline:none;-moz-appearance:textfield}
+.mat-card .inline-adjuster input::-webkit-outer-spin-button,.mat-card .inline-adjuster input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+@media(min-width:769px){.mat-card{width:calc(25% - 6px)}}
+@media(max-width:400px){.mat-card{width:calc(33.333% - 6px)}}
+
+/* Submit bar */
+.submit-bar{background:var(--accent);color:#fff;padding:14px 20px;border-radius:var(--radius);margin-bottom:12px;text-align:center;cursor:pointer;font-weight:700;font-size:1.05rem;box-shadow:0 2px 8px rgba(49,130,206,.3);transition:background .2s}
+.submit-bar:hover{background:var(--accent-hover)}
+.submit-bar .submit-count{background:rgba(255,255,255,.25);padding:2px 10px;border-radius:12px;font-size:.85rem;margin-left:8px}
+.submit-bar[disabled]{opacity:.5;pointer-events:none}
+
+/* Order confirm area */
+.order-confirm-area{background:#f0fff4;border:2px solid var(--success);border-radius:var(--radius);padding:16px;margin-top:16px}
+.order-confirm-area h3{margin-bottom:12px;color:var(--success);font-size:1rem}
+.order-confirm-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-light);font-size:.9rem}
+.order-confirm-item:last-child{border-bottom:none}
+.order-confirm-actions{margin-top:12px;display:flex;gap:10px;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -316,6 +350,11 @@ let confirmResolve = null;
 // Floating panel state
 let floatPanelItems = []; // [{material_id, name, quantity, type, ...}]
 let floatPanelMode = ''; // 'daily' or 'order'
+
+// View mode state
+let dailyViewMode = 'icon'; // 'icon' or 'list'
+let orderViewMode = 'icon';
+let orderConfirmItems = []; // confirmed order items for 2-step ordering
 
 // ===================== INIT =====================
 async function init() {
@@ -701,13 +740,10 @@ let dailyInvMap = {};
 
 async function renderDailyChange() {
   const mc = document.getElementById('mainContent');
-  floatPanelItems = [];
-  floatPanelMode = 'daily';
 
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   dailyClinicId = dailyClinicId || (myClinics[0] ? myClinics[0].id : null);
 
-  // Load inventory for selected clinic
   if (dailyClinicId) {
     const { data: inv } = await sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId);
     dailyInvMap = {};
@@ -720,19 +756,22 @@ async function renderDailyChange() {
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="dailyClinicId=parseInt(this.value);renderDailyChange()">
         ${myClinics.map(c => `<option value="${c.id}"${c.id === dailyClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(dailyClinicId))}</strong>`}
-      <input class="search-box" placeholder="搜尋品項..." oninput="filterDailyCards(this.value)" id="dailySearch">
+      <input class="search-box" placeholder="搜尋品項..." oninput="filterDailyItems(this.value)" id="dailySearch">
+      <div class="view-toggle">
+        <button class="btn btn-ghost btn-sm ${dailyViewMode==='icon'?'active':''}" onclick="dailyViewMode='icon';renderDailyContent()">🖼</button>
+        <button class="btn btn-ghost btn-sm ${dailyViewMode==='list'?'active':''}" onclick="dailyViewMode='list';renderDailyContent()">☰</button>
+      </div>
     </div>
     <div class="filter-chips" id="dailyCatChips"></div>
+    <div id="dailySubmitBar"></div>
     <div id="dailyContent"></div>`;
 
-  // Category chips
   let chipHtml = `<span class="chip active" onclick="dailyFilterCat(0,this)">全部</span>`;
   allCategories.forEach(c => { chipHtml += `<span class="chip" onclick="dailyFilterCat(${c.id},this)">${escHtml(c.name)}</span>`; });
   document.getElementById('dailyCatChips').innerHTML = chipHtml;
 
   window._dailyFilterCatId = 0;
   renderDailyContent();
-  showFloatPanel('daily');
 }
 
 window.dailyFilterCat = function(catId, el) {
@@ -747,89 +786,95 @@ function renderDailyContent() {
   let mats = allMaterials;
   if (window._dailyFilterCatId) mats = mats.filter(m => m.category_id === window._dailyFilterCatId);
 
-  container.innerHTML = `<div class="card">${mats.map(m => {
-    const inv = dailyInvMap[m.id];
-    const stock = inv ? inv.current_stock : 0;
-    return `<div class="item-row" data-name="${m.name.toLowerCase()}">
-      <div class="item-row-left">
-        <div class="item-name">${escHtml(m.name)}</div>
-        <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)} | 庫存: ${stock}</div>
-      </div>
-      <div class="item-row-right">
+  // Update submit bar
+  updateDailySubmitBar();
+
+  if (dailyViewMode === 'icon') {
+    container.innerHTML = `<div class="mat-grid">${mats.map(m => {
+      const inv = dailyInvMap[m.id];
+      const stock = inv ? inv.current_stock : 0;
+      return `<div class="mat-card" data-name="${m.name.toLowerCase()}">
+        ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
+        <div class="mat-card-name">${escHtml(m.name)}</div>
+        <div class="mat-card-stock">庫存: ${stock}</div>
         <div class="inline-adjuster">
-          <button class="adj-btn" onclick="adjInlineQty('daily_${m.id}',-1)">−</button>
-          <input type="number" id="daily_${m.id}" value="0" onchange="toggleAddBtn('daily_${m.id}')">
-          <button class="adj-btn" onclick="adjInlineQty('daily_${m.id}',1)">+</button>
+          <button class="adj-btn" onclick="adjDailyQty(${m.id},-1)">−</button>
+          <input type="number" id="daily_${m.id}" value="0" onchange="updateDailySubmitBar()">
+          <button class="adj-btn" onclick="adjDailyQty(${m.id},1)">+</button>
         </div>
-        <button class="btn btn-primary btn-xs btn-add-item" id="addBtn_daily_${m.id}" style="display:none" onclick="addDailyItemInline(${m.id})">加入</button>
-      </div>
-    </div>`;
-  }).join('')}</div>`;
+      </div>`;
+    }).join('')}</div>`;
+  } else {
+    container.innerHTML = `<div class="card">${mats.map(m => {
+      const inv = dailyInvMap[m.id];
+      const stock = inv ? inv.current_stock : 0;
+      return `<div class="item-row" data-name="${m.name.toLowerCase()}">
+        <div class="item-row-left">
+          <div class="item-name">${escHtml(m.name)}</div>
+          <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)} | 庫存: ${stock}</div>
+        </div>
+        <div class="item-row-right">
+          <div class="inline-adjuster">
+            <button class="adj-btn" onclick="adjDailyQty(${m.id},-1)">−</button>
+            <input type="number" id="daily_${m.id}" value="0" onchange="updateDailySubmitBar()">
+            <button class="adj-btn" onclick="adjDailyQty(${m.id},1)">+</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+  }
 }
 
-window.filterDailyCards = function(q) {
+window.adjDailyQty = function(matId, delta) {
+  const el = document.getElementById('daily_' + matId);
+  if (!el) return;
+  el.value = parseInt(el.value || 0) + delta;
+  updateDailySubmitBar();
+};
+
+function getDailyChangedItems() {
+  const items = [];
+  allMaterials.forEach(m => {
+    const el = document.getElementById('daily_' + m.id);
+    if (!el) return;
+    const val = parseInt(el.value || 0);
+    if (val !== 0) {
+      items.push({ material_id: m.id, name: m.name, quantity: Math.abs(val), changeType: val > 0 ? 'in' : 'out' });
+    }
+  });
+  return items;
+}
+
+function updateDailySubmitBar() {
+  const bar = document.getElementById('dailySubmitBar');
+  if (!bar) return;
+  const items = getDailyChangedItems();
+  if (items.length > 0) {
+    bar.innerHTML = `<div class="submit-bar" onclick="submitDailyChanges()">確定送出<span class="submit-count">${items.length} 項變動</span></div>`;
+  } else {
+    bar.innerHTML = `<div class="submit-bar" disabled>確定送出<span class="submit-count">請調整數量</span></div>`;
+  }
+}
+
+window.filterDailyItems = function(q) {
   q = q.toLowerCase();
-  document.querySelectorAll('#dailyContent .item-row').forEach(el => {
+  const selector = dailyViewMode === 'icon' ? '#dailyContent .mat-card' : '#dailyContent .item-row';
+  document.querySelectorAll(selector).forEach(el => {
     const name = el.dataset.name || '';
     el.style.display = name.includes(q) ? '' : 'none';
   });
 };
 
-window.adjInlineQty = function(inputId, delta) {
-  const el = document.getElementById(inputId);
-  if (!el) return;
-  el.value = parseInt(el.value || 0) + delta;
-  toggleAddBtn(inputId);
-};
-
-window.toggleAddBtn = function(inputId) {
-  const el = document.getElementById(inputId);
-  const btn = document.getElementById('addBtn_' + inputId);
-  if (!el || !btn) return;
-  const val = parseInt(el.value || 0);
-  btn.style.display = val !== 0 ? '' : 'none';
-  if (inputId.startsWith('order_')) {
-    // Order: only positive
-    btn.textContent = `加入 x${val}`;
-    btn.className = 'btn btn-primary btn-xs btn-add-item';
-  } else {
-    // Daily: positive = in, negative = out
-    if (val > 0) { btn.textContent = `加入 +${val}`; btn.className = 'btn btn-success btn-xs btn-add-item'; }
-    else if (val < 0) { btn.textContent = `加入 ${val}`; btn.className = 'btn btn-warning btn-xs btn-add-item'; }
-  }
-};
-
-function addDailyItemInline(matId) {
-  const el = document.getElementById('daily_' + matId);
-  if (!el) return;
-  const val = parseInt(el.value || 0);
-  if (val === 0) return;
-  const m = materialObj(matId);
-  if (!m) return;
-  const changeType = val > 0 ? 'in' : 'out';
-  const quantity = Math.abs(val);
-  const existing = floatPanelItems.find(x => x.material_id === matId && x.changeType === changeType);
-  if (existing) {
-    existing.quantity += quantity;
-  } else {
-    floatPanelItems.push({ material_id: matId, name: m.name, quantity, changeType });
-  }
-  el.value = 0;
-  toggleAddBtn('daily_' + matId);
-  const fp = document.getElementById('floatPanel');
-  fp.classList.remove('collapsed');
-  updateFloatPanel();
-  toast(`${changeType === 'in' ? '+' : '-'}${quantity} ${m.name}`, 'info');
-}
-
 async function submitDailyChanges() {
-  if (!floatPanelItems.length) { toast('清單是空的', 'error'); return; }
+  const items = getDailyChangedItems();
+  if (!items.length) { toast('請先調整品項數量', 'error'); return; }
   if (!dailyClinicId) { toast('請選擇診所', 'error'); return; }
 
-  if (!await showConfirm('確認送出', `將送出 ${floatPanelItems.length} 項變動，確定嗎？`)) return;
+  const summary = items.map(it => `${it.changeType === 'in' ? '+' : '-'}${it.quantity} ${it.name}`).join('、');
+  if (!await showConfirm('確認送出', `將送出 ${items.length} 項變動：<br><small>${summary}</small>`)) return;
 
   try {
-    for (const it of floatPanelItems) {
+    for (const it of items) {
       const { data: inv } = await sb.from('clinic_inventory')
         .select('*').eq('clinic_id', dailyClinicId).eq('material_id', it.material_id).single();
 
@@ -853,7 +898,6 @@ async function submitDailyChanges() {
       });
     }
     toast('所有變動已送出');
-    floatPanelItems = [];
     renderDailyChange();
   } catch (e) {
     toast('送出失敗: ' + e.message, 'error');
@@ -867,8 +911,7 @@ let orderClinicId = null;
 
 async function renderOrdering() {
   const mc = document.getElementById('mainContent');
-  floatPanelItems = [];
-  floatPanelMode = 'order';
+  orderConfirmItems = [];
 
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   orderClinicId = orderClinicId || (myClinics[0] ? myClinics[0].id : null);
@@ -879,10 +922,16 @@ async function renderOrdering() {
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="orderClinicId=parseInt(this.value)">
         ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(orderClinicId))}</strong>`}
-      <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderCards(this.value)">
+      <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderItems(this.value)">
+      <div class="view-toggle">
+        <button class="btn btn-ghost btn-sm ${orderViewMode==='icon'?'active':''}" onclick="orderViewMode='icon';renderOrderContent()">🖼</button>
+        <button class="btn btn-ghost btn-sm ${orderViewMode==='list'?'active':''}" onclick="orderViewMode='list';renderOrderContent()">☰</button>
+      </div>
     </div>
     <div class="filter-chips" id="orderCatChips"></div>
-    <div id="orderContent"></div>`;
+    <div id="orderSubmitBar"></div>
+    <div id="orderContent"></div>
+    <div id="orderConfirmArea"></div>`;
 
   let chipHtml = `<span class="chip active" onclick="orderFilterCat(0,this)">全部</span>`;
   allCategories.forEach(c => { chipHtml += `<span class="chip" onclick="orderFilterCat(${c.id},this)">${escHtml(c.name)}</span>`; });
@@ -890,7 +939,7 @@ async function renderOrdering() {
   window._orderFilterCatId = 0;
 
   renderOrderContent();
-  showFloatPanel('order');
+  updateOrderConfirmArea();
 }
 
 window.orderFilterCat = function(catId, el) {
@@ -905,68 +954,134 @@ function renderOrderContent() {
   let mats = allMaterials;
   if (window._orderFilterCatId) mats = mats.filter(m => m.category_id === window._orderFilterCatId);
 
-  container.innerHTML = `<div class="card">${mats.map(m => {
-    return `<div class="item-row" data-name="${m.name.toLowerCase()}">
-      <div class="item-row-left">
-        <div class="item-name">${escHtml(m.name)}</div>
-        <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)}${canSeePrice() ? ' | ' + fmtMoney(m.unit_price) : ''}</div>
-      </div>
-      <div class="item-row-right">
+  updateOrderSubmitBar();
+
+  if (orderViewMode === 'icon') {
+    container.innerHTML = `<div class="mat-grid">${mats.map(m => {
+      return `<div class="mat-card" data-name="${m.name.toLowerCase()}">
+        ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
+        <div class="mat-card-name">${escHtml(m.name)}</div>
+        <div class="mat-card-stock">${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
         <div class="inline-adjuster">
-          <button class="adj-btn" onclick="adjInlineQty('order_${m.id}',-1);if(parseInt(document.getElementById('order_${m.id}').value)<0){document.getElementById('order_${m.id}').value=0;toggleAddBtn('order_${m.id}');}">−</button>
-          <input type="number" id="order_${m.id}" value="0" min="0" onchange="if(this.value<0)this.value=0;toggleAddBtn('order_${m.id}')">
-          <button class="adj-btn" onclick="adjInlineQty('order_${m.id}',1)">+</button>
+          <button class="adj-btn" onclick="adjOrderQty(${m.id},-1)">−</button>
+          <input type="number" id="order_${m.id}" value="0" min="0" onchange="if(this.value<0)this.value=0;updateOrderSubmitBar()">
+          <button class="adj-btn" onclick="adjOrderQty(${m.id},1)">+</button>
         </div>
-        <button class="btn btn-primary btn-xs btn-add-item" id="addBtn_order_${m.id}" style="display:none" onclick="addOrderItemInline(${m.id})">加入</button>
-      </div>
-    </div>`;
-  }).join('')}</div>`;
+      </div>`;
+    }).join('')}</div>`;
+  } else {
+    container.innerHTML = `<div class="card">${mats.map(m => {
+      return `<div class="item-row" data-name="${m.name.toLowerCase()}">
+        <div class="item-row-left">
+          <div class="item-name">${escHtml(m.name)}</div>
+          <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)}${canSeePrice() ? ' | ' + fmtMoney(m.unit_price) : ''}</div>
+        </div>
+        <div class="item-row-right">
+          <div class="inline-adjuster">
+            <button class="adj-btn" onclick="adjOrderQty(${m.id},-1)">−</button>
+            <input type="number" id="order_${m.id}" value="0" min="0" onchange="if(this.value<0)this.value=0;updateOrderSubmitBar()">
+            <button class="adj-btn" onclick="adjOrderQty(${m.id},1)">+</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+  }
 }
 
-window.filterOrderCards = function(q) {
+window.adjOrderQty = function(matId, delta) {
+  const el = document.getElementById('order_' + matId);
+  if (!el) return;
+  let val = parseInt(el.value || 0) + delta;
+  if (val < 0) val = 0;
+  el.value = val;
+  updateOrderSubmitBar();
+};
+
+function getOrderSelectedItems() {
+  const items = [];
+  allMaterials.forEach(m => {
+    const el = document.getElementById('order_' + m.id);
+    if (!el) return;
+    const val = parseInt(el.value || 0);
+    if (val > 0) {
+      items.push({ material_id: m.id, name: m.name, quantity: val, unit_price: m.unit_price || 0, unit: m.unit });
+    }
+  });
+  return items;
+}
+
+function updateOrderSubmitBar() {
+  const bar = document.getElementById('orderSubmitBar');
+  if (!bar) return;
+  const items = getOrderSelectedItems();
+  if (items.length > 0) {
+    bar.innerHTML = `<div class="submit-bar" onclick="confirmOrderList()">確認叫貨清單<span class="submit-count">${items.length} 項品項</span></div>`;
+  } else {
+    bar.innerHTML = `<div class="submit-bar" disabled>確認叫貨清單<span class="submit-count">請選擇數量</span></div>`;
+  }
+}
+
+window.filterOrderItems = function(q) {
   q = q.toLowerCase();
-  document.querySelectorAll('#orderContent .item-row').forEach(el => {
+  const selector = orderViewMode === 'icon' ? '#orderContent .mat-card' : '#orderContent .item-row';
+  document.querySelectorAll(selector).forEach(el => {
     const name = el.dataset.name || '';
     el.style.display = name.includes(q) ? '' : 'none';
   });
 };
 
-function addOrderItemInline(matId) {
-  const el = document.getElementById('order_' + matId);
-  if (!el) return;
-  const qty = parseInt(el.value || 0);
-  if (qty <= 0) return;
-  const m = materialObj(matId);
-  if (!m) return;
-  const existing = floatPanelItems.find(x => x.material_id === matId);
-  if (existing) {
-    existing.quantity += qty;
-  } else {
-    floatPanelItems.push({ material_id: matId, name: m.name, quantity: qty, unit_price: m.unit_price || 0 });
-  }
-  el.value = 0;
-  toggleAddBtn('order_' + matId);
-  const fp = document.getElementById('floatPanel');
-  fp.classList.remove('collapsed');
-  updateFloatPanel();
-  toast(`${m.name} x${qty} 已加入`, 'info');
+function confirmOrderList() {
+  const items = getOrderSelectedItems();
+  if (!items.length) { toast('請先選擇品項數量', 'error'); return; }
+  orderConfirmItems = items;
+  // Reset inputs
+  items.forEach(it => {
+    const el = document.getElementById('order_' + it.material_id);
+    if (el) el.value = 0;
+  });
+  updateOrderSubmitBar();
+  updateOrderConfirmArea();
+  toast(`${items.length} 項品項已加入叫貨清單`, 'info');
 }
 
+function updateOrderConfirmArea() {
+  const area = document.getElementById('orderConfirmArea');
+  if (!area) return;
+  if (!orderConfirmItems.length) { area.innerHTML = ''; return; }
+  const total = orderConfirmItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
+  area.innerHTML = `<div class="order-confirm-area">
+    <h3>叫貨清單 (${orderConfirmItems.length} 項)${canSeePrice() ? ' | 總計 ' + fmtMoney(total) : ''}</h3>
+    ${orderConfirmItems.map((it, i) => `<div class="order-confirm-item">
+      <span><strong>${escHtml(it.name)}</strong> x${it.quantity}${canSeePrice() ? ' <small class="text-muted">' + fmtMoney(it.unit_price * it.quantity) + '</small>' : ''}</span>
+      <button class="btn btn-danger btn-xs" onclick="removeOrderConfirmItem(${i})">✕</button>
+    </div>`).join('')}
+    <div class="order-confirm-actions">
+      <button class="btn btn-ghost" onclick="orderConfirmItems=[];updateOrderConfirmArea()">清空</button>
+      <button class="btn btn-success" onclick="submitOrdering()">送出叫貨</button>
+    </div>
+  </div>`;
+}
+
+window.removeOrderConfirmItem = function(idx) {
+  orderConfirmItems.splice(idx, 1);
+  updateOrderConfirmArea();
+};
+
 async function submitOrdering() {
-  if (!floatPanelItems.length) { toast('清單是空的', 'error'); return; }
+  if (!orderConfirmItems.length) { toast('清單是空的', 'error'); return; }
   const cid = orderClinicId || userProfile.clinic_id;
   if (!cid) { toast('請選擇診所', 'error'); return; }
 
-  if (!await showConfirm('送出叫貨', `共 ${floatPanelItems.length} 項品項，確定送出？`)) return;
+  if (!await showConfirm('送出叫貨', `共 ${orderConfirmItems.length} 項品項，確定送出？`)) return;
 
   try {
-    const totalAmount = floatPanelItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
+    const totalAmount = orderConfirmItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
     const { data: order, error: e1 } = await sb.from('orders').insert({
       status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes: ''
     }).select().single();
     if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
 
-    const orderItems = floatPanelItems.map(it => ({
+    const orderItems = orderConfirmItems.map(it => ({
       order_id: order.id, material_id: it.material_id, clinic_id: cid,
       quantity: it.quantity, unit_price: it.unit_price || 0
     }));
@@ -974,8 +1089,7 @@ async function submitOrdering() {
     if (e2) { toast('明細建立失敗: ' + e2.message, 'error'); return; }
 
     toast('叫貨單已送出');
-    floatPanelItems = [];
-    hideFloatPanel();
+    orderConfirmItems = [];
     renderOrdering();
   } catch (e) {
     toast('錯誤: ' + e.message, 'error');

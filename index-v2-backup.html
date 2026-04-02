@@ -1750,43 +1750,4 @@ function editUser(id) {
   openModal('編輯人員', `
     <div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>
     <div class="form-row">
-      <div class="form-group"><label>角色</label>
-        <select id="fUserRole">
-          <option value="owner" ${u.role === 'owner' ? 'selected' : ''}>老闆</option>
-          <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>總管理者</option>
-          <option value="clinic_manager" ${u.role === 'clinic_manager' ? 'selected' : ''}>診所管理者</option>
-        </select>
-      </div>
-      <div class="form-group"><label>所屬診所</label>
-        <select id="fUserClinic">${optionsHTML(allClinics, 'id', 'name', u.clinic_id)}</select>
-      </div>
-    </div>
-  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
-     <button class="btn btn-primary" onclick="saveUser('${u.id}')">儲存</button>`);
-}
-
-async function saveUser(id) {
-  const obj = {
-    display_name: document.getElementById('fUserName').value.trim(),
-    role: document.getElementById('fUserRole').value,
-    clinic_id: document.getElementById('fUserClinic').value || null
-  };
-  if (!obj.display_name) { toast('請輸入姓名', 'error'); return; }
-  const { error } = await sb.from('user_profiles').update(obj).eq('id', id);
-  if (error) { toast('儲存失敗: ' + error.message, 'error'); return; }
-  toast('已更新'); closeModal(); await loadUsers(); renderUserMgmt();
-}
-
-async function toggleUserActive(id, active) {
-  const action = active ? '啟用' : '停用';
-  if (!await showConfirm(`${action}帳號`, `確定要${action}此帳號？`)) return;
-  const { error } = await sb.from('user_profiles').update({ is_active: active }).eq('id', id);
-  if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
-  toast(`已${action}`); await loadUsers(); renderUserMgmt();
-}
-
-// ===================== START =====================
-init();
-</script>
-</body>
-</html>
+      <div class="form

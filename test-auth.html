@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>LINE Login Test</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head><body>
+<h2>LINE Login Debug</h2>
+<pre id="log"></pre>
+<button onclick="doLogin()">LINE 登入</button>
+<button onclick="checkSession()">檢查 Session</button>
+<script>
+const log = document.getElementById('log');
+function addLog(msg){ log.textContent += new Date().toLocaleTimeString() + ' ' + msg + '\n'; }
+
+addLog('URL: ' + window.location.href);
+addLog('Search: ' + window.location.search);
+addLog('Hash: ' + window.location.hash);
+
+const sb = window.supabase.createClient(
+  'https://kvnwfesbnxzoqpdgauov.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2bndmZXNibnh6b3FwZGdhdW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTAwMjIsImV4cCI6MjA5MDYyNjAyMn0.wpf9rUcPiaTUkDVhVgUaxBJ2rA4WaAMHG7tgSv9BOOQ'
+);
+
+async function start(){
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  addLog('Code param: ' + code);
+  
+  if(code){
+    addLog('Exchanging code...');
+    const { data, error } = await sb.auth.exchangeCodeForSession(code);
+    addLog('Exchange result: ' + JSON.stringify({data: data?.session ? 'HAS SESSION' : 'NO SESSION', error: error?.message}));
+  }
+  
+  const { data: { session } } = await sb.auth.getSession();
+  addLog('Session: ' + (session ? 'LOGGED IN as ' + (session.user.user_metadata?.name || session.user.id) : 'NOT LOGGED IN'));
+  
+  sb.auth.onAuthStateChange((event, session) => {
+    addLog('Auth event: ' + event + ' session: ' + (session ? 'YES' : 'NO'));
+  });
+}
+start();
+
+async function doLogin(){
+  addLog('Starting LINE login...');
+  const { data, error } = await sb.auth.signInWithOAuth({ 
+    provider: 'custom:line',
+    options: { redirectTo: window.location.origin + '/test-auth.html' }
+  });
+  addLog('Login result: ' + JSON.stringify({url: data?.url?.substring(0,50), error: error?.message}));
+}
+
+async function checkSession(){
+  const { data: { session } } = await sb.auth.getSession();
+  addLog('Check session: ' + JSON.stringify(session ? {user: session.user.id, provider: session.user.app_metadata?.provider} : null));
+}
+</script>
+</body></html>

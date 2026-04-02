@@ -150,21 +150,22 @@ tr:hover td{background:#fafcff}
 .sub-tab{padding:8px 16px;cursor:pointer;font-size:.88rem;color:var(--text-light);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
 .sub-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
 
-/* View toggle */
-.view-toggle{display:flex;gap:4px;margin-left:auto}
-.view-toggle .btn{padding:6px 12px}
-.view-toggle .btn.active{background:var(--accent);color:#fff}
-
-/* Grid view cards */
-.mat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px}
-.mat-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px;text-align:center;cursor:pointer;transition:all .15s;border:2px solid transparent;position:relative}
-.mat-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.15)}
-.mat-card.selected{border-color:var(--accent);background:#ebf8ff}
-.mat-card img{width:80px;height:80px;object-fit:cover;border-radius:6px;margin-bottom:8px}
-.mat-card .mat-card-noimg{width:80px;height:80px;background:var(--border-light);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:2rem}
-.mat-card .mat-card-name{font-size:.85rem;font-weight:600;margin-bottom:4px;line-height:1.2}
-.mat-card .mat-card-stock{font-size:.78rem;color:var(--text-light)}
-.mat-card .mat-card-badge{position:absolute;top:-6px;right:-6px;background:var(--accent);color:#fff;border-radius:50%;width:24px;height:24px;font-size:.75rem;display:flex;align-items:center;justify-content:center;font-weight:700}
+/* Inline item row */
+.item-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border-light);gap:8px;flex-wrap:wrap}
+.item-row:last-child{border-bottom:none}
+.item-row .item-row-left{flex:1;min-width:120px}
+.item-row .item-row-left .item-name{font-weight:600;font-size:.9rem}
+.item-row .item-row-left .item-stock{font-size:.78rem;color:var(--text-light)}
+.item-row .item-row-right{display:flex;flex-direction:column;align-items:center;gap:4px}
+.item-row .inline-adjuster{display:flex;align-items:center;gap:0}
+.item-row .inline-adjuster .adj-btn{width:36px;height:36px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:1.1rem;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .15s;color:var(--text)}
+.item-row .inline-adjuster .adj-btn:first-child{border-radius:var(--radius) 0 0 var(--radius)}
+.item-row .inline-adjuster .adj-btn:last-child{border-radius:0 var(--radius) var(--radius) 0}
+.item-row .inline-adjuster .adj-btn:hover{background:var(--border-light)}
+.item-row .inline-adjuster .adj-btn:active{background:var(--accent);color:#fff}
+.item-row .inline-adjuster input{width:56px;height:36px;text-align:center;border:1px solid var(--border);border-left:none;border-right:none;font-size:.95rem;font-weight:600;outline:none;-moz-appearance:textfield}
+.item-row .inline-adjuster input::-webkit-outer-spin-button,.item-row .inline-adjuster input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.item-row .btn-add-item{font-size:.78rem;padding:3px 12px;border-radius:12px}
 
 /* Floating panel */
 .float-panel{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:2px solid var(--accent);z-index:90;transition:transform .3s;max-height:50vh;overflow-y:auto;box-shadow:0 -4px 20px rgba(0,0,0,.15)}
@@ -646,24 +647,7 @@ function floatItemQty(idx, delta) {
 }
 
 function refreshCardBadges() {
-  document.querySelectorAll('.mat-card').forEach(card => {
-    const mid = parseInt(card.dataset.mid);
-    const item = floatPanelItems.find(x => x.material_id === mid);
-    const badge = card.querySelector('.mat-card-badge');
-    if (item) {
-      if (badge) badge.textContent = item.quantity;
-      else {
-        const b = document.createElement('div');
-        b.className = 'mat-card-badge';
-        b.textContent = item.quantity;
-        card.appendChild(b);
-      }
-      card.classList.add('selected');
-    } else {
-      if (badge) badge.remove();
-      card.classList.remove('selected');
-    }
-  });
+  // No longer needed — inline mode doesn't use card badges
 }
 
 // ============================================================
@@ -712,7 +696,6 @@ async function renderStockOverview() {
 // ============================================================
 // 2. 日常變動 (renamed from 日常消耗)
 // ============================================================
-let dailyViewMode = 'grid';
 let dailyClinicId = null;
 let dailyInvMap = {};
 
@@ -738,10 +721,6 @@ async function renderDailyChange() {
         ${myClinics.map(c => `<option value="${c.id}"${c.id === dailyClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(dailyClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterDailyCards(this.value)" id="dailySearch">
-      <div class="view-toggle">
-        <button class="btn btn-ghost btn-sm ${dailyViewMode === 'grid' ? 'active' : ''}" onclick="dailyViewMode='grid';renderDailyContent()">圖示</button>
-        <button class="btn btn-ghost btn-sm ${dailyViewMode === 'list' ? 'active' : ''}" onclick="dailyViewMode='list';renderDailyContent()">清單</button>
-      </div>
     </div>
     <div class="filter-chips" id="dailyCatChips"></div>
     <div id="dailyContent"></div>`;
@@ -768,101 +747,78 @@ function renderDailyContent() {
   let mats = allMaterials;
   if (window._dailyFilterCatId) mats = mats.filter(m => m.category_id === window._dailyFilterCatId);
 
-  if (dailyViewMode === 'grid') {
-    container.innerHTML = `<div class="mat-grid">${mats.map(m => {
-      const inv = dailyInvMap[m.id];
-      const stock = inv ? inv.current_stock : 0;
-      const inPanel = floatPanelItems.find(x => x.material_id === m.id);
-      return `<div class="mat-card ${inPanel ? 'selected' : ''}" data-mid="${m.id}" data-name="${m.name.toLowerCase()}" onclick="openDailyAdjust(${m.id})">
-        ${inPanel ? `<div class="mat-card-badge">${inPanel.quantity}</div>` : ''}
-        ${m.image_url ? `<img src="${m.image_url}" alt="">` : `<div class="mat-card-noimg">📦</div>`}
-        <div class="mat-card-name">${escHtml(m.name)}</div>
-        <div class="mat-card-stock">庫存: ${stock} ${escHtml(m.unit)}</div>
-      </div>`;
-    }).join('')}</div>`;
-  } else {
-    container.innerHTML = `<div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>品項</th><th>庫存</th><th>操作</th></tr></thead>
-      <tbody>${mats.map(m => {
-        const inv = dailyInvMap[m.id];
-        const stock = inv ? inv.current_stock : 0;
-        return `<tr data-name="${m.name.toLowerCase()}">
-          <td><strong>${escHtml(m.name)}</strong><br><small class="text-muted">${escHtml(m.spec || '')} ${escHtml(m.unit)}</small></td>
-          <td>${stock}</td>
-          <td>
-            <button class="btn btn-warning btn-sm" onclick="addDailyItem(${m.id},'out',1)">-1</button>
-            <button class="btn btn-success btn-sm" onclick="addDailyItem(${m.id},'in',1)">+1</button>
-            <button class="btn btn-ghost btn-sm" onclick="openDailyAdjust(${m.id})">自訂</button>
-          </td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table></div></div>`;
-  }
+  container.innerHTML = `<div class="card">${mats.map(m => {
+    const inv = dailyInvMap[m.id];
+    const stock = inv ? inv.current_stock : 0;
+    return `<div class="item-row" data-name="${m.name.toLowerCase()}">
+      <div class="item-row-left">
+        <div class="item-name">${escHtml(m.name)}</div>
+        <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)} | 庫存: ${stock}</div>
+      </div>
+      <div class="item-row-right">
+        <div class="inline-adjuster">
+          <button class="adj-btn" onclick="adjInlineQty('daily_${m.id}',-1)">−</button>
+          <input type="number" id="daily_${m.id}" value="0" onchange="toggleAddBtn('daily_${m.id}')">
+          <button class="adj-btn" onclick="adjInlineQty('daily_${m.id}',1)">+</button>
+        </div>
+        <button class="btn btn-primary btn-xs btn-add-item" id="addBtn_daily_${m.id}" style="display:none" onclick="addDailyItemInline(${m.id})">加入</button>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 window.filterDailyCards = function(q) {
   q = q.toLowerCase();
-  document.querySelectorAll('.mat-card, #dailyContent tr').forEach(el => {
+  document.querySelectorAll('#dailyContent .item-row').forEach(el => {
     const name = el.dataset.name || '';
     el.style.display = name.includes(q) ? '' : 'none';
   });
 };
 
-function openDailyAdjust(matId) {
-  const m = materialObj(matId);
-  if (!m) return;
-  const inv = dailyInvMap[matId];
-  const stock = inv ? inv.current_stock : 0;
-
-  openModal(`${m.name} - 調整庫存`, `
-    <div style="text-align:center;margin-bottom:12px">
-      ${m.image_url ? `<img src="${m.image_url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px">` : ''}
-      <div style="margin-top:8px;color:var(--text-light)">目前庫存: <strong>${stock}</strong> ${escHtml(m.unit)}</div>
-    </div>
-    <div class="qty-type-toggle">
-      <button class="btn btn-warning btn-sm active" id="btnTypeOut" onclick="setDailyType('out')">消耗 (減少)</button>
-      <button class="btn btn-success btn-sm" id="btnTypeIn" onclick="setDailyType('in')">入庫 (增加)</button>
-    </div>
-    <div class="qty-adjuster">
-      <button class="btn btn-ghost" onclick="adjDailyQty(-1)">−</button>
-      <input type="number" id="dailyAdjQty" value="1" min="1">
-      <button class="btn btn-ghost" onclick="adjDailyQty(1)">+</button>
-    </div>
-  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
-     <button class="btn btn-primary" onclick="confirmDailyAdjust(${matId})">加入變動清單</button>`);
-  window._dailyAdjType = 'out';
-}
-
-window.setDailyType = function(type) {
-  window._dailyAdjType = type;
-  document.getElementById('btnTypeOut').classList.toggle('active', type === 'out');
-  document.getElementById('btnTypeIn').classList.toggle('active', type === 'in');
-};
-window.adjDailyQty = function(delta) {
-  const el = document.getElementById('dailyAdjQty');
-  el.value = Math.max(1, parseInt(el.value || 1) + delta);
+window.adjInlineQty = function(inputId, delta) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = parseInt(el.value || 0) + delta;
+  toggleAddBtn(inputId);
 };
 
-function confirmDailyAdjust(matId) {
-  const m = materialObj(matId);
-  const qty = parseInt(document.getElementById('dailyAdjQty').value) || 1;
-  addDailyItem(matId, window._dailyAdjType, qty);
-  closeModal();
-}
+window.toggleAddBtn = function(inputId) {
+  const el = document.getElementById(inputId);
+  const btn = document.getElementById('addBtn_' + inputId);
+  if (!el || !btn) return;
+  const val = parseInt(el.value || 0);
+  btn.style.display = val !== 0 ? '' : 'none';
+  if (inputId.startsWith('order_')) {
+    // Order: only positive
+    btn.textContent = `加入 x${val}`;
+    btn.className = 'btn btn-primary btn-xs btn-add-item';
+  } else {
+    // Daily: positive = in, negative = out
+    if (val > 0) { btn.textContent = `加入 +${val}`; btn.className = 'btn btn-success btn-xs btn-add-item'; }
+    else if (val < 0) { btn.textContent = `加入 ${val}`; btn.className = 'btn btn-warning btn-xs btn-add-item'; }
+  }
+};
 
-function addDailyItem(matId, changeType, quantity) {
+function addDailyItemInline(matId) {
+  const el = document.getElementById('daily_' + matId);
+  if (!el) return;
+  const val = parseInt(el.value || 0);
+  if (val === 0) return;
   const m = materialObj(matId);
   if (!m) return;
+  const changeType = val > 0 ? 'in' : 'out';
+  const quantity = Math.abs(val);
   const existing = floatPanelItems.find(x => x.material_id === matId && x.changeType === changeType);
   if (existing) {
     existing.quantity += quantity;
   } else {
     floatPanelItems.push({ material_id: matId, name: m.name, quantity, changeType });
   }
+  el.value = 0;
+  toggleAddBtn('daily_' + matId);
   const fp = document.getElementById('floatPanel');
   fp.classList.remove('collapsed');
   updateFloatPanel();
-  refreshCardBadges();
   toast(`${changeType === 'in' ? '+' : '-'}${quantity} ${m.name}`, 'info');
 }
 
@@ -907,7 +863,6 @@ async function submitDailyChanges() {
 // ============================================================
 // 3. 叫貨
 // ============================================================
-let orderViewMode = 'grid';
 let orderClinicId = null;
 
 async function renderOrdering() {
@@ -925,10 +880,6 @@ async function renderOrdering() {
         ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(orderClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderCards(this.value)">
-      <div class="view-toggle">
-        <button class="btn btn-ghost btn-sm ${orderViewMode === 'grid' ? 'active' : ''}" onclick="orderViewMode='grid';renderOrderContent()">圖示</button>
-        <button class="btn btn-ghost btn-sm ${orderViewMode === 'list' ? 'active' : ''}" onclick="orderViewMode='list';renderOrderContent()">清單</button>
-      </div>
     </div>
     <div class="filter-chips" id="orderCatChips"></div>
     <div id="orderContent"></div>`;
@@ -954,77 +905,50 @@ function renderOrderContent() {
   let mats = allMaterials;
   if (window._orderFilterCatId) mats = mats.filter(m => m.category_id === window._orderFilterCatId);
 
-  if (orderViewMode === 'grid') {
-    container.innerHTML = `<div class="mat-grid">${mats.map(m => {
-      const inPanel = floatPanelItems.find(x => x.material_id === m.id);
-      return `<div class="mat-card ${inPanel ? 'selected' : ''}" data-mid="${m.id}" data-name="${m.name.toLowerCase()}" onclick="openOrderAdjust(${m.id})">
-        ${inPanel ? `<div class="mat-card-badge">${inPanel.quantity}</div>` : ''}
-        ${m.image_url ? `<img src="${m.image_url}" alt="">` : `<div class="mat-card-noimg">📦</div>`}
-        <div class="mat-card-name">${escHtml(m.name)}</div>
-        <div class="mat-card-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)}</div>
-      </div>`;
-    }).join('')}</div>`;
-  } else {
-    container.innerHTML = `<div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>品項</th><th>規格</th>${canSeePrice() ? '<th>單價</th>' : ''}<th>操作</th></tr></thead>
-      <tbody>${mats.map(m => `<tr data-name="${m.name.toLowerCase()}">
-        <td><strong>${escHtml(m.name)}</strong></td>
-        <td>${escHtml(m.spec || '')} ${escHtml(m.unit)}</td>
-        ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}
-        <td><button class="btn btn-primary btn-sm" onclick="openOrderAdjust(${m.id})">加入</button></td>
-      </tr>`).join('')}</tbody>
-    </table></div></div>`;
-  }
+  container.innerHTML = `<div class="card">${mats.map(m => {
+    return `<div class="item-row" data-name="${m.name.toLowerCase()}">
+      <div class="item-row-left">
+        <div class="item-name">${escHtml(m.name)}</div>
+        <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)}${canSeePrice() ? ' | ' + fmtMoney(m.unit_price) : ''}</div>
+      </div>
+      <div class="item-row-right">
+        <div class="inline-adjuster">
+          <button class="adj-btn" onclick="adjInlineQty('order_${m.id}',-1);if(parseInt(document.getElementById('order_${m.id}').value)<0){document.getElementById('order_${m.id}').value=0;toggleAddBtn('order_${m.id}');}">−</button>
+          <input type="number" id="order_${m.id}" value="0" min="0" onchange="if(this.value<0)this.value=0;toggleAddBtn('order_${m.id}')">
+          <button class="adj-btn" onclick="adjInlineQty('order_${m.id}',1)">+</button>
+        </div>
+        <button class="btn btn-primary btn-xs btn-add-item" id="addBtn_order_${m.id}" style="display:none" onclick="addOrderItemInline(${m.id})">加入</button>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 window.filterOrderCards = function(q) {
   q = q.toLowerCase();
-  document.querySelectorAll('.mat-card, #orderContent tr').forEach(el => {
+  document.querySelectorAll('#orderContent .item-row').forEach(el => {
     const name = el.dataset.name || '';
     el.style.display = name.includes(q) ? '' : 'none';
   });
 };
 
-function openOrderAdjust(matId) {
+function addOrderItemInline(matId) {
+  const el = document.getElementById('order_' + matId);
+  if (!el) return;
+  const qty = parseInt(el.value || 0);
+  if (qty <= 0) return;
   const m = materialObj(matId);
   if (!m) return;
   const existing = floatPanelItems.find(x => x.material_id === matId);
-  const currentQty = existing ? existing.quantity : 1;
-
-  openModal(`${m.name} - 叫貨數量`, `
-    <div style="text-align:center;margin-bottom:12px">
-      ${m.image_url ? `<img src="${m.image_url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px">` : ''}
-      <div style="margin-top:8px;color:var(--text-light)">${escHtml(m.spec || '')} ${escHtml(m.unit)}</div>
-      ${canSeePrice() ? `<div>單價: ${fmtMoney(m.unit_price)}</div>` : ''}
-    </div>
-    <div class="qty-adjuster">
-      <button class="btn btn-ghost" onclick="adjOrderQty(-1)">−</button>
-      <input type="number" id="orderAdjQty" value="${currentQty}" min="1">
-      <button class="btn btn-ghost" onclick="adjOrderQty(1)">+</button>
-    </div>
-  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
-     <button class="btn btn-primary" onclick="confirmOrderAdjust(${matId})">加入叫貨清單</button>`);
-}
-
-window.adjOrderQty = function(delta) {
-  const el = document.getElementById('orderAdjQty');
-  el.value = Math.max(1, parseInt(el.value || 1) + delta);
-};
-
-function confirmOrderAdjust(matId) {
-  const m = materialObj(matId);
-  const qty = parseInt(document.getElementById('orderAdjQty').value) || 1;
-  const existing = floatPanelItems.find(x => x.material_id === matId);
   if (existing) {
-    existing.quantity = qty;
+    existing.quantity += qty;
   } else {
     floatPanelItems.push({ material_id: matId, name: m.name, quantity: qty, unit_price: m.unit_price || 0 });
   }
+  el.value = 0;
+  toggleAddBtn('order_' + matId);
   const fp = document.getElementById('floatPanel');
   fp.classList.remove('collapsed');
   updateFloatPanel();
-  refreshCardBadges();
-  closeModal();
   toast(`${m.name} x${qty} 已加入`, 'info');
 }
 

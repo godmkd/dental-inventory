@@ -2664,7 +2664,7 @@ async function saveMaterial(id) {
     const fileInput = document.getElementById('fMatImage');
     if (fileInput.files && fileInput.files[0]) {
       const compressed = await compressImage(fileInput.files[0]);
-      const path = `materials/${Date.now()}.jpg`;
+      const path = `${Date.now()}.jpg`;
       const { error: upErr } = await sb.storage.from('materials').upload(path, compressed);
       if (upErr) { toast('圖片上傳失敗: ' + upErr.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
       const { data: urlData } = sb.storage.from('materials').getPublicUrl(path);

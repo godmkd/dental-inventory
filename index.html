@@ -2619,12 +2619,20 @@ function editMaterial(id) {
     <div class="form-group"><label>單價</label><input id="fMatPrice" type="number" step="0.01" value="${m.unit_price || 0}"></div>
     <div class="form-group"><label>圖片</label>
       <input id="fMatImage" type="file" accept="image/*" onchange="previewMatImage(this)">
-      ${m.image_url ? `<img class="img-upload-preview" id="matImgPreview" src="${m.image_url}">` : '<img class="img-upload-preview" id="matImgPreview" style="display:none">'}
+      ${m.image_url ? `<div id="matImgWrap"><img class="img-upload-preview" id="matImgPreview" src="${m.image_url}"><button type="button" class="btn btn-danger btn-sm" style="margin-left:8px;vertical-align:top" onclick="removeMatImage()">刪除圖片</button></div>` : '<img class="img-upload-preview" id="matImgPreview" style="display:none">'}
       <input type="hidden" id="fMatImageUrl" value="${m.image_url || ''}">
     </div>
     <div class="form-group"><label>備註</label><textarea id="fMatNotes">${escHtml(m.notes || '')}</textarea></div>
   `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
      <button class="btn btn-primary" id="btnSaveMat" onclick="saveMaterial(${id || 'null'})">儲存</button>`);
+}
+
+function removeMatImage() {
+  document.getElementById('fMatImageUrl').value = '__DELETE__';
+  const wrap = document.getElementById('matImgWrap');
+  if (wrap) wrap.innerHTML = '<span style="color:var(--text-light);font-size:.85rem">圖片已標記刪除，儲存後生效</span>';
+  const prev = document.getElementById('matImgPreview');
+  if (prev) { prev.src = ''; prev.style.display = 'none'; }
 }
 
 function previewMatImage(input) {
@@ -2661,6 +2669,7 @@ async function saveMaterial(id) {
   btn.disabled = true; btn.textContent = '儲存中...';
   try {
     let imageUrl = document.getElementById('fMatImageUrl').value;
+    if (imageUrl === '__DELETE__') imageUrl = '';
     const fileInput = document.getElementById('fMatImage');
     if (fileInput.files && fileInput.files[0]) {
       const compressed = await compressImage(fileInput.files[0]);

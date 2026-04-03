@@ -2245,7 +2245,7 @@ async function loadReceiveItems(dcId, orderId, clinicId) {
         <td>${materialName(it.material_id)}</td>
         <td>${it.quantity}</td>
         <td>${statusBadge(itemStatus)}</td>
-        <td>${canReceive ? `<button class="btn btn-success btn-sm" style="font-size:.78rem;padding:2px 8px" onclick="confirmReceiveSingle(${it.id},${dcId},${orderId},${clinicId})">收貨</button>` : ''}</td>
+        <td>${canReceive ? `<button class="btn btn-success btn-sm" style="font-size:.78rem;padding:2px 8px" onclick="confirmReceiveSingle(${it.id},${dcId},${orderId},${clinicId})">收貨</button> <button class="btn btn-warning btn-sm" style="font-size:.78rem;padding:2px 8px" onclick="rushSingleItem(${dcId},${it.id})">催貨</button>` : ''}</td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
@@ -2312,6 +2312,17 @@ async function rushDelivery(dcId) {
   const { error } = await sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId);
   if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
   toast('已記錄催貨');
+}
+
+async function rushSingleItem(dcId, itemId) {
+  const now = new Date().toISOString();
+  const { data: item } = await sb.from('order_items').select('material_id').eq('id', itemId).single();
+  const mat = item ? materialName(item.material_id) : `品項#${itemId}`;
+  const { data: dc } = await sb.from('delivery_confirmations').select('notes').eq('id', dcId).single();
+  const newNotes = (dc?.notes || '') + `\n[診所催貨-個別] ${mat} ${fmtDate(now)} by ${userProfile.display_name}`;
+  const { error } = await sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId);
+  if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
+  toast(`已催貨：${mat}`);
 }
 
 async function startReceive(dcId, orderId, clinicId) {

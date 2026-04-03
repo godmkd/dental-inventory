@@ -1485,6 +1485,34 @@ window.cancelOrderItem = async function(orderId, itemId) {
   }
 };
 
+// 叫貨管理用：單項取消（刪除 item，重算狀態）
+window.cancelOrderItemMgmt = async function(orderId, itemId) {
+  if (!await showConfirm('取消品項', '確定要取消此品項？')) return;
+  try {
+    await sb.from('order_items').delete().eq('id', itemId);
+    const { data: remaining } = await sb.from('order_items').select('id').eq('order_id', orderId);
+    if (!remaining || remaining.length === 0) {
+      await sb.from('orders').delete().eq('id', orderId);
+      toast('品項已取消，叫貨單已清空刪除');
+    } else {
+      await recomputeOrderStatus(orderId);
+      toast('品項已取消');
+    }
+    renderOrderMgmt();
+  } catch (e) { toast('取消失敗: ' + e.message, 'error'); }
+};
+
+// 叫貨管理用：取消整單（刪所有 items + order）
+window.cancelWholeOrder = async function(orderId) {
+  if (!await showConfirm('取消整單', '確定要取消整張叫貨單？所有品項都會被刪除。')) return;
+  try {
+    await sb.from('order_items').delete().eq('order_id', orderId);
+    await sb.from('orders').delete().eq('id', orderId);
+    toast('叫貨單已取消');
+    renderOrderMgmt();
+  } catch (e) { toast('取消失敗: ' + e.message, 'error'); }
+};
+
 // ============================================================
 // 4. 叫貨管理 (admin/owner)
 // ============================================================
@@ -1547,9 +1575,10 @@ async function renderOrderMgmtList(orders) {
           <strong>#${o.id}</strong> ${statusBadge(realStatus)}
           <span class="text-muted" style="font-size:.82rem;margin-left:8px">${fmtDate(o.created_at)}</span>
         </div>
-        <div>
+        <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:.85rem">${userName(o.created_by)} | ${fmtMoney(o.total_amount)}</span>
-          <span style="margin-left:8px">▼</span>
+          <button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelWholeOrder(${o.id})">取消整單</button>
+          <span>▼</span>
         </div>
       </div>
       <div class="order-card-body" id="ocb_${o.id}"></div>
@@ -1693,15 +1722,16 @@ async function toggleOrderCard(orderId) {
         ${itemStatus === 'pending' ? `
           <button class="btn btn-ghost btn-xs" onclick="editItemPrice(${it.id},${it.unit_price},${it.custom_price || 0},${it.is_custom_price ? 1 : 0})">💰 改價</button>
           <button class="btn btn-success btn-xs" onclick="confirmOrderItem(${it.id},${orderId})">✓ 確認</button>
-          <button class="btn btn-danger btn-xs" onclick="setItemStatus(${it.id},${orderId},'cancelled')">✕ 取消</button>
+          <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>
         ` : ''}
         ${itemStatus === 'confirmed' ? `
           <button class="btn btn-primary btn-xs" onclick="setItemStatus(${it.id},${orderId},'shipped')">📦 出貨</button>
           <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'pending')">↩ 回待確認</button>
-          <button class="btn btn-danger btn-xs" onclick="setItemStatus(${it.id},${orderId},'cancelled')">✕ 取消</button>
+          <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>
         ` : ''}
         ${itemStatus === 'shipped' ? `
           <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'confirmed')">↩ 回已確認</button>
+          <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>
         ` : ''}
         ${itemStatus === 'cancelled' ? `
           <button class="btn btn-ghost btn-xs" onclick="setItemStatus(${it.id},${orderId},'pending')">↩ 恢復</button>
@@ -1742,8 +1772,7 @@ window.confirmAllItems = async function(orderId) {
     }
     await recomputeOrderStatus(orderId);
     toast(`已確認 ${pendingItems.length} 個品項`);
-    const cardBody = document.getElementById('ocb_' + orderId);
-    if (cardBody) { cardBody.innerHTML = ''; document.getElementById('oc_' + orderId).classList.remove('expanded'); toggleOrderCard(orderId); }
+    renderOrderMgmt();
   } catch (e) { toast('全部確認失敗: ' + e.message, 'error'); }
 };
 
@@ -1760,8 +1789,7 @@ window.shipAllItems = async function(orderId) {
     await checkAutoShipOrder(orderId);
     await recomputeOrderStatus(orderId);
     toast(`已出貨 ${confirmedItems.length} 個品項`);
-    const cardBody = document.getElementById('ocb_' + orderId);
-    if (cardBody) { cardBody.innerHTML = ''; document.getElementById('oc_' + orderId).classList.remove('expanded'); toggleOrderCard(orderId); }
+    renderOrderMgmt();
   } catch (e) { toast('全部出貨失敗: ' + e.message, 'error'); }
 };
 
@@ -1901,14 +1929,8 @@ async function setItemStatus(itemId, orderId, newStatus) {
   // 重新計算整單狀態（以最慢的 item 為準）
   await recomputeOrderStatus(orderId);
 
-  // Refresh card
-  const cardBody = document.getElementById('ocb_' + orderId);
-  if (cardBody) {
-    cardBody.innerHTML = '';
-    const cardEl = document.getElementById('oc_' + orderId);
-    cardEl.classList.remove('expanded');
-    toggleOrderCard(orderId);
-  }
+  // Refresh entire order management list so cards move to correct tab
+  renderOrderMgmt();
 }
 
 function statusLabelText(s) {
@@ -1916,21 +1938,34 @@ function statusLabelText(s) {
 }
 
 async function checkAutoShipOrder(orderId) {
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
-  if (!items) return;
+  console.log(`[checkAutoShipOrder] START orderId=${orderId}`);
+  const { data: items, error: itemsErr } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (itemsErr) { console.error('[checkAutoShipOrder] fetch items error:', itemsErr); return; }
+  if (!items || !items.length) { console.log('[checkAutoShipOrder] no items found, return'); return; }
+  console.log(`[checkAutoShipOrder] total items: ${items.length}`, items.map(i => ({ id: i.id, status: i.item_status, clinic_id: i.clinic_id })));
 
   // Check: any items shipped? → create delivery confirmations for those clinics
   const shippedItems = items.filter(i => (i.item_status || 'pending') === 'shipped');
+  console.log(`[checkAutoShipOrder] shippedItems: ${shippedItems.length}`);
   if (shippedItems.length > 0) {
-    const clinicIds = [...new Set(shippedItems.map(i => i.clinic_id))];
+    // Filter out items with null/undefined clinic_id
+    const validShipped = shippedItems.filter(i => i.clinic_id != null);
+    if (validShipped.length === 0) {
+      console.warn('[checkAutoShipOrder] all shipped items have null clinic_id! Cannot create delivery_confirmations.');
+      return;
+    }
+    const clinicIds = [...new Set(validShipped.map(i => Number(i.clinic_id)))];
+    console.log(`[checkAutoShipOrder] clinicIds from shipped items:`, clinicIds);
     // Check existing delivery_confirmations
     const { data: existingDcs } = await sb.from('delivery_confirmations').select('clinic_id').eq('order_id', orderId);
-    const existingClinicIds = (existingDcs || []).map(d => d.clinic_id);
+    const existingClinicIds = (existingDcs || []).map(d => Number(d.clinic_id));
+    console.log(`[checkAutoShipOrder] existing DC clinic_ids:`, existingClinicIds);
     const newClinicIds = clinicIds.filter(c => !existingClinicIds.includes(c));
+    console.log(`[checkAutoShipOrder] new clinic_ids to insert:`, newClinicIds);
     if (newClinicIds.length > 0) {
-      const { error: insertErr } = await sb.from('delivery_confirmations').insert(
-        newClinicIds.map(cid => ({ order_id: orderId, clinic_id: cid, status: 'pending' }))
-      );
+      const insertRows = newClinicIds.map(cid => ({ order_id: Number(orderId), clinic_id: Number(cid), status: 'pending' }));
+      console.log(`[checkAutoShipOrder] inserting delivery_confirmations:`, insertRows);
+      const { error: insertErr } = await sb.from('delivery_confirmations').insert(insertRows);
       if (insertErr) {
         console.error(`[checkAutoShipOrder] delivery_confirmations insert failed for order ${orderId}:`, insertErr);
         toast('建立待收貨記錄失敗: ' + insertErr.message, 'error');
@@ -1940,7 +1975,9 @@ async function checkAutoShipOrder(orderId) {
     }
     // Update order status to shipped if not already
     await sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId);
+    console.log(`[checkAutoShipOrder] order ${orderId} status updated to shipped`);
   }
+  console.log(`[checkAutoShipOrder] END orderId=${orderId}`);
 }
 
 async function checkAutoDeliverOrder(orderId) {
@@ -1957,10 +1994,13 @@ async function checkAutoDeliverOrder(orderId) {
 // ============================================================
 // 5. 收貨
 // ============================================================
+let receiveClinicId = null;
+
 async function renderReceiving() {
   const mc = document.getElementById('mainContent');
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
-  const clinicIds = myClinics.map(c => c.id);
+  receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
+  const clinicIds = receiveClinicId ? [receiveClinicId] : myClinics.map(c => c.id);
 
   const { data: dcs } = await sb.from('delivery_confirmations').select('*, orders(*)').in('clinic_id', clinicIds).order('created_at', { ascending: false });
 
@@ -1969,6 +2009,11 @@ async function renderReceiving() {
 
   mc.innerHTML = `
     <div class="page-title">✅ 收貨</div>
+    <div class="toolbar">
+      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="receiveClinicId=parseInt(this.value);renderReceiving()">
+        ${myClinics.map(c => `<option value="${c.id}"${c.id === receiveClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
+      </select>` : `<strong>${escHtml(clinicName(receiveClinicId))}</strong>`}
+    </div>
     <div class="sub-tabs">
       <div class="sub-tab active" onclick="showReceiveSub('pending')">待收貨 (${pending.length})</div>
       <div class="sub-tab" onclick="showReceiveSub('confirmed')">已收貨</div>
@@ -2441,7 +2486,9 @@ async function renderAdminRoles(el) {
         } else permLabels = '';
         return `<tr>
           <td><strong>${escHtml(r.display_name)}</strong></td>
-          <td style="font-size:.82rem;max-width:300px">${permLabels || '<span class="text-muted">無</span>'}</td>
+          <td style="font-size:.82rem;max-width:400px">${permLabels
+            ? `<div style="display:flex;flex-wrap:wrap;gap:4px">${(typeof permLabels === 'string' ? permLabels.split('、') : [permLabels]).map(l => `<span style="display:inline-block;padding:2px 8px;background:var(--border-light);border-radius:12px;font-size:.78rem;white-space:nowrap">${l}</span>`).join('')}</div>`
+            : '<span class="text-muted">無</span>'}</td>
           <td>${r.is_system ? '✓' : ''}</td>
           <td>
             <button class="btn btn-ghost btn-sm" onclick="editRole(${r.id})">編輯</button>

@@ -528,7 +528,9 @@ function hasPermission(perm) {
     const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
     if (role && role.permissions) {
       const perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions;
-      return Array.isArray(perms) && perms.includes(perm);
+      // Support both object {"all":true,"manage_orders":true} and array ["perm1","perm2"]
+      if (Array.isArray(perms)) return perms.includes(perm);
+      if (typeof perms === 'object') return perms.all === true || perms[perm] === true;
     }
   }
   // Fallback: old role field when role_id is null

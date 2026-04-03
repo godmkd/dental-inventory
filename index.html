@@ -2424,10 +2424,13 @@ async function renderAdminRoles(el) {
       <thead><tr><th>名稱</th><th>權限</th><th>系統角色</th><th>操作</th></tr></thead>
       <tbody>${visibleRoles.map(r => {
         const perms = (typeof r.permissions === 'string' ? JSON.parse(r.permissions || '[]') : r.permissions) || [];
-        const permLabels = perms.map(p => {
-          const found = ALL_PERMISSIONS.find(ap => ap.key === p);
-          return found ? found.label : p;
-        }).join('、');
+        let permLabels;
+        if (Array.isArray(perms)) {
+          permLabels = perms.map(p => { const f = ALL_PERMISSIONS.find(ap => ap.key === p); return f ? f.label : p; }).join('、');
+        } else if (typeof perms === 'object' && perms !== null) {
+          if (perms.all) permLabels = '全部權限';
+          else permLabels = Object.keys(perms).filter(k => perms[k]).map(p => { const f = ALL_PERMISSIONS.find(ap => ap.key === p); return f ? f.label : p; }).join('、');
+        } else permLabels = '';
         return `<tr>
           <td><strong>${escHtml(r.display_name)}</strong></td>
           <td style="font-size:.82rem;max-width:300px">${permLabels || '<span class="text-muted">無</span>'}</td>
@@ -2444,11 +2447,15 @@ async function renderAdminRoles(el) {
 function editRole(id) {
   const r = id ? allRoles.find(x => x.id === id) : {};
   const currentPerms = r.permissions ? (typeof r.permissions === 'string' ? JSON.parse(r.permissions) : r.permissions) : [];
-  const permCheckboxes = ALL_PERMISSIONS.map(p => `
-    <label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.9rem">
-      <input type="checkbox" class="role-perm-cb" value="${p.key}" ${currentPerms.includes(p.key) ? 'checked' : ''}>
+  const permCheckboxes = ALL_PERMISSIONS.map(p => {
+    let checked = false;
+    if (Array.isArray(currentPerms)) checked = currentPerms.includes(p.key);
+    else if (typeof currentPerms === 'object' && currentPerms !== null) checked = currentPerms[p.key] === true || currentPerms.all === true;
+    return `<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.9rem">
+      <input type="checkbox" class="role-perm-cb" value="${p.key}" ${checked ? 'checked' : ''}>
       ${escHtml(p.label)}
-    </label>`).join('');
+    </label>`;
+  }).join('');
   openModal(id ? '編輯角色' : '新增角色', `
     <div class="form-group"><label>顯示名稱 *</label><input id="fRoleName" value="${escHtml(r.display_name || '')}"></div>
     <div class="form-group"><label>權限</label><div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px">${permCheckboxes}</div></div>

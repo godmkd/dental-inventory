@@ -2038,14 +2038,16 @@ async function renderReceiving() {
   receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
   const clinicIds = receiveClinicId ? [receiveClinicId] : myClinics.map(c => c.id);
 
-  console.log('[renderReceiving] clinicIds:', clinicIds);
   const { data: dcs, error: dcsErr } = await sb.from('delivery_confirmations').select('*').in('clinic_id', clinicIds).order('id', { ascending: false });
-  console.log('[renderReceiving] dcs:', dcs, 'error:', dcsErr);
+  // Debug info on page
+  const debugInfo = `[DEBUG] clinicIds: ${JSON.stringify(clinicIds)} | 查到 ${(dcs||[]).length} 筆 | error: ${dcsErr ? dcsErr.message : '無'}`;
+  console.log(debugInfo);
 
   const pending = (dcs || []).filter(d => d.status === 'pending');
   const confirmed = (dcs || []).filter(d => d.status === 'confirmed');
 
   mc.innerHTML = `
+    <div style="background:#fef3c7;padding:8px;font-size:.75rem;border-radius:4px;margin-bottom:8px">${debugInfo}</div>
     <div class="page-title">✅ 收貨</div>
     <div class="toolbar">
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="receiveClinicId=parseInt(this.value);renderReceiving()">

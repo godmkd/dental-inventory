@@ -1445,13 +1445,16 @@ async function loadConfirmedOrders() {
   bodyEl.innerHTML = filteredOrders.map(o => {
     const ois = (oiMap[o.id] || []).filter(oi => !cid || oi.clinic_id === cid);
     const time = new Date(o.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-    const itemsHtml = ois.map(oi => `<span style="display:inline-flex;align-items:center;gap:2px">${escHtml(materialName(oi.material_id))} x${oi.quantity}<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.85rem;padding:0 2px" onclick="event.stopPropagation();cancelOrderItem(${o.id},${oi.id})">✕</button></span>`).join('、');
-    return `<div class="cp-item">
-      <div class="cp-item-left" style="flex-direction:column;align-items:flex-start;gap:2px">
+    const itemsHtml = ois.map(oi => `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-bottom:1px solid var(--border-light)">
+        <span style="font-size:.84rem">${escHtml(materialName(oi.material_id))} x${oi.quantity}</span>
+        <button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;padding:2px 6px" onclick="event.stopPropagation();cancelOrderItem(${o.id},${oi.id})" title="取消此品項">✕</button>
+      </div>`).join('');
+    return `<div class="cp-item" style="flex-direction:column;align-items:stretch;gap:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid var(--border)">
         <span class="cp-item-name">#${o.id} ${statusBadge(o.status)} <span class="cp-item-time">${time}</span></span>
-        <span style="font-size:.82rem;color:var(--text-light)">${itemsHtml}</span>
+        ${o.status === 'pending' ? `<button class="cp-item-cancel" onclick="cancelOrder(${o.id})">整單取消</button>` : ''}
       </div>
-      ${o.status === 'pending' ? `<button class="cp-item-cancel" onclick="cancelOrder(${o.id})">取消</button>` : ''}
+      <div style="margin-top:4px">${itemsHtml}</div>
     </div>`;
   }).join('');
 }
@@ -1909,14 +1912,20 @@ async function recomputeOrderStatus(orderId) {
 }
 
 async function setItemStatus(itemId, orderId, newStatus) {
+  console.log(`[setItemStatus] called with itemId=${itemId}, orderId=${orderId}, newStatus=${newStatus}`);
   // Try to update item_status column; fallback to notes
   let { error } = await sb.from('order_items').update({ item_status: newStatus }).eq('id', itemId);
   if (error) {
+    console.log(`[setItemStatus] item_status update failed, trying notes fallback. Error:`, error);
     // Fallback: use notes field to store status
     const notesVal = `__status:${newStatus}`;
     ({ error } = await sb.from('order_items').update({ notes: notesVal }).eq('id', itemId));
     if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   }
+
+  // Verify the update was persisted
+  const { data: verifyItem } = await sb.from('order_items').select('id,item_status,order_id,clinic_id').eq('id', itemId).single();
+  console.log(`[setItemStatus] after update, verified item:`, verifyItem);
 
   toast(`品項狀態已改為 ${statusLabelText(newStatus)}`);
 
@@ -1965,13 +1974,21 @@ async function checkAutoShipOrder(orderId) {
     if (newClinicIds.length > 0) {
       const insertRows = newClinicIds.map(cid => ({ order_id: Number(orderId), clinic_id: Number(cid), status: 'pending' }));
       console.log(`[checkAutoShipOrder] inserting delivery_confirmations:`, insertRows);
-      const { error: insertErr } = await sb.from('delivery_confirmations').insert(insertRows);
+      const { data: insertedData, error: insertErr } = await sb.from('delivery_confirmations').insert(insertRows).select();
       if (insertErr) {
         console.error(`[checkAutoShipOrder] delivery_confirmations insert failed for order ${orderId}:`, insertErr);
         toast('建立待收貨記錄失敗: ' + insertErr.message, 'error');
         return;
       }
-      console.log(`[checkAutoShipOrder] Created delivery_confirmations for order ${orderId}, clinics:`, newClinicIds);
+      console.log(`[checkAutoShipOrder] insert returned data:`, insertedData);
+      // Verify by re-reading
+      const { data: verifyDcs, error: verifyErr } = await sb.from('delivery_confirmations').select('*').eq('order_id', orderId);
+      if (verifyErr) {
+        console.error(`[checkAutoShipOrder] verify select failed:`, verifyErr);
+        toast('驗證待收貨記錄失敗: ' + verifyErr.message, 'error');
+      } else {
+        console.log(`[checkAutoShipOrder] verified delivery_confirmations for order ${orderId}:`, verifyDcs);
+      }
     }
     // Update order status to shipped if not already
     await sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId);
@@ -2506,14 +2523,14 @@ function editRole(id) {
     let checked = false;
     if (Array.isArray(currentPerms)) checked = currentPerms.includes(p.key);
     else if (typeof currentPerms === 'object' && currentPerms !== null) checked = currentPerms[p.key] === true || currentPerms.all === true;
-    return `<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.9rem">
+    return `<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.85rem;white-space:nowrap">
       <input type="checkbox" class="role-perm-cb" value="${p.key}" ${checked ? 'checked' : ''}>
       ${escHtml(p.label)}
     </label>`;
   }).join('');
   openModal(id ? '編輯角色' : '新增角色', `
     <div class="form-group"><label>顯示名稱 *</label><input id="fRoleName" value="${escHtml(r.display_name || '')}"></div>
-    <div class="form-group"><label>權限</label><div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px">${permCheckboxes}</div></div>
+    <div class="form-group"><label>權限</label><div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;word-wrap:break-word;overflow-x:hidden">${permCheckboxes}</div></div>
   `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
      <button class="btn btn-primary" onclick="saveRole(${id || 'null'})">儲存</button>`);
 }

@@ -1756,6 +1756,7 @@ window.shipAllItems = async function(orderId) {
     for (const it of confirmedItems) {
       await sb.from('order_items').update({ item_status: 'shipped' }).eq('id', it.id);
     }
+    console.log(`[shipAllItems] All ${confirmedItems.length} items updated to shipped → calling checkAutoShipOrder(${orderId})`);
     await checkAutoShipOrder(orderId);
     await recomputeOrderStatus(orderId);
     toast(`已出貨 ${confirmedItems.length} 個品項`);
@@ -1893,6 +1894,7 @@ async function setItemStatus(itemId, orderId, newStatus) {
 
   // Check if we need to create delivery_confirmations (when item shipped)
   if (newStatus === 'shipped') {
+    console.log(`[setItemStatus] Item ${itemId} shipped → calling checkAutoShipOrder(${orderId})`);
     await checkAutoShipOrder(orderId);
   }
 
@@ -1926,9 +1928,15 @@ async function checkAutoShipOrder(orderId) {
     const existingClinicIds = (existingDcs || []).map(d => d.clinic_id);
     const newClinicIds = clinicIds.filter(c => !existingClinicIds.includes(c));
     if (newClinicIds.length > 0) {
-      await sb.from('delivery_confirmations').insert(
+      const { error: insertErr } = await sb.from('delivery_confirmations').insert(
         newClinicIds.map(cid => ({ order_id: orderId, clinic_id: cid, status: 'pending' }))
       );
+      if (insertErr) {
+        console.error(`[checkAutoShipOrder] delivery_confirmations insert failed for order ${orderId}:`, insertErr);
+        toast('建立待收貨記錄失敗: ' + insertErr.message, 'error');
+        return;
+      }
+      console.log(`[checkAutoShipOrder] Created delivery_confirmations for order ${orderId}, clinics:`, newClinicIds);
     }
     // Update order status to shipped if not already
     await sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId);

@@ -578,8 +578,8 @@ function getNavItems() {
     { id: 'ordering', icon: '📦', label: '叫貨', perm: 'create_orders' },
     { id: 'order-mgmt', icon: '📋', label: '叫貨管理', perm: 'manage_orders' },
     { id: 'receiving', icon: '✅', label: '收貨', perm: 'receive_orders' },
-    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics', 'manage_roles'] },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', perm: 'manage_users' }
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', perms: ['manage_users', 'manage_roles'] }
   ];
   return all.filter(it => {
     if (!it.perm && !it.perms) return true;
@@ -1445,11 +1445,11 @@ async function loadConfirmedOrders() {
   bodyEl.innerHTML = filteredOrders.map(o => {
     const ois = (oiMap[o.id] || []).filter(oi => !cid || oi.clinic_id === cid);
     const time = new Date(o.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-    const summary = ois.map(oi => `${materialName(oi.material_id)} x${oi.quantity}`).join('、');
+    const itemsHtml = ois.map(oi => `<span style="display:inline-flex;align-items:center;gap:2px">${escHtml(materialName(oi.material_id))} x${oi.quantity}<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.85rem;padding:0 2px" onclick="event.stopPropagation();cancelOrderItem(${o.id},${oi.id})">✕</button></span>`).join('、');
     return `<div class="cp-item">
       <div class="cp-item-left" style="flex-direction:column;align-items:flex-start;gap:2px">
         <span class="cp-item-name">#${o.id} ${statusBadge(o.status)} <span class="cp-item-time">${time}</span></span>
-        <span style="font-size:.82rem;color:var(--text-light)">${escHtml(summary)}</span>
+        <span style="font-size:.82rem;color:var(--text-light)">${itemsHtml}</span>
       </div>
       ${o.status === 'pending' ? `<button class="cp-item-cancel" onclick="cancelOrder(${o.id})">取消</button>` : ''}
     </div>`;
@@ -1462,6 +1462,23 @@ window.cancelOrder = async function(orderId) {
     await sb.from('order_items').delete().eq('order_id', orderId);
     await sb.from('orders').delete().eq('id', orderId);
     toast('叫貨單已取消');
+    loadConfirmedOrders();
+  } catch (e) {
+    toast('取消失敗: ' + e.message, 'error');
+  }
+};
+
+window.cancelOrderItem = async function(orderId, itemId) {
+  if (!await showConfirm('取消品項', '確定要取消此品項？')) return;
+  try {
+    await sb.from('order_items').delete().eq('id', itemId);
+    const { data: remaining } = await sb.from('order_items').select('id').eq('order_id', orderId);
+    if (!remaining || remaining.length === 0) {
+      await sb.from('orders').delete().eq('id', orderId);
+      toast('品項已取消，叫貨單已清空刪除');
+    } else {
+      toast('品項已取消');
+    }
     loadConfirmedOrders();
   } catch (e) {
     toast('取消失敗: ' + e.message, 'error');
@@ -1545,27 +1562,33 @@ async function renderOrderSummary() {
   const el = document.getElementById('orderMgmtTabContent');
   el.innerHTML = '<div style="text-align:center;padding:32px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent);width:28px;height:28px;border-width:3px"></div></div>';
 
-  // 讀取所有 confirmed / shipped 的 order_items
-  const { data: items } = await sb.from('order_items').select('*').in('item_status', ['confirmed', 'shipped']);
+  // 讀取所有 confirmed / shipped / delivered 的 order_items
+  const { data: items } = await sb.from('order_items').select('*').in('item_status', ['confirmed', 'shipped', 'delivered']);
   if (!items || !items.length) {
     el.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>目前沒有已確認或已出貨的品項</div></div>';
     return;
   }
 
-  // 按 material_id 彙總
+  // 按 material_id 彙總，分開統計 confirmed vs shipped/delivered
   const grouped = {};
   items.forEach(it => {
     const mid = it.material_id;
-    if (!grouped[mid]) grouped[mid] = { items: [], totalQty: 0, totalActual: 0 };
-    grouped[mid].items.push(it);
-    grouped[mid].totalQty += (it.quantity || 0);
+    if (!grouped[mid]) grouped[mid] = { confirmedItems: [], shippedItems: [], totalConfirmedQty: 0, totalShippedQty: 0, totalActual: 0 };
+    if (it.item_status === 'confirmed') {
+      grouped[mid].confirmedItems.push(it);
+      grouped[mid].totalConfirmedQty += (it.quantity || 0);
+    } else {
+      grouped[mid].shippedItems.push(it);
+      grouped[mid].totalShippedQty += (it.quantity || 0);
+    }
     grouped[mid].totalActual += (it.actual_ordered_qty || 0);
   });
 
   let html = '<div class="card" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9rem">';
   html += '<thead><tr style="border-bottom:2px solid var(--border);text-align:left">';
   html += '<th style="padding:10px 12px">品項名</th><th style="padding:10px 12px">廠商</th>';
-  html += '<th style="padding:10px 12px">確認數量</th><th style="padding:10px 12px">已叫貨數量</th>';
+  html += '<th style="padding:10px 12px">待出貨</th><th style="padding:10px 12px">已出貨</th>';
+  html += '<th style="padding:10px 12px">已叫貨數量</th>';
   html += '<th style="padding:10px 12px">差額</th></tr></thead><tbody>';
 
   Object.keys(grouped).forEach(mid => {
@@ -1576,18 +1599,20 @@ async function renderOrderSummary() {
     const ratio = mat ? (mat.unit_ratio || 1) : 1;
     const orderUnit = mat ? (mat.order_unit || mat.unit || '') : '';
 
-    const confirmedQty = Math.round((g.totalQty / ratio) * 100) / 100;
+    const confirmedQty = Math.round((g.totalConfirmedQty / ratio) * 100) / 100;
+    const shippedQty = Math.round((g.totalShippedQty / ratio) * 100) / 100;
     const actualQty = Math.round((g.totalActual / ratio) * 100) / 100;
     const diff = Math.round((confirmedQty - actualQty) * 100) / 100;
     const diffColor = diff > 0 ? 'var(--danger)' : diff < 0 ? 'var(--success)' : 'var(--text-light)';
 
-    // 收集所有相關 item ids 供更新用
-    const itemIds = g.items.map(i => i.id).join(',');
+    // 收集所有 confirmed items 的 ids 供更新用
+    const itemIds = g.confirmedItems.map(i => i.id).join(',');
 
     html += `<tr style="border-bottom:1px solid var(--border-light)">
       <td style="padding:10px 12px"><strong>${name}</strong></td>
       <td style="padding:10px 12px">${supplier}</td>
       <td style="padding:10px 12px">${confirmedQty} ${escHtml(orderUnit)}</td>
+      <td style="padding:10px 12px">${shippedQty} ${escHtml(orderUnit)}</td>
       <td style="padding:10px 12px">
         <input type="number" value="${actualQty}" min="0" step="0.01"
           style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:.88rem"
@@ -2112,7 +2137,6 @@ async function renderAdminMgmt() {
       <div class="sub-tab ${adminSubTab === 'suppliers' ? 'active' : ''}" data-tab="suppliers" onclick="adminSubTab='suppliers';renderAdminContent()">🏭 廠商</div>
       <div class="sub-tab ${adminSubTab === 'materials' ? 'active' : ''}" data-tab="materials" onclick="adminSubTab='materials';renderAdminContent()">📦 品項</div>
       <div class="sub-tab ${adminSubTab === 'categories' ? 'active' : ''}" data-tab="categories" onclick="adminSubTab='categories';renderAdminContent()">📁 類別</div>
-      ${hasPermission('manage_roles') ? `<div class="sub-tab ${adminSubTab === 'roles' ? 'active' : ''}" data-tab="roles" onclick="adminSubTab='roles';renderAdminContent()">🔐 角色管理</div>` : ''}
     </div>
     <div id="adminContent"></div>`;
   renderAdminContent();
@@ -2126,7 +2150,6 @@ async function renderAdminContent() {
   if (adminSubTab === 'clinics') await renderAdminClinics(el);
   else if (adminSubTab === 'suppliers') await renderAdminSuppliers(el);
   else if (adminSubTab === 'materials') await renderAdminMaterials(el);
-  else if (adminSubTab === 'roles') await renderAdminRoles(el);
   else await renderAdminCategories(el);
 }
 
@@ -2446,7 +2469,7 @@ async function saveRole(id) {
     ({ error: err } = await sb.from('roles').insert(obj));
   }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
-  toast('已儲存'); closeModal(); await loadRoles(); renderAdminContent();
+  toast('已儲存'); closeModal(); await loadRoles(); renderUserMgmt();
 }
 
 async function deleteRole(id) {
@@ -2455,17 +2478,35 @@ async function deleteRole(id) {
   if (!await showConfirm('刪除角色', '確定要刪除此角色？使用此角色的人員將失去角色設定。')) return;
   const { error } = await sb.from('roles').delete().eq('id', id);
   if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
-  toast('已刪除'); await loadRoles(); renderAdminContent();
+  toast('已刪除'); await loadRoles(); renderUserMgmt();
 }
 
 // ============================================================
 // 7. 人員管理 (owner only)
 // ============================================================
+window.usersSubTab = 'users';
+
 async function renderUserMgmt() {
-  await loadUsers();
   const mc = document.getElementById('mainContent');
   mc.innerHTML = `
     <div class="page-title">👥 人員管理</div>
+    <div class="sub-tabs" id="usersSubTabs">
+      <div class="sub-tab ${window.usersSubTab === 'users' ? 'active' : ''}" onclick="window.usersSubTab='users';renderUserMgmt()">👤 人員</div>
+      ${hasPermission('manage_roles') ? `<div class="sub-tab ${window.usersSubTab === 'roles' ? 'active' : ''}" onclick="window.usersSubTab='roles';renderUserMgmt()">🔐 角色</div>` : ''}
+    </div>
+    <div id="usersContent"></div>`;
+
+  const el = document.getElementById('usersContent');
+  if (window.usersSubTab === 'roles' && hasPermission('manage_roles')) {
+    await renderAdminRoles(el);
+  } else {
+    await renderUsersList(el);
+  }
+}
+
+async function renderUsersList(el) {
+  await loadUsers();
+  el.innerHTML = `
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>姓名</th><th>角色</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
       <tbody>${allUsers.map(u => `<tr>

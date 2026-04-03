@@ -2038,7 +2038,9 @@ async function renderReceiving() {
   receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
   const clinicIds = receiveClinicId ? [receiveClinicId] : myClinics.map(c => c.id);
 
-  const { data: dcs } = await sb.from('delivery_confirmations').select('*, orders(*)').in('clinic_id', clinicIds).order('created_at', { ascending: false });
+  console.log('[renderReceiving] clinicIds:', clinicIds);
+  const { data: dcs, error: dcsErr } = await sb.from('delivery_confirmations').select('*').in('clinic_id', clinicIds).order('id', { ascending: false });
+  console.log('[renderReceiving] dcs:', dcs, 'error:', dcsErr);
 
   const pending = (dcs || []).filter(d => d.status === 'pending');
   const confirmed = (dcs || []).filter(d => d.status === 'confirmed');

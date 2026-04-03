@@ -1524,7 +1524,7 @@ window.cancelWholeOrder = async function(orderId) {
 // 4. 叫貨管理 (admin/owner)
 // ============================================================
 let orderMgmtFilter = 'all';
-let orderMgmtTab = 'list'; // 'list' | 'summary'
+let orderMgmtTab = 'list'; // 'list' | 'summary' | 'rush'
 
 async function renderOrderMgmt() {
   const mc = document.getElementById('mainContent');
@@ -1534,11 +1534,16 @@ async function renderOrderMgmt() {
     <div class="sub-tabs" style="margin-bottom:4px">
       <div class="sub-tab ${orderMgmtTab === 'list' ? 'active' : ''}" onclick="orderMgmtTab='list';renderOrderMgmt()">各單管理</div>
       <div class="sub-tab ${orderMgmtTab === 'summary' ? 'active' : ''}" onclick="orderMgmtTab='summary';renderOrderMgmt()">叫貨總覽</div>
+      <div class="sub-tab ${orderMgmtTab === 'rush' ? 'active' : ''}" onclick="orderMgmtTab='rush';renderOrderMgmt()">催貨管理</div>
     </div>
     <div id="orderMgmtTabContent"></div>`;
 
   if (orderMgmtTab === 'summary') {
     await renderOrderSummary();
+    return;
+  }
+  if (orderMgmtTab === 'rush') {
+    await renderRushMgmt();
     return;
   }
 
@@ -1676,6 +1681,100 @@ window.onSummaryActualChange = async function(val, ratio, itemIdsStr) {
     }
     toast('已更新叫貨數量');
   } catch (e) { toast('更新失敗: ' + e.message, 'error'); }
+};
+
+// ---- 催貨管理 ----
+async function renderRushMgmt() {
+  const el = document.getElementById('orderMgmtTabContent');
+  el.innerHTML = '<div style="text-align:center;padding:32px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent);width:28px;height:28px;border-width:3px"></div></div>';
+
+  // 取得所有 shipped 品項
+  const { data: shippedItems } = await sb.from('order_items').select('*').eq('item_status', 'shipped');
+  if (!shippedItems || !shippedItems.length) {
+    el.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>目前沒有已出貨待收貨的品項</div></div>';
+    return;
+  }
+
+  // 取得對應的 delivery_confirmations (status=pending)
+  const orderIds = [...new Set(shippedItems.map(i => i.order_id))];
+  const { data: dcs } = await sb.from('delivery_confirmations').select('*').in('order_id', orderIds).eq('status', 'pending');
+  const dcMap = {};
+  (dcs || []).forEach(dc => { dcMap[dc.order_id + '_' + dc.clinic_id] = dc; });
+
+  // 組合資料：每個 shipped item 配上 dc
+  const rows = shippedItems.map(it => {
+    const dc = dcMap[it.order_id + '_' + it.clinic_id];
+    const mat = materialObj(it.material_id);
+    const shippedAt = it.updated_at || it.created_at;
+    const waitDays = shippedAt ? Math.floor((Date.now() - new Date(shippedAt).getTime()) / 86400000) : 0;
+    return {
+      item: it,
+      dc,
+      matName: mat ? mat.name : `#${it.material_id}`,
+      clinicId: it.clinic_id,
+      clinicLabel: clinicName(it.clinic_id),
+      shippedAt,
+      waitDays,
+      notes: dc ? (dc.notes || '') : ''
+    };
+  });
+
+  // 按診所分組
+  const byClinic = {};
+  rows.forEach(r => {
+    if (!byClinic[r.clinicId]) byClinic[r.clinicId] = { label: r.clinicLabel, items: [] };
+    byClinic[r.clinicId].items.push(r);
+  });
+
+  let html = '';
+  Object.keys(byClinic).forEach(cid => {
+    const group = byClinic[cid];
+    const gid = 'rushClinic_' + cid;
+    html += `<div class="card" style="margin-bottom:8px">
+      <div style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600" onclick="document.getElementById('${gid}').style.display=document.getElementById('${gid}').style.display==='none'?'block':'none';this.querySelector('.chevron').textContent=document.getElementById('${gid}').style.display==='none'?'▶':'▼'">
+        <span>🏥 ${escHtml(group.label)} (${group.items.length})</span>
+        <span class="chevron" style="font-size:.8rem">▼</span>
+      </div>
+      <div id="${gid}">
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+          <thead><tr style="border-bottom:2px solid var(--border);text-align:left">
+            <th style="padding:8px 12px">品項</th>
+            <th style="padding:8px 12px">出貨日</th>
+            <th style="padding:8px 12px">等待</th>
+            <th style="padding:8px 12px">操作</th>
+          </tr></thead><tbody>`;
+
+    group.items.forEach(r => {
+      const rushHistory = r.notes.split('\n').filter(l => l.includes('催貨')).map(l => escHtml(l.trim())).join('<br>');
+      html += `<tr style="border-bottom:1px solid var(--border-light)">
+        <td style="padding:8px 12px"><strong>${escHtml(r.matName)}</strong></td>
+        <td style="padding:8px 12px">${fmtDate(r.shippedAt)}</td>
+        <td style="padding:8px 12px;${r.waitDays >= 3 ? 'color:var(--danger);font-weight:600' : ''}">${r.waitDays} 天</td>
+        <td style="padding:8px 12px">
+          ${r.dc ? `<button class="btn btn-sm" style="font-size:.8rem;padding:4px 10px" onclick="rushFromMgmt(${r.dc.id})">📞 催貨</button>` : '<span style="color:var(--text-light)">無確認單</span>'}
+        </td>
+      </tr>`;
+      if (rushHistory) {
+        html += `<tr style="border-bottom:1px solid var(--border-light)"><td colspan="4" style="padding:4px 12px 8px;font-size:.78rem;color:var(--text-light)">${rushHistory}</td></tr>`;
+      }
+    });
+
+    html += '</tbody></table></div></div>';
+  });
+
+  if (!html) html = '<div class="card"><div class="empty-state"><span>📭</span>目前沒有已出貨待收貨的品項</div></div>';
+  el.innerHTML = html;
+}
+
+window.rushFromMgmt = async function(dcId) {
+  const now = new Date();
+  const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const { data: dc } = await sb.from('delivery_confirmations').select('notes').eq('id', dcId).single();
+  const newNotes = ((dc?.notes || '') + `\n催貨 ${ts}`).trim();
+  const { error } = await sb.from('delivery_confirmations').update({ notes: newNotes }).eq('id', dcId);
+  if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
+  toast('已記錄催貨');
+  await renderRushMgmt();
 };
 
 async function toggleOrderCard(orderId) {
@@ -2039,15 +2138,10 @@ async function renderReceiving() {
   const clinicIds = receiveClinicId ? [receiveClinicId] : myClinics.map(c => c.id);
 
   const { data: dcs, error: dcsErr } = await sb.from('delivery_confirmations').select('*').in('clinic_id', clinicIds).order('id', { ascending: false });
-  // Debug info on page
-  const debugInfo = `[DEBUG] clinicIds: ${JSON.stringify(clinicIds)} | 查到 ${(dcs||[]).length} 筆 | error: ${dcsErr ? dcsErr.message : '無'}`;
-  console.log(debugInfo);
-
   const pending = (dcs || []).filter(d => d.status === 'pending');
   const confirmed = (dcs || []).filter(d => d.status === 'confirmed');
 
   mc.innerHTML = `
-    <div style="background:#fef3c7;padding:8px;font-size:.75rem;border-radius:4px;margin-bottom:8px">${debugInfo}</div>
     <div class="page-title">✅ 收貨</div>
     <div class="toolbar">
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="receiveClinicId=parseInt(this.value);renderReceiving()">

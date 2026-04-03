@@ -459,7 +459,7 @@ async function doLogin() {
 async function doLogout() { await sb.auth.signOut(); showLogin(); }
 
 async function loadProfile() {
-  const { data, error } = await sb.from('user_profiles').select('*').eq('id', currentUser.id).single();
+  const { data, error } = await sb.from('user_profiles').select('*, roles(*)').eq('id', currentUser.id).single();
   if (error && error.code === 'PGRST116') {
     const meta = currentUser.user_metadata || {};
     const displayName = meta.full_name || meta.name || meta.preferred_username || currentUser.email || '新使用者';
@@ -491,19 +491,67 @@ async function enterApp() {
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  document.getElementById('headerUser').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role)})`;
+  document.getElementById('headerUser').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles()]);
   buildNav();
   const firstNav = getNavItems()[0];
   if (firstNav) navigateTo(firstNav.id);
 }
 
-function roleLabel(r) { return { owner: '老闆', admin: '總管理者', clinic_manager: '診所管理者' }[r] || r; }
-function isOwner() { return userProfile.role === 'owner'; }
-function isAdmin() { return userProfile.role === 'admin'; }
-function isManager() { return userProfile.role === 'clinic_manager'; }
-function canSeeAdmin() { return isOwner() || isAdmin(); }
-function canSeePrice() { return isOwner() || isAdmin(); }
+const ALL_PERMISSIONS = [
+  { key: 'manage_materials', label: '管理品項' },
+  { key: 'manage_categories', label: '管理類別' },
+  { key: 'manage_suppliers', label: '管理廠商' },
+  { key: 'view_all_inventory', label: '查看所有庫存' },
+  { key: 'view_prices', label: '查看價格' },
+  { key: 'manage_orders', label: '管理叫貨' },
+  { key: 'ship_orders', label: '出貨管理' },
+  { key: 'daily_changes', label: '日常變動' },
+  { key: 'create_orders', label: '建立叫貨' },
+  { key: 'receive_orders', label: '收貨' },
+  { key: 'manage_clinics', label: '管理診所' },
+  { key: 'manage_users', label: '管理人員' },
+  { key: 'manage_roles', label: '管理角色' }
+];
+
+function roleLabel(roleStr, roleId) {
+  if (roleId) {
+    const role = allRoles.find(r => r.id === roleId);
+    if (role) return role.display_name;
+  }
+  return { owner: '系統管理員', admin: '總管理者', clinic_manager: '診所管理者' }[roleStr] || roleStr;
+}
+
+function hasPermission(perm) {
+  if (!userProfile) return false;
+  if (userProfile.role_id) {
+    const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
+    if (role && role.permissions) {
+      const perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions;
+      return Array.isArray(perms) && perms.includes(perm);
+    }
+  }
+  // Fallback: old role field when role_id is null
+  const r = userProfile.role;
+  if (r === 'owner') return true;
+  if (r === 'admin') return !['manage_users', 'manage_roles'].includes(perm);
+  return ['daily_changes', 'create_orders', 'receive_orders'].includes(perm);
+}
+
+function isSystemAdmin() {
+  if (!userProfile) return false;
+  if (userProfile.role_id) {
+    const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
+    return !!(role && role.is_system);
+  }
+  return userProfile.role === 'owner';
+}
+
+function isOwner() { return isSystemAdmin(); }
+function isAdmin() { return hasPermission('manage_orders'); }
+function isManager() { return !hasPermission('manage_orders'); }
+function canSeeAdmin() { return hasPermission('view_all_inventory'); }
+function canSeePrice() { return hasPermission('view_prices'); }
 
 // ===================== DATA =====================
 async function loadClinics() { const { data } = await sb.from('clinics').select('*').order('id'); allClinics = data || []; }
@@ -522,40 +570,26 @@ function userName(id) { return allUsers.find(u => u.id === id)?.display_name || 
 
 // ===================== NAV =====================
 function getNavItems() {
-  const items = [];
-  if (isOwner()) {
-    items.push(
-      { id: 'stock-overview', icon: '📊', label: '庫存總覽' },
-      { id: 'daily-change', icon: '🔄', label: '日常變動' },
-      { id: 'ordering', icon: '📦', label: '叫貨' },
-      { id: 'order-mgmt', icon: '📋', label: '叫貨管理' },
-      { id: 'receiving', icon: '✅', label: '收貨' },
-      { id: 'admin-mgmt', icon: '⚙️', label: '行政管理' },
-      { id: 'user-mgmt', icon: '👥', label: '人員管理' }
-    );
-  } else if (isAdmin()) {
-    items.push(
-      { id: 'stock-overview', icon: '📊', label: '庫存總覽' },
-      { id: 'daily-change', icon: '🔄', label: '日常變動' },
-      { id: 'ordering', icon: '📦', label: '叫貨' },
-      { id: 'order-mgmt', icon: '📋', label: '叫貨管理' },
-      { id: 'receiving', icon: '✅', label: '收貨' },
-      { id: 'admin-mgmt', icon: '⚙️', label: '行政管理' }
-    );
-  } else {
-    items.push(
-      { id: 'stock-overview', icon: '📊', label: '庫存總覽' },
-      { id: 'daily-change', icon: '🔄', label: '日常變動' },
-      { id: 'ordering', icon: '📦', label: '叫貨' },
-      { id: 'receiving', icon: '✅', label: '收貨' }
-    );
-  }
-  return items;
+  const all = [
+    { id: 'stock-overview', icon: '📊', label: '庫存總覽' },
+    { id: 'daily-change', icon: '🔄', label: '日常變動', perm: 'daily_changes' },
+    { id: 'ordering', icon: '📦', label: '叫貨', perm: 'create_orders' },
+    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', perm: 'manage_orders' },
+    { id: 'receiving', icon: '✅', label: '收貨', perm: 'receive_orders' },
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics', 'manage_roles'] },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', perm: 'manage_users' }
+  ];
+  return all.filter(it => {
+    if (!it.perm && !it.perms) return true;
+    if (it.perm) return hasPermission(it.perm);
+    if (it.perms) return it.perms.some(p => hasPermission(p));
+    return false;
+  });
 }
 
 function buildNav() {
   const items = getNavItems();
-  let sidebarHTML = `<div class="nav-section">${roleLabel(userProfile.role)}</div>`;
+  let sidebarHTML = `<div class="nav-section">${roleLabel(userProfile.role, userProfile.role_id)}</div>`;
   items.forEach(it => {
     sidebarHTML += `<div class="nav-item" data-page="${it.id}" onclick="navigateTo('${it.id}')">${it.icon} ${it.label}</div>`;
   });
@@ -2071,25 +2105,26 @@ async function renderAdminMgmt() {
   const mc = document.getElementById('mainContent');
   mc.innerHTML = `
     <div class="page-title">⚙️ 行政管理</div>
-    <div class="sub-tabs">
-      <div class="sub-tab ${adminSubTab === 'clinics' ? 'active' : ''}" onclick="adminSubTab='clinics';renderAdminContent()">🏥 診所</div>
-      <div class="sub-tab ${adminSubTab === 'suppliers' ? 'active' : ''}" onclick="adminSubTab='suppliers';renderAdminContent()">🏭 廠商</div>
-      <div class="sub-tab ${adminSubTab === 'materials' ? 'active' : ''}" onclick="adminSubTab='materials';renderAdminContent()">📦 品項</div>
-      <div class="sub-tab ${adminSubTab === 'categories' ? 'active' : ''}" onclick="adminSubTab='categories';renderAdminContent()">📁 類別</div>
+    <div class="sub-tabs" id="adminSubTabs">
+      <div class="sub-tab ${adminSubTab === 'clinics' ? 'active' : ''}" data-tab="clinics" onclick="adminSubTab='clinics';renderAdminContent()">🏥 診所</div>
+      <div class="sub-tab ${adminSubTab === 'suppliers' ? 'active' : ''}" data-tab="suppliers" onclick="adminSubTab='suppliers';renderAdminContent()">🏭 廠商</div>
+      <div class="sub-tab ${adminSubTab === 'materials' ? 'active' : ''}" data-tab="materials" onclick="adminSubTab='materials';renderAdminContent()">📦 品項</div>
+      <div class="sub-tab ${adminSubTab === 'categories' ? 'active' : ''}" data-tab="categories" onclick="adminSubTab='categories';renderAdminContent()">📁 類別</div>
+      ${hasPermission('manage_roles') ? `<div class="sub-tab ${adminSubTab === 'roles' ? 'active' : ''}" data-tab="roles" onclick="adminSubTab='roles';renderAdminContent()">🔐 角色管理</div>` : ''}
     </div>
     <div id="adminContent"></div>`;
   renderAdminContent();
 }
 
 async function renderAdminContent() {
-  document.querySelectorAll('.sub-tab').forEach(t => {
-    const tab = t.textContent.includes('診所') ? 'clinics' : t.textContent.includes('廠商') ? 'suppliers' : t.textContent.includes('品項') ? 'materials' : 'categories';
-    t.classList.toggle('active', tab === adminSubTab);
+  document.querySelectorAll('#adminSubTabs .sub-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === adminSubTab);
   });
   const el = document.getElementById('adminContent');
   if (adminSubTab === 'clinics') await renderAdminClinics(el);
   else if (adminSubTab === 'suppliers') await renderAdminSuppliers(el);
   else if (adminSubTab === 'materials') await renderAdminMaterials(el);
+  else if (adminSubTab === 'roles') await renderAdminRoles(el);
   else await renderAdminCategories(el);
 }
 
@@ -2354,6 +2389,73 @@ async function deleteCategory(id) {
   toast('已刪除'); await loadCategories(); renderAdminContent();
 }
 
+// --- Roles CRUD ---
+async function renderAdminRoles(el) {
+  await loadRoles();
+  const visibleRoles = allRoles.filter(r => !r.is_system || isSystemAdmin());
+  el.innerHTML = `
+    <div class="toolbar"><button class="btn btn-primary" onclick="editRole()">＋ 新增角色</button></div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>名稱</th><th>權限</th><th>系統角色</th><th>操作</th></tr></thead>
+      <tbody>${visibleRoles.map(r => {
+        const perms = (typeof r.permissions === 'string' ? JSON.parse(r.permissions || '[]') : r.permissions) || [];
+        const permLabels = perms.map(p => {
+          const found = ALL_PERMISSIONS.find(ap => ap.key === p);
+          return found ? found.label : p;
+        }).join('、');
+        return `<tr>
+          <td><strong>${escHtml(r.display_name)}</strong></td>
+          <td style="font-size:.82rem;max-width:300px">${permLabels || '<span class="text-muted">無</span>'}</td>
+          <td>${r.is_system ? '✓' : ''}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="editRole(${r.id})">編輯</button>
+            ${r.is_system ? '' : `<button class="btn btn-danger btn-sm" onclick="deleteRole(${r.id})">刪除</button>`}
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function editRole(id) {
+  const r = id ? allRoles.find(x => x.id === id) : {};
+  const currentPerms = r.permissions ? (typeof r.permissions === 'string' ? JSON.parse(r.permissions) : r.permissions) : [];
+  const permCheckboxes = ALL_PERMISSIONS.map(p => `
+    <label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.9rem">
+      <input type="checkbox" class="role-perm-cb" value="${p.key}" ${currentPerms.includes(p.key) ? 'checked' : ''}>
+      ${escHtml(p.label)}
+    </label>`).join('');
+  openModal(id ? '編輯角色' : '新增角色', `
+    <div class="form-group"><label>顯示名稱 *</label><input id="fRoleName" value="${escHtml(r.display_name || '')}"></div>
+    <div class="form-group"><label>權限</label><div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px">${permCheckboxes}</div></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveRole(${id || 'null'})">儲存</button>`);
+}
+
+async function saveRole(id) {
+  const displayName = document.getElementById('fRoleName').value.trim();
+  if (!displayName) { toast('請輸入名稱', 'error'); return; }
+  const perms = Array.from(document.querySelectorAll('.role-perm-cb:checked')).map(cb => cb.value);
+  const obj = { display_name: displayName, permissions: perms };
+  let err;
+  if (id) {
+    ({ error: err } = await sb.from('roles').update(obj).eq('id', id));
+  } else {
+    obj.is_system = false;
+    ({ error: err } = await sb.from('roles').insert(obj));
+  }
+  if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
+  toast('已儲存'); closeModal(); await loadRoles(); renderAdminContent();
+}
+
+async function deleteRole(id) {
+  const role = allRoles.find(r => r.id === id);
+  if (role && role.is_system) { toast('系統角色不可刪除', 'error'); return; }
+  if (!await showConfirm('刪除角色', '確定要刪除此角色？使用此角色的人員將失去角色設定。')) return;
+  const { error } = await sb.from('roles').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除'); await loadRoles(); renderAdminContent();
+}
+
 // ============================================================
 // 7. 人員管理 (owner only)
 // ============================================================
@@ -2366,7 +2468,7 @@ async function renderUserMgmt() {
       <thead><tr><th>姓名</th><th>角色</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
       <tbody>${allUsers.map(u => `<tr>
         <td>${escHtml(u.display_name)}</td>
-        <td>${roleLabel(u.role)}</td>
+        <td>${roleLabel(u.role, u.role_id)}</td>
         <td>${u.clinic_id ? escHtml(clinicName(u.clinic_id)) : '<span class="text-muted">未指派</span>'}</td>
         <td>${u.is_active ? '<span class="text-success">啟用</span>' : '<span class="text-danger">停用</span>'}</td>
         <td>
@@ -2380,16 +2482,24 @@ async function renderUserMgmt() {
 function editUser(id) {
   const u = allUsers.find(x => x.id === id);
   if (!u) return;
+  let roleDropdown;
+  if (allRoles.length > 0) {
+    const roleOpts = allRoles
+      .filter(r => !r.is_system || isSystemAdmin())
+      .map(r => `<option value="${r.id}" ${u.role_id === r.id ? 'selected' : ''}>${escHtml(r.display_name)}</option>`)
+      .join('');
+    roleDropdown = `<select id="fUserRole"><option value="">-- 請選擇 --</option>${roleOpts}</select>`;
+  } else {
+    roleDropdown = `<select id="fUserRole">
+      <option value="owner" ${u.role === 'owner' ? 'selected' : ''}>系統管理員</option>
+      <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>總管理者</option>
+      <option value="clinic_manager" ${u.role === 'clinic_manager' ? 'selected' : ''}>診所管理者</option>
+    </select>`;
+  }
   openModal('編輯人員', `
     <div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>
     <div class="form-row">
-      <div class="form-group"><label>角色</label>
-        <select id="fUserRole">
-          <option value="owner" ${u.role === 'owner' ? 'selected' : ''}>老闆</option>
-          <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>總管理者</option>
-          <option value="clinic_manager" ${u.role === 'clinic_manager' ? 'selected' : ''}>診所管理者</option>
-        </select>
-      </div>
+      <div class="form-group"><label>角色</label>${roleDropdown}</div>
       <div class="form-group"><label>所屬診所</label>
         <select id="fUserClinic">${optionsHTML(allClinics, 'id', 'name', u.clinic_id)}</select>
       </div>
@@ -2399,12 +2509,17 @@ function editUser(id) {
 }
 
 async function saveUser(id) {
+  const roleVal = document.getElementById('fUserRole').value;
   const obj = {
     display_name: document.getElementById('fUserName').value.trim(),
-    role: document.getElementById('fUserRole').value,
     clinic_id: document.getElementById('fUserClinic').value || null
   };
   if (!obj.display_name) { toast('請輸入姓名', 'error'); return; }
+  if (allRoles.length > 0 && roleVal) {
+    obj.role_id = parseInt(roleVal);
+  } else if (roleVal) {
+    obj.role = roleVal;
+  }
   const { error } = await sb.from('user_profiles').update(obj).eq('id', id);
   if (error) { toast('儲存失敗: ' + error.message, 'error'); return; }
   toast('已更新'); closeModal(); await loadUsers(); renderUserMgmt();

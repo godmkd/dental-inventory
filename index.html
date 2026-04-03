@@ -1538,8 +1538,16 @@ window.cancelOrderItemMgmt = async function(orderId, itemId) {
 
 // 叫貨管理用：取消整單（刪所有 items + order）
 window.cancelWholeOrder = async function(orderId) {
+  // 檢查是否有品項已收貨
+  const { data: dcs } = await sb.from('delivery_confirmations').select('*').eq('order_id', orderId);
+  if (dcs && dcs.some(dc => dc.status === 'confirmed')) {
+    toast('有品項已收貨，請先讓診所回待收貨', 'error');
+    return;
+  }
   if (!await showConfirm('取消整單', '確定要取消整張叫貨單？所有品項都會被刪除。')) return;
   try {
+    // 同時刪除 delivery_confirmations
+    await sb.from('delivery_confirmations').delete().eq('order_id', orderId);
     await sb.from('order_items').delete().eq('order_id', orderId);
     await sb.from('orders').delete().eq('id', orderId);
     toast('叫貨單已取消');
@@ -2262,8 +2270,8 @@ async function renderReceiveContent(tab) {
           <button class="btn btn-ghost btn-sm" onclick="loadReceiveItems(${d.id},${d.order_id},${d.clinic_id})">展開明細</button>
         ` : ''}
         ${d.status === 'confirmed' ? `
-          <button class="btn btn-ghost btn-sm" onclick="undoReceive(${d.id},${d.order_id},${d.clinic_id})">↩ 反悔收貨</button>
-          <button class="btn btn-ghost btn-sm" onclick="viewReceiveDetail(${d.id},${d.order_id},${d.clinic_id})">查看明細</button>
+          <button class="btn btn-ghost btn-sm" onclick="undoReceive(${d.id},${d.order_id},${d.clinic_id})">↩ 整單反悔</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadConfirmedReceiveItems(${d.id},${d.order_id},${d.clinic_id})">展開明細</button>
         ` : ''}
       </div>
     </div>`;
@@ -2283,6 +2291,72 @@ async function viewReceiveDetail(dcId, orderId, clinicId) {
     }).join('')}</tbody>
   </table></div>`;
 }
+
+async function loadConfirmedReceiveItems(dcId, orderId, clinicId) {
+  const el = document.getElementById('rcDetail_' + dcId);
+  if (el.innerHTML) { el.innerHTML = ''; return; }
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  if (!items || !items.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-light)">無明細</div>'; return; }
+  el.innerHTML = `<div class="table-wrap" style="margin-bottom:12px"><table>
+    <thead><tr><th>品項</th><th>數量</th><th>狀態</th><th>操作</th></tr></thead>
+    <tbody>${items.map(it => {
+      const itemStatus = it.item_status || 'pending';
+      const isDelivered = itemStatus === 'delivered';
+      return `<tr>
+        <td>${materialName(it.material_id)}</td>
+        <td>${it.quantity}</td>
+        <td>${statusBadge(itemStatus)}</td>
+        <td>${isDelivered ? `<button class="btn btn-warning btn-sm" style="font-size:.78rem;padding:2px 8px" onclick="undoReceiveSingle(${it.id},${dcId},${orderId},${clinicId})">回待收貨</button>` : ''}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+window.loadConfirmedReceiveItems = loadConfirmedReceiveItems;
+
+async function undoReceiveSingle(itemId, dcId, orderId, clinicId) {
+  if (!await showConfirm('回待收貨', '確定要將此品項回到待收貨狀態？庫存將回扣。')) return;
+  try {
+    const { data: it } = await sb.from('order_items').select('*').eq('id', itemId).single();
+    if (!it) { toast('找不到品項', 'error'); return; }
+
+    // 1. item_status 改回 shipped
+    await sb.from('order_items').update({ item_status: 'shipped' }).eq('id', itemId);
+
+    // 2. clinic_inventory 扣回庫存
+    const { data: inv } = await sb.from('clinic_inventory')
+      .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single();
+    if (inv) {
+      await sb.from('clinic_inventory').update({ current_stock: Math.max(0, inv.current_stock - it.quantity) }).eq('id', inv.id);
+    }
+
+    // 3. 刪除最近一筆該品項的 receive log
+    const { data: logs } = await sb.from('inventory_logs')
+      .select('id').eq('clinic_id', clinicId).eq('material_id', it.material_id).eq('type', 'receive')
+      .order('created_at', { ascending: false }).limit(1);
+    if (logs && logs.length > 0) {
+      await sb.from('inventory_logs').delete().eq('id', logs[0].id);
+    }
+
+    // 4. 重新計算 dc 狀態：檢查是否還有 delivered 品項
+    const { data: allItems } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+    const anyDelivered = (allItems || []).some(i => i.id !== itemId && (i.item_status || 'pending') === 'delivered');
+    if (!anyDelivered) {
+      // 沒有任何 delivered 品項了，dc 回 pending
+      await sb.from('delivery_confirmations').update({
+        status: 'pending', confirmed_by: null, confirmed_at: null
+      }).eq('id', dcId);
+    }
+
+    // 5. 重新計算 order 狀態
+    await recomputeOrderStatus(orderId);
+
+    toast('已將品項回到待收貨');
+    renderReceiving();
+  } catch (e) {
+    toast('操作失敗: ' + e.message, 'error');
+  }
+}
+window.undoReceiveSingle = undoReceiveSingle;
 
 async function loadReceiveItems(dcId, orderId, clinicId) {
   const el = document.getElementById('rcDetail_' + dcId);

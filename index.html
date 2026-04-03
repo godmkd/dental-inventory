@@ -1445,14 +1445,18 @@ async function loadConfirmedOrders() {
   bodyEl.innerHTML = filteredOrders.map(o => {
     const ois = (oiMap[o.id] || []).filter(oi => !cid || oi.clinic_id === cid);
     const time = new Date(o.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-    const itemsHtml = ois.map(oi => `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-bottom:1px solid var(--border-light)">
+    const itemsHtml = ois.map(oi => {
+      const isSt = oi.item_status || 'pending';
+      const canCancel = (isSt === 'pending' || isSt === 'confirmed');
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-bottom:1px solid var(--border-light)">
         <span style="font-size:.84rem">${escHtml(materialName(oi.material_id))} x${oi.quantity}</span>
-        <button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;padding:2px 6px" onclick="event.stopPropagation();cancelOrderItem(${o.id},${oi.id})" title="取消此品項">✕</button>
-      </div>`).join('');
+        ${canCancel ? `<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;padding:2px 6px" onclick="event.stopPropagation();cancelOrderItem(${o.id},${oi.id})" title="取消此品項">✕</button>` : ''}
+      </div>`;
+    }).join('');
     return `<div class="cp-item" style="flex-direction:column;align-items:stretch;gap:0">
       <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid var(--border)">
         <span class="cp-item-name">#${o.id} ${statusBadge(o.status)} <span class="cp-item-time">${time}</span></span>
-        ${o.status === 'pending' ? `<button class="cp-item-cancel" onclick="cancelOrder(${o.id})">整單取消</button>` : ''}
+        ${o.status === 'pending' && !ois.some(oi => (oi.item_status === 'shipped' || oi.item_status === 'delivered')) ? `<button class="cp-item-cancel" onclick="cancelOrder(${o.id})">整單取消</button>` : ''}
       </div>
       <div style="margin-top:4px">${itemsHtml}</div>
     </div>`;
@@ -1931,8 +1935,23 @@ async function setItemStatus(itemId, orderId, newStatus) {
 
   // Check if we need to create delivery_confirmations (when item shipped)
   if (newStatus === 'shipped') {
-    console.log(`[setItemStatus] Item ${itemId} shipped → calling checkAutoShipOrder(${orderId})`);
-    await checkAutoShipOrder(orderId);
+    console.log(`[setItemStatus] Item ${itemId} shipped → directly inserting delivery_confirmation`);
+    const clinicId = verifyItem ? verifyItem.clinic_id : null;
+    if (clinicId) {
+      const { data: existDc } = await sb.from('delivery_confirmations')
+        .select('id').eq('order_id', orderId).eq('clinic_id', clinicId);
+      if (!existDc || existDc.length === 0) {
+        const { error: dcErr } = await sb.from('delivery_confirmations')
+          .insert({ order_id: Number(orderId), clinic_id: Number(clinicId), status: 'pending' });
+        if (dcErr) { console.error('DC insert error:', dcErr); toast('建立收貨確認失敗: ' + dcErr.message, 'error'); }
+        else { console.log('DC created for order', orderId, 'clinic', clinicId); toast('已建立收貨確認'); }
+      } else {
+        console.log('DC already exists for order', orderId, 'clinic', clinicId);
+      }
+    } else {
+      console.warn('[setItemStatus] No clinic_id found for item', itemId, ', falling back to checkAutoShipOrder');
+      await checkAutoShipOrder(orderId);
+    }
   }
 
   // 重新計算整單狀態（以最慢的 item 為準）
@@ -2523,7 +2542,7 @@ function editRole(id) {
     let checked = false;
     if (Array.isArray(currentPerms)) checked = currentPerms.includes(p.key);
     else if (typeof currentPerms === 'object' && currentPerms !== null) checked = currentPerms[p.key] === true || currentPerms.all === true;
-    return `<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.85rem;white-space:nowrap">
+    return `<label style="display:block;padding:6px 0;font-size:.9rem;cursor:pointer">
       <input type="checkbox" class="role-perm-cb" value="${p.key}" ${checked ? 'checked' : ''}>
       ${escHtml(p.label)}
     </label>`;

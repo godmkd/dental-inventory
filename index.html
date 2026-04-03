@@ -278,6 +278,21 @@ tr:hover td{background:#fafcff}
 .btn-reset-item{background:none;border:none;cursor:pointer;font-size:.85rem;color:var(--text-light);padding:2px 4px;line-height:1;transition:color .15s}
 .btn-reset-item:hover{color:var(--danger)}
 
+/* Order stats collapsible */
+.os-group{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.os-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border-light)}
+.os-header:hover{background:var(--border-light)}
+.os-title{font-weight:700;font-size:.95rem;color:var(--text)}
+.os-arrow{font-size:.85rem;color:var(--text-light);transition:transform .3s}
+.os-group.collapsed .os-arrow{transform:rotate(180deg)}
+.os-group.collapsed .os-body{display:none}
+.os-body{overflow-x:auto}
+.os-subtotal{padding:10px 20px;text-align:right;font-weight:700;font-size:.9rem;border-top:1px solid var(--border-light);background:var(--bg)}
+.os-grand-total{padding:16px 20px;text-align:right;font-weight:700;font-size:1.05rem;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin-top:12px}
+.os-filters{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.os-filters input{padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:.88rem}
+.os-filters .btn{font-size:.85rem}
+
 /* Order confirm area */
 .order-confirm-area{background:#f0fff4;border:2px solid var(--success);border-radius:var(--radius);padding:16px;margin-top:16px}
 .order-confirm-area h3{margin-bottom:12px;color:var(--success);font-size:1rem}
@@ -2430,6 +2445,7 @@ async function renderAdminMgmt() {
       <div class="sub-tab ${adminSubTab === 'suppliers' ? 'active' : ''}" data-tab="suppliers" onclick="adminSubTab='suppliers';renderAdminContent()">🏭 廠商</div>
       <div class="sub-tab ${adminSubTab === 'materials' ? 'active' : ''}" data-tab="materials" onclick="adminSubTab='materials';renderAdminContent()">📦 品項</div>
       <div class="sub-tab ${adminSubTab === 'categories' ? 'active' : ''}" data-tab="categories" onclick="adminSubTab='categories';renderAdminContent()">📁 類別</div>
+      <div class="sub-tab ${adminSubTab === 'order-stats' ? 'active' : ''}" data-tab="order-stats" onclick="adminSubTab='order-stats';renderAdminContent()">📊 叫貨統計</div>
     </div>
     <div id="adminContent"></div>`;
   renderAdminContent();
@@ -2443,6 +2459,7 @@ async function renderAdminContent() {
   if (adminSubTab === 'clinics') await renderAdminClinics(el);
   else if (adminSubTab === 'suppliers') await renderAdminSuppliers(el);
   else if (adminSubTab === 'materials') await renderAdminMaterials(el);
+  else if (adminSubTab === 'order-stats') await renderOrderStats(el);
   else await renderAdminCategories(el);
 }
 
@@ -2706,6 +2723,112 @@ async function deleteCategory(id) {
   if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
   toast('已刪除'); await loadCategories(); renderAdminContent();
 }
+
+// --- Order Stats ---
+let osDateFrom = '', osDateTo = '';
+function initOSDates() {
+  const now = new Date();
+  osDateFrom = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-01';
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  osDateTo = last.getFullYear() + '-' + String(last.getMonth() + 1).padStart(2, '0') + '-' + String(last.getDate()).padStart(2, '0');
+}
+initOSDates();
+
+async function renderOrderStats(el) {
+  el.innerHTML = `
+    <div class="os-filters">
+      <label>起始日</label><input type="date" id="osFrom" value="${osDateFrom}">
+      <label>結束日</label><input type="date" id="osTo" value="${osDateTo}">
+      <button class="btn btn-primary btn-sm" onclick="applyOSFilter()">查詢</button>
+    </div>
+    <div id="osResult"><div style="text-align:center;padding:30px;color:var(--text-light)">載入中...</div></div>`;
+  await loadOrderStats();
+}
+
+async function applyOSFilter() {
+  osDateFrom = document.getElementById('osFrom').value;
+  osDateTo = document.getElementById('osTo').value;
+  await loadOrderStats();
+}
+
+async function loadOrderStats() {
+  const container = document.getElementById('osResult');
+  if (!container) return;
+
+  await loadClinics();
+  await loadMaterials();
+
+  let query = sb.from('order_items').select('*');
+  if (osDateFrom) query = query.gte('created_at', osDateFrom + 'T00:00:00');
+  if (osDateTo) query = query.lte('created_at', osDateTo + 'T23:59:59');
+  const { data: items, error } = await query;
+  if (error) { container.innerHTML = '<p style="color:var(--danger)">讀取失敗: ' + escHtml(error.message) + '</p>'; return; }
+  if (!items || items.length === 0) { container.innerHTML = '<p style="text-align:center;padding:30px;color:var(--text-light)">此期間無叫貨資料</p>'; return; }
+
+  const matMap = {};
+  allMaterials.forEach(m => { matMap[m.id] = m; });
+  const clinicMap = {};
+  allClinics.forEach(c => { clinicMap[c.id] = c; });
+
+  // Group by clinic
+  const groups = {};
+  items.forEach(it => {
+    const cid = it.clinic_id || 0;
+    if (!groups[cid]) groups[cid] = [];
+    groups[cid].push(it);
+  });
+
+  let grandTotal = 0;
+  let html = '';
+  const statusLabels = { pending: '待處理', confirmed: '已確認', shipped: '已出貨', delivered: '已到貨', cancelled: '已取消' };
+
+  Object.keys(groups).forEach(cid => {
+    const rows = groups[cid];
+    const clinicName = clinicMap[cid] ? clinicMap[cid].name : '未知診所';
+    let clinicTotal = 0;
+
+    const rowsHtml = rows.map(it => {
+      const mat = matMap[it.material_id] || {};
+      const unitPrice = it.unit_price || 0;
+      const customPrice = it.custom_price || 0;
+      const isCustom = it.is_custom_price;
+      const subtotal = isCustom && customPrice != null ? customPrice : (it.quantity * unitPrice);
+      clinicTotal += subtotal;
+      const status = statusLabels[it.item_status || 'pending'] || it.item_status || '-';
+      const dateStr = it.created_at ? it.created_at.slice(0, 10) : '-';
+      return `<tr>
+        <td>${escHtml(mat.name || '(已刪除)')}</td>
+        <td>${it.quantity}</td>
+        <td>${fmtMoney(unitPrice)}</td>
+        <td>${isCustom ? fmtMoney(customPrice) : '-'}</td>
+        <td>${fmtMoney(subtotal)}</td>
+        <td>${status}</td>
+        <td>${dateStr}</td>
+      </tr>`;
+    }).join('');
+
+    grandTotal += clinicTotal;
+
+    html += `<div class="os-group">
+      <div class="os-header" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="os-title">🏥 ${escHtml(clinicName)}　合計 ${fmtMoney(clinicTotal)}</span>
+        <span class="os-arrow">▼</span>
+      </div>
+      <div class="os-body">
+        <table>
+          <thead><tr><th>品項</th><th>數量</th><th>單價</th><th>優惠價</th><th>小計</th><th>狀態</th><th>叫貨日期</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="os-subtotal">小計：${fmtMoney(clinicTotal)}</div>
+    </div>`;
+  });
+
+  html += `<div class="os-grand-total">所有診所總金額：${fmtMoney(grandTotal)}</div>`;
+  container.innerHTML = html;
+}
+
+function toggleOsGroup(el) { el.closest('.os-group').classList.toggle('collapsed'); }
 
 // --- Roles CRUD ---
 async function renderAdminRoles(el) {

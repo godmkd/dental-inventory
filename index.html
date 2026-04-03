@@ -1450,7 +1450,13 @@ async function renderOrderMgmt() {
     </div>
     <div id="orderMgmtList"></div>`;
 
-  const filtered = orderMgmtFilter === 'all' ? (orders || []) : (orders || []).filter(o => o.status === orderMgmtFilter);
+  // 先取得所有 items 以計算真實狀態來篩選
+  const allOrderIds = (orders || []).map(o => o.id);
+  const { data: allOItems } = await sb.from('order_items').select('order_id, item_status').in('order_id', allOrderIds);
+  const oiByOrder = {};
+  (allOItems || []).forEach(it => { (oiByOrder[it.order_id] = oiByOrder[it.order_id] || []).push(it); });
+  const withRealStatus = (orders || []).map(o => ({ ...o, _realStatus: oiByOrder[o.id] ? slowestItemStatus(oiByOrder[o.id]) : o.status }));
+  const filtered = orderMgmtFilter === 'all' ? withRealStatus : withRealStatus.filter(o => o._realStatus === orderMgmtFilter);
   renderOrderMgmtList(filtered);
 }
 
@@ -1460,11 +1466,14 @@ async function renderOrderMgmtList(orders) {
     el.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>沒有叫貨單</div></div>';
     return;
   }
-  el.innerHTML = orders.map(o => `
+
+  el.innerHTML = orders.map(o => {
+    const realStatus = o._realStatus || o.status;
+    return `
     <div class="order-card" id="oc_${o.id}">
       <div class="order-card-header" onclick="toggleOrderCard(${o.id})">
         <div>
-          <strong>#${o.id}</strong> ${statusBadge(o.status)}
+          <strong>#${o.id}</strong> ${statusBadge(realStatus)}
           <span class="text-muted" style="font-size:.82rem;margin-left:8px">${fmtDate(o.created_at)}</span>
         </div>
         <div>
@@ -1473,7 +1482,8 @@ async function renderOrderMgmtList(orders) {
         </div>
       </div>
       <div class="order-card-body" id="ocb_${o.id}"></div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function toggleOrderCard(orderId) {
@@ -1543,9 +1553,60 @@ async function toggleOrderCard(orderId) {
       </div>
     </div>`;
   });
+  // 底部統一操作按鈕
+  const hasPending = items.some(i => (i.item_status || 'pending') === 'pending');
+  const hasConfirmed = items.some(i => (i.item_status || 'pending') === 'confirmed');
+  if (hasPending || hasConfirmed) {
+    html += '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border)">';
+    if (hasPending) html += `<button class="btn btn-success btn-sm" onclick="confirmAllItems(${orderId})">✓ 全部確認</button>`;
+    if (hasConfirmed) html += `<button class="btn btn-primary btn-sm" onclick="shipAllItems(${orderId})">📦 全部出貨</button>`;
+    html += '</div>';
+  }
+
   html += '</div>';
   body.innerHTML = html;
 }
+
+window.confirmAllItems = async function(orderId) {
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (!items) return;
+  const pendingItems = items.filter(i => (i.item_status || 'pending') === 'pending');
+  if (!pendingItems.length) { toast('沒有待確認品項'); return; }
+  try {
+    for (const it of pendingItems) {
+      const mat = materialObj(it.material_id);
+      const ratio = mat ? (mat.unit_ratio || 1) : 1;
+      // 讀取 DOM 中管理員可能修改過的數量和換算
+      const qtyEl = document.getElementById('oiq_' + it.id);
+      const ratioEl = document.getElementById('oir_' + it.id);
+      const qtyInOrderUnit = qtyEl ? (parseFloat(qtyEl.value) || 0) : Math.round((it.quantity / ratio) * 100) / 100;
+      const finalRatio = ratioEl ? (parseFloat(ratioEl.value) || 1) : ratio;
+      const dailyQty = Math.round(qtyInOrderUnit * finalRatio);
+      await sb.from('order_items').update({ quantity: dailyQty, item_status: 'confirmed' }).eq('id', it.id);
+    }
+    await recomputeOrderStatus(orderId);
+    toast(`已確認 ${pendingItems.length} 個品項`);
+    const cardBody = document.getElementById('ocb_' + orderId);
+    if (cardBody) { cardBody.innerHTML = ''; document.getElementById('oc_' + orderId).classList.remove('expanded'); toggleOrderCard(orderId); }
+  } catch (e) { toast('全部確認失敗: ' + e.message, 'error'); }
+};
+
+window.shipAllItems = async function(orderId) {
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (!items) return;
+  const confirmedItems = items.filter(i => (i.item_status || 'pending') === 'confirmed');
+  if (!confirmedItems.length) { toast('沒有已確認品項'); return; }
+  try {
+    for (const it of confirmedItems) {
+      await sb.from('order_items').update({ item_status: 'shipped' }).eq('id', it.id);
+    }
+    await checkAutoShipOrder(orderId);
+    await recomputeOrderStatus(orderId);
+    toast(`已出貨 ${confirmedItems.length} 個品項`);
+    const cardBody = document.getElementById('ocb_' + orderId);
+    if (cardBody) { cardBody.innerHTML = ''; document.getElementById('oc_' + orderId).classList.remove('expanded'); toggleOrderCard(orderId); }
+  } catch (e) { toast('全部出貨失敗: ' + e.message, 'error'); }
+};
 
 // Inline edit: update order_item qty (in order units) → convert to daily units and save
 window.onOrderItemQtyChange = async function(itemId, orderId, val) {
@@ -1639,6 +1700,29 @@ async function saveItemPrice(itemId) {
   }
 }
 
+// 計算整單最慢狀態：pending > confirmed > shipped > delivered
+function slowestItemStatus(items) {
+  const priority = { pending: 0, confirmed: 1, shipped: 2, delivered: 3 };
+  const activeItems = items.filter(i => (i.item_status || 'pending') !== 'cancelled');
+  if (!activeItems.length) return 'cancelled';
+  let slowest = 'delivered';
+  for (const it of activeItems) {
+    const s = it.item_status || 'pending';
+    if ((priority[s] ?? 0) < (priority[slowest] ?? 3)) slowest = s;
+  }
+  return slowest;
+}
+
+async function recomputeOrderStatus(orderId) {
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (!items) return;
+  const newStatus = slowestItemStatus(items);
+  const update = { status: newStatus };
+  if (newStatus === 'shipped' && !items._shipped_at) update.shipped_at = new Date().toISOString();
+  if (newStatus === 'delivered' && !items._delivered_at) update.delivered_at = new Date().toISOString();
+  await sb.from('orders').update(update).eq('id', orderId);
+}
+
 async function setItemStatus(itemId, orderId, newStatus) {
   // Try to update item_status column; fallback to notes
   let { error } = await sb.from('order_items').update({ item_status: newStatus }).eq('id', itemId);
@@ -1656,8 +1740,8 @@ async function setItemStatus(itemId, orderId, newStatus) {
     await checkAutoShipOrder(orderId);
   }
 
-  // Check if all items shipped → auto mark order delivered
-  await checkAutoDeliverOrder(orderId);
+  // 重新計算整單狀態（以最慢的 item 為準）
+  await recomputeOrderStatus(orderId);
 
   // Refresh card
   const cardBody = document.getElementById('ocb_' + orderId);
@@ -1796,12 +1880,14 @@ async function startReceive(dcId, orderId, clinicId) {
   const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
   if (!items || !items.length) { toast('無明細', 'error'); return; }
 
-  // Only show items that are shipped
-  const shippedItems = items.filter(i => (i.item_status || 'pending') === 'shipped' || (i.item_status || 'pending') === 'confirmed');
+  // 只顯示已出貨的品項
+  const shippedItems = items.filter(i => (i.item_status || 'pending') === 'shipped');
+
+  if (!shippedItems.length) { toast('沒有已出貨的品項可收貨', 'error'); return; }
 
   let body = '<p style="margin-bottom:12px"><strong>確認收貨明細：</strong></p>';
   body += '<table style="width:100%"><thead><tr><th>品項</th><th>數量</th></tr></thead><tbody>';
-  (shippedItems.length > 0 ? shippedItems : items).forEach(it => {
+  shippedItems.forEach(it => {
     body += `<tr><td>${materialName(it.material_id)}</td><td>+${it.quantity}</td></tr>`;
   });
   body += '</tbody></table>';
@@ -1810,7 +1896,7 @@ async function startReceive(dcId, orderId, clinicId) {
   openModal('確認收貨 #' + orderId, body,
     `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
      <button class="btn btn-success" onclick="doReceive(${dcId},${orderId},${clinicId})">✓ 確認收貨</button>`);
-  window._receiveItems = shippedItems.length > 0 ? shippedItems : items;
+  window._receiveItems = shippedItems;
 }
 
 async function doReceive(dcId, orderId, clinicId) {
@@ -1836,11 +1922,8 @@ async function doReceive(dcId, orderId, clinicId) {
       status: 'confirmed', confirmed_by: currentUser.id, confirmed_at: new Date().toISOString()
     }).eq('id', dcId);
 
-    // Check all delivery confirmations → auto mark order delivered
-    const { data: allDcs } = await sb.from('delivery_confirmations').select('status').eq('order_id', orderId);
-    if (allDcs && allDcs.every(d => d.status === 'confirmed')) {
-      await sb.from('orders').update({ status: 'delivered', delivered_at: new Date().toISOString() }).eq('id', orderId);
-    }
+    // 重新計算整單狀態
+    await recomputeOrderStatus(orderId);
 
     toast('收貨完成，庫存已更新');
     closeModal();
@@ -1874,8 +1957,8 @@ async function undoReceive(dcId, orderId, clinicId) {
       status: 'pending', confirmed_by: null, confirmed_at: null
     }).eq('id', dcId);
 
-    // Revert order status
-    await sb.from('orders').update({ status: 'shipped', delivered_at: null }).eq('id', orderId);
+    // 重新計算整單狀態
+    await recomputeOrderStatus(orderId);
 
     toast('已反悔收貨，庫存已回扣');
     renderReceiving();

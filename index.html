@@ -1112,7 +1112,7 @@ async function renderOrdering() {
   mc.innerHTML = `
     <div class="page-title">📦 叫貨</div>
     <div class="toolbar">
-      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="orderClinicId=parseInt(this.value)">
+      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="orderClinicId=parseInt(this.value);loadConfirmedOrders()">
         ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(orderClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderItems(this.value)">
@@ -1370,6 +1370,8 @@ async function loadConfirmedOrders() {
   const bodyEl = document.getElementById('orderConfirmedBody');
   if (!titleEl || !bodyEl) return;
 
+  const cid = orderClinicId || userProfile.clinic_id;
+
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
   const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
@@ -1379,22 +1381,31 @@ async function loadConfirmedOrders() {
     .eq('created_by', currentUser.id)
     .order('created_at', { ascending: false });
 
-  const items = orders || [];
-  titleEl.textContent = `✅ 已送出叫貨單 (${items.length})`;
+  // Filter orders that have order_items belonging to the selected clinic
+  const orderIds = (orders || []).map(o => o.id);
+  let filteredOrders = [];
+  let oiMap = {};
+  if (orderIds.length > 0 && cid) {
+    const { data: allOI } = await sb.from('order_items').select('*').in('order_id', orderIds);
+    (allOI || []).forEach(oi => { if (!oiMap[oi.order_id]) oiMap[oi.order_id] = []; oiMap[oi.order_id].push(oi); });
+    filteredOrders = (orders || []).filter(o => (oiMap[o.id] || []).some(oi => oi.clinic_id === cid));
+  } else {
+    filteredOrders = orders || [];
+    if (orderIds.length > 0) {
+      const { data: allOI } = await sb.from('order_items').select('*').in('order_id', orderIds);
+      (allOI || []).forEach(oi => { if (!oiMap[oi.order_id]) oiMap[oi.order_id] = []; oiMap[oi.order_id].push(oi); });
+    }
+  }
 
-  if (!items.length) {
+  titleEl.textContent = `✅ 已送出叫貨單 (${filteredOrders.length})`;
+
+  if (!filteredOrders.length) {
     bodyEl.innerHTML = '<div class="cp-empty">今天尚無已送出叫貨單</div>';
     return;
   }
 
-  // Load order_items for each order
-  const orderIds = items.map(o => o.id);
-  const { data: allOI } = await sb.from('order_items').select('*').in('order_id', orderIds);
-  const oiMap = {};
-  (allOI || []).forEach(oi => { if (!oiMap[oi.order_id]) oiMap[oi.order_id] = []; oiMap[oi.order_id].push(oi); });
-
-  bodyEl.innerHTML = items.map(o => {
-    const ois = oiMap[o.id] || [];
+  bodyEl.innerHTML = filteredOrders.map(o => {
+    const ois = (oiMap[o.id] || []).filter(oi => !cid || oi.clinic_id === cid);
     const time = new Date(o.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
     const summary = ois.map(oi => `${materialName(oi.material_id)} x${oi.quantity}`).join('、');
     return `<div class="cp-item">
@@ -1485,21 +1496,37 @@ async function toggleOrderCard(orderId) {
   items.forEach(it => {
     const mat = materialObj(it.material_id);
     const price = it.is_custom_price && it.custom_price != null ? it.custom_price : it.unit_price;
-    // Use notes field to track item_status if not a column
     const itemStatus = it.item_status || it.notes_status || 'pending';
+    const ratio = mat ? (mat.unit_ratio || 1) : 1;
+    const orderUnit = mat ? (mat.order_unit || mat.unit) : '';
+    const dailyUnit = mat ? mat.unit : '';
+    const orderQty = Math.round((it.quantity / ratio) * 100) / 100;
+    const subtotal = orderQty * price;
 
     html += `<div class="order-item-row" id="oi_${it.id}">
-      <div class="order-item-info">
+      <div class="order-item-info" style="flex:1">
         <strong>${mat ? escHtml(mat.name) : materialName(it.material_id)}</strong>
-        <span class="text-muted"> | ${escHtml(clinicName(it.clinic_id))} | x${it.quantity}</span>
-        <br><small>單價: ${it.is_custom_price ? '<span class="text-success">優惠</span> ' : ''}${fmtMoney(price)}
-        | 小計: ${fmtMoney(price * it.quantity)}</small>
+        <span class="text-muted"> | ${escHtml(clinicName(it.clinic_id))}</span>
+        <br>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0">
+          <label style="font-size:.82rem;color:var(--text-light)">數量(${escHtml(orderUnit)}):</label>
+          <input type="number" id="oiq_${it.id}" value="${orderQty}" min="0" step="0.01"
+            style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:.88rem"
+            onchange="onOrderItemQtyChange(${it.id},${orderId},this.value)">
+          <label style="font-size:.82rem;color:var(--text-light)">換算:</label>
+          <input type="number" id="oir_${it.id}" value="${ratio}" min="0.01" step="0.01"
+            style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:.88rem"
+            onchange="onOrderItemRatioChange(${it.id},${orderId},this.value)">
+          <span style="font-size:.8rem;color:var(--text-light)">1${escHtml(orderUnit)}=${ratio}${escHtml(dailyUnit)}</span>
+        </div>
+        <small>單價: ${it.is_custom_price ? '<span class="text-success">優惠</span> ' : ''}${fmtMoney(price)}
+        | 小計: <span id="ois_${it.id}">${fmtMoney(subtotal)}</span></small>
         <br>${statusBadge(itemStatus)}
       </div>
       <div class="order-item-actions">
         ${itemStatus === 'pending' ? `
           <button class="btn btn-ghost btn-xs" onclick="editItemPrice(${it.id},${it.unit_price},${it.custom_price || 0},${it.is_custom_price ? 1 : 0})">💰 改價</button>
-          <button class="btn btn-success btn-xs" onclick="setItemStatus(${it.id},${orderId},'confirmed')">✓ 確認</button>
+          <button class="btn btn-success btn-xs" onclick="confirmOrderItem(${it.id},${orderId})">✓ 確認</button>
           <button class="btn btn-danger btn-xs" onclick="setItemStatus(${it.id},${orderId},'cancelled')">✕ 取消</button>
         ` : ''}
         ${itemStatus === 'confirmed' ? `
@@ -1519,6 +1546,66 @@ async function toggleOrderCard(orderId) {
   html += '</div>';
   body.innerHTML = html;
 }
+
+// Inline edit: update order_item qty (in order units) → convert to daily units and save
+window.onOrderItemQtyChange = async function(itemId, orderId, val) {
+  const qtyInOrderUnit = parseFloat(val) || 0;
+  const ratioEl = document.getElementById('oir_' + itemId);
+  const ratio = parseFloat(ratioEl?.value) || 1;
+  const dailyQty = Math.round(qtyInOrderUnit * ratio);
+  const { error } = await sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId);
+  if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
+  // Update subtotal display
+  updateOrderItemSubtotal(itemId, qtyInOrderUnit);
+};
+
+window.onOrderItemRatioChange = async function(itemId, orderId, val) {
+  const ratio = parseFloat(val) || 1;
+  const qtyEl = document.getElementById('oiq_' + itemId);
+  const qtyInOrderUnit = parseFloat(qtyEl?.value) || 0;
+  const dailyQty = Math.round(qtyInOrderUnit * ratio);
+  const { error } = await sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId);
+  if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
+  updateOrderItemSubtotal(itemId, qtyInOrderUnit);
+};
+
+function updateOrderItemSubtotal(itemId, qtyInOrderUnit) {
+  // Re-read price from the card context — we stored it in the DOM implicitly
+  const subtotalEl = document.getElementById('ois_' + itemId);
+  if (!subtotalEl) return;
+  // Parse price from the small tag text nearby
+  const row = document.getElementById('oi_' + itemId);
+  if (!row) return;
+  const priceMatch = row.innerHTML.match(/單價:.*?\$([0-9,]+(?:\.\d+)?)/);
+  const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 0;
+  subtotalEl.textContent = fmtMoney(qtyInOrderUnit * price);
+}
+
+// Confirm button: convert qty to daily units (qty * ratio) and set confirmed
+window.confirmOrderItem = async function(itemId, orderId) {
+  const qtyEl = document.getElementById('oiq_' + itemId);
+  const ratioEl = document.getElementById('oir_' + itemId);
+  const qtyInOrderUnit = parseFloat(qtyEl?.value) || 0;
+  const ratio = parseFloat(ratioEl?.value) || 1;
+  const dailyQty = Math.round(qtyInOrderUnit * ratio);
+
+  const { error } = await sb.from('order_items').update({
+    quantity: dailyQty,
+    item_status: 'confirmed'
+  }).eq('id', itemId);
+  if (error) { toast('確認失敗: ' + error.message, 'error'); return; }
+
+  toast('品項已確認（已換算為日常單位）');
+
+  // Refresh card
+  const cardBody = document.getElementById('ocb_' + orderId);
+  if (cardBody) {
+    cardBody.innerHTML = '';
+    const cardEl = document.getElementById('oc_' + orderId);
+    cardEl.classList.remove('expanded');
+    toggleOrderCard(orderId);
+  }
+};
 
 function editItemPrice(itemId, unitPrice, customPrice, isCustom) {
   openModal('修改價格', `
@@ -1974,8 +2061,13 @@ function editMaterial(id) {
     </div>
     <div class="form-row">
       <div class="form-group"><label>規格</label><input id="fMatSpec" value="${escHtml(m.spec || '')}"></div>
-      <div class="form-group"><label>單位</label><input id="fMatUnit" value="${escHtml(m.unit || '個')}"></div>
+      <div class="form-group"><label>日常單位</label><input id="fMatUnit" value="${escHtml(m.unit || '個')}"></div>
     </div>
+    <div class="form-row">
+      <div class="form-group"><label>叫貨單位</label><input id="fMatOrderUnit" value="${escHtml(m.order_unit || '')}" placeholder="如：箱、盒"></div>
+      <div class="form-group"><label>換算比例</label><input id="fMatUnitRatio" type="number" step="0.01" min="0.01" value="${m.unit_ratio || 1}" title="1 叫貨單位 = ? 日常單位"></div>
+    </div>
+    <div style="font-size:.82rem;color:var(--text-light);margin:-8px 0 12px 0">1 [叫貨單位] = [換算比例] [日常單位]</div>
     <div class="form-group"><label>單價</label><input id="fMatPrice" type="number" step="0.01" value="${m.unit_price || 0}"></div>
     <div class="form-group"><label>圖片</label>
       <input id="fMatImage" type="file" accept="image/*" onchange="previewMatImage(this)">
@@ -2019,6 +2111,8 @@ async function saveMaterial(id) {
       supplier_id: document.getElementById('fMatSup').value || null,
       spec: document.getElementById('fMatSpec').value.trim(),
       unit: document.getElementById('fMatUnit').value.trim() || '個',
+      order_unit: document.getElementById('fMatOrderUnit').value.trim(),
+      unit_ratio: parseFloat(document.getElementById('fMatUnitRatio').value) || 1,
       unit_price: parseFloat(document.getElementById('fMatPrice').value) || 0,
       image_url: imageUrl,
       notes: document.getElementById('fMatNotes').value.trim()

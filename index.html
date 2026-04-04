@@ -777,6 +777,9 @@ function buildNav() {
     hidden.forEach(it => {
       moreHtml += `<div class="mm-item" data-page="${it.id}" onclick="navigateTo('${it.id}');closeMoreMenu()">${it.icon} ${it.label}</div>`;
     });
+    if (hasPermission('change_background')) {
+      moreHtml += `<div class="mm-item" onclick="openBgSettingModal();closeMoreMenu()">🎨 客製化</div>`;
+    }
     bhtml += `<div class="bnav-item bnav-more" onclick="toggleMoreMenu(event)"><span>⋯</span><span>更多</span><div class="more-menu" id="moreMenu">${moreHtml}</div></div>`;
   }
   bottomInner.innerHTML = bhtml;
@@ -973,7 +976,10 @@ function applyCustomFont() {
     document.body.style.fontFamily = "";
     localStorage.removeItem("custom_font");
   }
+  document.documentElement.style.setProperty('--custom-font-size', size + 'px');
   document.body.style.fontSize = size + "px";
+  // Also set on html element to override everything
+  document.documentElement.style.fontSize = size + "px";
   localStorage.setItem("custom_font_size", size);
 }
 

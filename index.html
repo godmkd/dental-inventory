@@ -314,6 +314,17 @@ tr:hover td{background:#fafcff}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
         LINE 登入
       </button>
+      <div style="margin:20px 0 12px;border-top:1px solid var(--border);position:relative">
+        <span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--card);padding:0 12px;font-size:.8rem;color:var(--text-light)">或</span>
+      </div>
+      <div style="text-align:left">
+        <input id="loginEmail" type="email" placeholder="信箱" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;font-size:.95rem;box-sizing:border-box">
+        <input id="loginPassword" type="password" placeholder="密碼" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;font-size:.95rem;box-sizing:border-box">
+        <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text-light);margin-bottom:12px;cursor:pointer">
+          <input id="rememberMe" type="checkbox"> 記住帳號密碼
+        </label>
+        <button class="btn btn-primary" style="width:100%" onclick="doEmailLogin()">信箱登入</button>
+      </div>
     </div>
     <div class="login-loading" id="loginLoading">
       <div class="spinner"></div>
@@ -460,6 +471,35 @@ function showLogin() {
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
+  // 自動填入記住的帳密
+  const saved = localStorage.getItem('remembered_login');
+  if (saved) {
+    try {
+      const { email, password } = JSON.parse(saved);
+      document.getElementById('loginEmail').value = email || '';
+      document.getElementById('loginPassword').value = password || '';
+      document.getElementById('rememberMe').checked = true;
+    } catch(e) {}
+  }
+}
+
+async function doEmailLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!email || !password) { toast('請輸入信箱和密碼', 'error'); return; }
+  document.getElementById('loginLoading').style.display = 'block';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    toast('登入失敗: ' + error.message, 'error');
+    document.getElementById('loginLoading').style.display = 'none';
+    return;
+  }
+  // 記住帳密
+  if (document.getElementById('rememberMe').checked) {
+    localStorage.setItem('remembered_login', JSON.stringify({ email, password }));
+  } else {
+    localStorage.removeItem('remembered_login');
+  }
 }
 
 async function doLogin() {
@@ -594,7 +634,8 @@ function getNavItems() {
     { id: 'order-mgmt', icon: '📋', label: '叫貨管理', perm: 'manage_orders' },
     { id: 'receiving', icon: '✅', label: '收貨', perm: 'receive_orders' },
     { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', perms: ['manage_users', 'manage_roles'] }
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', perms: ['manage_users', 'manage_roles'] },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定' }
   ];
   return all.filter(it => {
     if (!it.perm && !it.perms) return true;
@@ -653,7 +694,8 @@ function navigateTo(pageId) {
     'order-mgmt': renderOrderMgmt,
     'receiving': renderReceiving,
     'admin-mgmt': renderAdminMgmt,
-    'user-mgmt': renderUserMgmt
+    'user-mgmt': renderUserMgmt,
+    'account-settings': renderAccountSettings
   };
   const fn = renderers[pageId];
   if (fn) fn();
@@ -1544,6 +1586,12 @@ window.cancelWholeOrder = async function(orderId) {
     toast('有品項已收貨，請先讓診所回待收貨', 'error');
     return;
   }
+  // 檢查是否有品項已到貨
+  const { data: oiCheck } = await sb.from('order_items').select('item_status').eq('order_id', orderId);
+  if (oiCheck && oiCheck.some(it => it.item_status === 'delivered')) {
+    toast('有品項已到貨，無法取消整單', 'error');
+    return;
+  }
   if (!await showConfirm('取消整單', '確定要取消整張叫貨單？所有品項都會被刪除。')) return;
   try {
     // 同時刪除 delivery_confirmations
@@ -1560,6 +1608,7 @@ window.cancelWholeOrder = async function(orderId) {
 // ============================================================
 let orderMgmtFilter = 'all';
 let orderMgmtTab = 'list'; // 'list' | 'summary' | 'rush'
+window.orderSortAsc = false; // false = 新到舊, true = 舊到新
 
 async function renderOrderMgmt() {
   const mc = document.getElementById('mainContent');
@@ -1613,8 +1662,14 @@ async function renderOrderMgmtList(orders) {
     return;
   }
 
+  // 排序
+  const sorted = [...orders].sort((a, b) => {
+    const ta = new Date(a.created_at).getTime(), tb = new Date(b.created_at).getTime();
+    return window.orderSortAsc ? ta - tb : tb - ta;
+  });
+
   // 取得所有訂單的 order_items 以取得診所名
-  const orderIds = orders.map(o => o.id);
+  const orderIds = sorted.map(o => o.id);
   const { data: allOI } = await sb.from('order_items').select('order_id, clinic_id').in('order_id', orderIds);
   const orderClinicMap = {};
   (allOI || []).forEach(oi => {
@@ -1622,16 +1677,20 @@ async function renderOrderMgmtList(orders) {
     if (oi.clinic_id) orderClinicMap[oi.order_id].add(oi.clinic_id);
   });
 
-  el.innerHTML = orders.map((o, idx) => {
+  const sortBtnHtml = `<div style="margin-bottom:8px;display:flex;gap:6px">
+    <button class="btn ${window.orderSortAsc ? 'btn-ghost' : 'btn-primary'} btn-xs" onclick="window.orderSortAsc=false;renderOrderMgmt()">新→舊</button>
+    <button class="btn ${window.orderSortAsc ? 'btn-primary' : 'btn-ghost'} btn-xs" onclick="window.orderSortAsc=true;renderOrderMgmt()">舊→新</button>
+  </div>`;
+
+  el.innerHTML = sortBtnHtml + sorted.map(o => {
     const realStatus = o._realStatus || o.status;
     const clinicIds = orderClinicMap[o.id] ? [...orderClinicMap[o.id]] : [];
     const clinicLabel = clinicIds.map(cid => clinicName(cid)).join(', ') || '-';
-    const displayNum = idx + 1;
     return `
     <div class="order-card" id="oc_${o.id}">
       <div class="order-card-header" onclick="toggleOrderCard(${o.id})">
         <div>
-          <strong>#${displayNum}</strong> - ${escHtml(clinicLabel)} - ${fmtDate(o.created_at)} ${statusBadge(realStatus)}
+          <strong>#${o.id}</strong> - ${escHtml(clinicLabel)} - ${fmtDate(o.created_at)} ${statusBadge(realStatus)}
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:.85rem">${userName(o.created_by)} | ${fmtMoney(o.total_amount)}</span>
@@ -2270,7 +2329,7 @@ async function renderReceiveContent(tab) {
           <button class="btn btn-ghost btn-sm" onclick="loadReceiveItems(${d.id},${d.order_id},${d.clinic_id})">展開明細</button>
         ` : ''}
         ${d.status === 'confirmed' ? `
-          <button class="btn btn-ghost btn-sm" onclick="undoReceive(${d.id},${d.order_id},${d.clinic_id})">↩ 整單反悔</button>
+          <button class="btn btn-ghost btn-sm" onclick="undoReceive(${d.id},${d.order_id},${d.clinic_id})">↩ 整單回待收貨</button>
           <button class="btn btn-ghost btn-sm" onclick="loadConfirmedReceiveItems(${d.id},${d.order_id},${d.clinic_id})">展開明細</button>
         ` : ''}
       </div>
@@ -3137,6 +3196,77 @@ async function toggleUserActive(id, active) {
   const { error } = await sb.from('user_profiles').update({ is_active: active }).eq('id', id);
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   toast(`已${action}`); await loadUsers(); renderUserMgmt();
+}
+
+// ===================== 帳戶設定 =====================
+async function renderAccountSettings() {
+  const mc = document.getElementById('mainContent');
+  const provider = currentUser.app_metadata?.provider || currentUser.app_metadata?.providers?.[0] || 'email';
+  const loginMethod = provider.includes('line') ? 'LINE' : 'Email';
+  const userEmail = currentUser.email || '';
+
+  mc.innerHTML = `
+    <div class="page-title">⚙️ 帳戶設定</div>
+    <div class="card">
+      <div class="card-title">登入資訊</div>
+      <div style="margin-bottom:16px;font-size:.9rem">目前登入方式：<strong>${loginMethod}</strong>${userEmail ? ' (' + escHtml(userEmail) + ')' : ''}</div>
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:.85rem;font-weight:600;margin-bottom:4px;display:block">設定信箱</label>
+        <div style="display:flex;gap:8px">
+          <input id="accEmail" type="email" placeholder="新信箱" value="${escHtml(userEmail)}" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
+          <button class="btn btn-primary btn-sm" onclick="updateAccountEmail()">儲存</button>
+        </div>
+        <div style="font-size:.78rem;color:var(--text-light);margin-top:4px">Supabase 會寄驗證信到新信箱</div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:.85rem;font-weight:600;margin-bottom:4px;display:block">設定密碼</label>
+        <div style="display:flex;gap:8px">
+          <input id="accPassword" type="password" placeholder="新密碼" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
+          <button class="btn btn-primary btn-sm" onclick="updateAccountPassword()">儲存</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:.85rem;font-weight:600;margin-bottom:4px;display:block">修改顯示名稱</label>
+        <div style="display:flex;gap:8px">
+          <input id="accDisplayName" type="text" placeholder="顯示名稱" value="${escHtml(userProfile.display_name || '')}" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
+          <button class="btn btn-primary btn-sm" onclick="updateDisplayName()">儲存</button>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <button class="btn btn-danger" onclick="doLogout()">登出</button>
+      </div>
+    </div>`;
+}
+
+async function updateAccountEmail() {
+  const email = document.getElementById('accEmail').value.trim();
+  if (!email) { toast('請輸入信箱', 'error'); return; }
+  const { error } = await sb.auth.updateUser({ email });
+  if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
+  toast('請到信箱點擊驗證連結');
+}
+
+async function updateAccountPassword() {
+  const password = document.getElementById('accPassword').value;
+  if (!password || password.length < 6) { toast('密碼至少 6 個字元', 'error'); return; }
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
+  toast('密碼已更新');
+  document.getElementById('accPassword').value = '';
+}
+
+async function updateDisplayName() {
+  const name = document.getElementById('accDisplayName').value.trim();
+  if (!name) { toast('請輸入名稱', 'error'); return; }
+  const { error } = await sb.from('user_profiles').update({ display_name: name }).eq('id', currentUser.id);
+  if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
+  userProfile.display_name = name;
+  document.getElementById('headerUser').textContent = `${name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
+  toast('名稱已更新');
 }
 
 // ===================== START =====================

@@ -391,30 +391,31 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .usage-hint.open .usage-hint-body{display:block}
 
 /* V3 Bubble Home */
-.home-section{min-height:100vh;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:60px 20px 20px}
+.home-section{min-height:100vh;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:60px 20px 20px;background:#000}
 .bubble-container{position:relative;width:100%;max-width:900px;height:75vh}
 .bubble{position:absolute;border-radius:50%;background:rgba(255,255,255,.06);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,.12);box-shadow:0 0 30px rgba(255,255,255,.04),inset 0 0 30px rgba(255,255,255,.02),0 4px 15px rgba(0,0,0,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);animation:float 6s ease-in-out infinite;text-decoration:none;user-select:none}
 .bubble:hover,.bubble.active{transform:scale(1.2);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);box-shadow:0 0 50px rgba(255,255,255,.1),0 0 100px rgba(100,150,255,.08)}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-10px) rotate(2deg)}}
+@keyframes float2{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-7px) rotate(-3deg)}}
+@keyframes float3{0%,100%{transform:translateY(0) rotate(1deg)}50%{transform:translateY(-12px) rotate(-1deg)}}
 .bubble.active{animation:none}
 .bubble .bubble-icon{font-size:2rem;margin-bottom:4px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.2))}
 .bubble .bubble-label{font-size:.78rem;font-weight:600;color:#fff;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.3)}
-.bubble-xlarge{width:180px;height:180px}.bubble-xlarge .bubble-icon{font-size:2.8rem}.bubble-xlarge .bubble-label{font-size:.92rem}
-.bubble-large{width:150px;height:150px}.bubble-large .bubble-icon{font-size:2.4rem}.bubble-large .bubble-label{font-size:.85rem}
-.bubble-medium{width:130px;height:130px}
-.bubble-small{width:105px;height:105px}.bubble-small .bubble-icon{font-size:1.6rem}.bubble-small .bubble-label{font-size:.72rem}
-.content-section{min-height:100vh;padding:20px;background:linear-gradient(180deg,#0f0c29,#1a1a2e);display:none}
+.bubble-xlarge{width:160px;height:160px}.bubble-xlarge .bubble-icon{font-size:2.6rem}.bubble-xlarge .bubble-label{font-size:.9rem}
+.bubble-large{width:130px;height:130px}.bubble-large .bubble-icon{font-size:2.2rem}.bubble-large .bubble-label{font-size:.82rem}
+.bubble-medium{width:110px;height:110px}.bubble-medium .bubble-icon{font-size:1.8rem}
+.bubble-small{width:90px;height:90px}.bubble-small .bubble-icon{font-size:1.5rem}.bubble-small .bubble-label{font-size:.7rem}
+.content-section{min-height:100vh;padding:20px;background:#000;display:none}
 .content-section.active{display:block}
 .back-home-btn{position:sticky;top:12px;z-index:50;background:rgba(15,12,41,.85);backdrop-filter:blur(10px);color:var(--text);border:1px solid var(--border);padding:8px 18px;border-radius:20px;cursor:pointer;font-size:.88rem;transition:all .2s;margin-bottom:12px}
 .back-home-btn:hover{background:rgba(99,179,237,.15);border-color:var(--accent);color:var(--accent)}
 .home-greeting{text-align:center;margin-bottom:8px;color:rgba(255,255,255,.5);font-size:.85rem;letter-spacing:1px}
 @media(max-width:768px){
-  .bubble-container{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:14px;height:auto;padding:10px}
-  .bubble{position:relative!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important}
-  .bubble-xlarge{width:130px;height:130px}.bubble-xlarge .bubble-icon{font-size:2.2rem}.bubble-xlarge .bubble-label{font-size:.82rem}
-  .bubble-large{width:115px;height:115px}.bubble-large .bubble-icon{font-size:2rem}.bubble-large .bubble-label{font-size:.78rem}
-  .bubble-medium{width:105px;height:105px}.bubble-medium .bubble-icon{font-size:1.8rem}
-  .bubble-small{width:88px;height:88px}.bubble-small .bubble-icon{font-size:1.5rem}.bubble-small .bubble-label{font-size:.68rem}
+  .bubble-container{height:70vh}
+  .bubble-xlarge{width:112px;height:112px}.bubble-xlarge .bubble-icon{font-size:2rem}.bubble-xlarge .bubble-label{font-size:.76rem}
+  .bubble-large{width:91px;height:91px}.bubble-large .bubble-icon{font-size:1.7rem}.bubble-large .bubble-label{font-size:.72rem}
+  .bubble-medium{width:77px;height:77px}.bubble-medium .bubble-icon{font-size:1.4rem}.bubble-medium .bubble-label{font-size:.65rem}
+  .bubble-small{width:63px;height:63px}.bubble-small .bubble-icon{font-size:1.2rem}.bubble-small .bubble-label{font-size:.6rem}
   .content-section{padding:12px;padding-bottom:20px}
   .home-section{padding:60px 10px 20px;min-height:calc(100vh - 56px)}
 }
@@ -808,14 +809,14 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'large', top: '8%', left: '8%', delay: '0s' },
-    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '22%', left: '38%', delay: '0.8s', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
-    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'medium', top: '5%', right: '10%', delay: '1.5s', perm: 'manage_orders' },
-    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'medium', top: '58%', left: '5%', delay: '2.2s', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '55%', right: '8%', delay: '1.2s', perms: ['manage_users', 'manage_roles'] },
-    { id: 'tutorials', icon: '📖', label: '教學', size: 'small', top: '38%', left: '2%', delay: '2.8s' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '35%', right: '3%', delay: '3.2s' },
-    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '78%', left: '40%', delay: '3.6s', perm: 'change_background' }
+    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '8%', left: '5%', delay: '0s', duration: '6s', anim: 'float' },
+    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '15%', left: '55%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
+    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '5%', left: '72%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '52%', left: '8%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '58%', left: '68%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] },
+    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '35%', left: '30%', delay: '2.8s', duration: '5s', anim: 'float3' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '42%', left: '82%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
+    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '75%', left: '40%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' }
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
@@ -823,10 +824,8 @@ function buildBubbles() {
     // Permission check
     if (b.perm && !hasPermission(b.perm)) return;
     if (b.perms && !b.perms.some(p => hasPermission(p))) return;
-    let posStyle = `top:${b.top};`;
-    if (b.left) posStyle += `left:${b.left};`;
-    if (b.right) posStyle += `right:${b.right};`;
-    posStyle += `animation-delay:${b.delay};`;
+    let posStyle = `top:${b.top};left:${b.left};`;
+    posStyle += `animation-name:${b.anim || 'float'};animation-delay:${b.delay};animation-duration:${b.duration || '6s'};`;
     html += `<div class="bubble bubble-${b.size}" data-page="${b.id}" style="${posStyle}" onclick="navigateToBubble('${b.id}')">
       <span class="bubble-icon">${b.icon}</span>
       <span class="bubble-label">${b.label}</span>

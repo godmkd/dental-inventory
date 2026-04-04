@@ -1670,11 +1670,13 @@ async function renderOrderMgmtList(orders) {
 
   // 取得所有訂單的 order_items 以取得診所名
   const orderIds = sorted.map(o => o.id);
-  const { data: allOI } = await sb.from('order_items').select('order_id, clinic_id').in('order_id', orderIds);
+  const { data: allOI } = await sb.from('order_items').select('order_id, clinic_id, item_status').in('order_id', orderIds);
   const orderClinicMap = {};
+  const orderHasShipped = {};
   (allOI || []).forEach(oi => {
     if (!orderClinicMap[oi.order_id]) orderClinicMap[oi.order_id] = new Set();
     if (oi.clinic_id) orderClinicMap[oi.order_id].add(oi.clinic_id);
+    if (oi.item_status === 'delivered' || oi.item_status === 'shipped') orderHasShipped[oi.order_id] = true;
   });
 
   const sortBtnHtml = `<div style="margin-bottom:8px;display:flex;gap:6px">
@@ -1694,7 +1696,9 @@ async function renderOrderMgmtList(orders) {
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:.85rem">${userName(o.created_by)} | ${fmtMoney(o.total_amount)}</span>
-          <button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelWholeOrder(${o.id})">取消整單</button>
+          ${orderHasShipped[o.id]
+            ? `<button class="btn btn-danger btn-xs" disabled style="opacity:0.4;cursor:not-allowed;pointer-events:none">取消整單（有品項已出貨）</button>`
+            : `<button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelWholeOrder(${o.id})">取消整單</button>`}
           <span>▼</span>
         </div>
       </div>
@@ -2297,6 +2301,27 @@ async function renderReceiveContent(tab) {
     return;
   }
 
+  // 預先查詢 order_items 判斷每張 dc 是否全部已出貨
+  const dcAllShipped = {};
+  if (tab === 'pending') {
+    const dcKeys = items.map(d => ({ order_id: d.order_id, clinic_id: d.clinic_id }));
+    const orderIds = [...new Set(dcKeys.map(k => k.order_id))];
+    if (orderIds.length) {
+      const { data: oiRows } = await sb.from('order_items').select('order_id, clinic_id, item_status').in('order_id', orderIds);
+      const grouped = {};
+      (oiRows || []).forEach(oi => {
+        const key = oi.order_id + '_' + oi.clinic_id;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(oi.item_status || 'pending');
+      });
+      items.forEach(d => {
+        const key = d.order_id + '_' + d.clinic_id;
+        const statuses = grouped[key] || [];
+        dcAllShipped[d.id] = statuses.length > 0 && statuses.every(s => s === 'shipped' || s === 'delivered');
+      });
+    }
+  }
+
   // 載入催貨紀錄顏色
   const colorRushNotes = (notes) => {
     if (!notes) return '';
@@ -2310,6 +2335,7 @@ async function renderReceiveContent(tab) {
 
   el.innerHTML = items.map(d => {
     const rushHtml = colorRushNotes(d.notes);
+    const canReceiveAll = dcAllShipped[d.id] !== false;
     return `
     <div class="card">
       <div class="card-title" style="justify-content:space-between">
@@ -2324,7 +2350,9 @@ async function renderReceiveContent(tab) {
       <div id="rcDetail_${d.id}"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${d.status === 'pending' ? `
-          <button class="btn btn-success btn-sm" onclick="startReceive(${d.id},${d.order_id},${d.clinic_id})">全部收貨</button>
+          ${canReceiveAll
+            ? `<button class="btn btn-success btn-sm" onclick="startReceive(${d.id},${d.order_id},${d.clinic_id})">全部收貨</button>`
+            : `<button class="btn btn-success btn-sm" disabled style="opacity:0.4;cursor:not-allowed;pointer-events:none" title="有品項尚未出貨">全部收貨（有品項尚未出貨）</button>`}
           <button class="btn btn-warning btn-sm" onclick="rushDelivery(${d.id})">🔔 催貨</button>
           <button class="btn btn-ghost btn-sm" onclick="loadReceiveItems(${d.id},${d.order_id},${d.clinic_id})">展開明細</button>
         ` : ''}

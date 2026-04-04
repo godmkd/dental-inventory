@@ -39,7 +39,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 
 /* App Shell */
 .app{display:none}
-.header{background:linear-gradient(135deg,#0a0820,#1a1535,#2a2555);color:#fff;padding:10px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.4)}
+.header{background:#000;color:#fff;padding:10px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.4);border-bottom:1px solid rgba(255,255,255,.1)}
 .header-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .header h1{font-size:1.2rem;white-space:nowrap;display:flex;align-items:center;gap:8px}
 .header-right{display:flex;align-items:center;gap:12px}
@@ -809,14 +809,14 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '8%', left: '5%', delay: '0s', duration: '6s', anim: 'float' },
-    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '15%', left: '55%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
-    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '5%', left: '72%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
-    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '52%', left: '8%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '58%', left: '68%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] },
-    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '35%', left: '30%', delay: '2.8s', duration: '5s', anim: 'float3' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '42%', left: '82%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
-    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '75%', left: '40%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' }
+    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '5%', left: '3%', delay: '0s', duration: '6s', anim: 'float' },
+    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '5%', left: '45%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
+    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '32%', left: '68%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '55%', left: '3%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '55%', left: '55%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] },
+    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '32%', left: '22%', delay: '2.8s', duration: '5s', anim: 'float3' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '78%', left: '30%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
+    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '78%', left: '65%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' }
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';

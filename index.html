@@ -319,6 +319,7 @@ select option{background:#1a1a2e;color:#e2e8f0}
 .os-group.collapsed .os-body{display:none}
 .os-body{overflow-x:auto}
 .os-subtotal{padding:10px 20px;text-align:right;font-weight:700;font-size:.9rem;border-top:1px solid var(--border-light);background:var(--bg)}
+.money{font-size:1.1em;font-weight:700;font-family:var(--font-mono);letter-spacing:.5px}
 .os-grand-total{padding:16px 20px;text-align:right;font-weight:700;font-size:1.05rem;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin-top:12px}
 .os-filters{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .os-filters input{padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:.88rem}
@@ -1121,7 +1122,7 @@ function optionsHTML(arr, valKey, labelKey, selected) {
     arr.map(a => `<option value="${a[valKey]}"${a[valKey] == selected ? ' selected' : ''}>${a[labelKey]}</option>`).join('');
 }
 function fmtDate(d) { if (!d) return '-'; const dt = new Date(d); return dt.toLocaleDateString('zh-TW') + ' ' + dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }); }
-function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString(); }
+function fmtMoney(n) { return '<span class="money">' + '$' + Number(n || 0).toLocaleString() + '</span>'; }
 function statusBadge(s) {
   const map = { pending: '待確認', confirmed: '已確認', shipped: '已出貨', delivered: '已到貨', cancelled: '已取消' };
   return `<span class="badge badge-${s}">${map[s] || s}</span>`;

@@ -3674,7 +3674,7 @@ function editRole(id) {
     let checked = false;
     if (Array.isArray(currentPerms)) checked = currentPerms.includes(p.key);
     else if (typeof currentPerms === 'object' && currentPerms !== null) checked = currentPerms[p.key] === true || currentPerms.all === true;
-    return `<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;font-size:.85rem;cursor:pointer;white-space:nowrap"><input type="checkbox" class="role-perm-cb" value="${p.key}" ${checked ? 'checked' : ''}>${escHtml(p.label)}</label>`;
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:.85rem;cursor:pointer"><input type="checkbox" class="role-perm-cb" value="${p.key}" style="flex-shrink:0;width:16px;height:16px" ${checked ? 'checked' : ''}><span>${escHtml(p.label)}</span></label>`;
   }).join('');
   openModal(id ? '編輯角色' : '新增角色', `
     <div class="form-group"><label>顯示名稱 *</label><input id="fRoleName" value="${escHtml(r.display_name || '')}"></div>

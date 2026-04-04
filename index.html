@@ -48,6 +48,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .btn-logout:hover{background:rgba(255,255,255,.3)}
 
 .app-body{display:flex;max-width:1400px;margin:0 auto;min-height:calc(100vh - 56px)}
+.content-section .content{max-width:1400px;margin:0 auto}
 .sidebar{width:180px;min-width:180px;max-width:180px;background:rgba(15,12,41,.95);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0;color:#e2e8f0;overflow-y:auto;display:flex;flex-direction:column}
 .sidebar .nav-item{display:flex;align-items:center;gap:10px;padding:12px 20px;cursor:pointer;font-size:.92rem;color:var(--text);transition:all .25s ease;border-left:3px solid transparent}
 .sidebar .nav-item:hover{background:linear-gradient(90deg,rgba(99,179,237,.15),transparent);color:var(--accent)}
@@ -388,6 +389,35 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .usage-hint-toggle:hover{color:var(--accent)}
 .usage-hint-body{font-size:.8rem;color:var(--text-light);line-height:1.5;margin-top:6px;padding:8px 12px;background:var(--border-light);border-radius:var(--radius);display:none}
 .usage-hint.open .usage-hint-body{display:block}
+
+/* V3 Bubble Home */
+.home-section{min-height:100vh;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:60px 20px 20px}
+.bubble-container{position:relative;width:100%;max-width:900px;height:75vh}
+.bubble{position:absolute;border-radius:50%;background:rgba(255,255,255,.06);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,.12);box-shadow:0 0 30px rgba(255,255,255,.04),inset 0 0 30px rgba(255,255,255,.02),0 4px 15px rgba(0,0,0,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);animation:float 6s ease-in-out infinite;text-decoration:none;user-select:none}
+.bubble:hover,.bubble.active{transform:scale(1.2);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);box-shadow:0 0 50px rgba(255,255,255,.1),0 0 100px rgba(100,150,255,.08)}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.bubble.active{animation:none}
+.bubble .bubble-icon{font-size:2rem;margin-bottom:4px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.2))}
+.bubble .bubble-label{font-size:.78rem;font-weight:600;color:#fff;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.3)}
+.bubble-xlarge{width:180px;height:180px}.bubble-xlarge .bubble-icon{font-size:2.8rem}.bubble-xlarge .bubble-label{font-size:.92rem}
+.bubble-large{width:150px;height:150px}.bubble-large .bubble-icon{font-size:2.4rem}.bubble-large .bubble-label{font-size:.85rem}
+.bubble-medium{width:130px;height:130px}
+.bubble-small{width:105px;height:105px}.bubble-small .bubble-icon{font-size:1.6rem}.bubble-small .bubble-label{font-size:.72rem}
+.content-section{min-height:100vh;padding:20px;background:linear-gradient(180deg,#0f0c29,#1a1a2e);display:none}
+.content-section.active{display:block}
+.back-home-btn{position:sticky;top:12px;z-index:50;background:rgba(15,12,41,.85);backdrop-filter:blur(10px);color:var(--text);border:1px solid var(--border);padding:8px 18px;border-radius:20px;cursor:pointer;font-size:.88rem;transition:all .2s;margin-bottom:12px}
+.back-home-btn:hover{background:rgba(99,179,237,.15);border-color:var(--accent);color:var(--accent)}
+.home-greeting{text-align:center;margin-bottom:8px;color:rgba(255,255,255,.5);font-size:.85rem;letter-spacing:1px}
+@media(max-width:768px){
+  .bubble-container{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:14px;height:auto;padding:10px}
+  .bubble{position:relative!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important}
+  .bubble-xlarge{width:130px;height:130px}.bubble-xlarge .bubble-icon{font-size:2.2rem}.bubble-xlarge .bubble-label{font-size:.82rem}
+  .bubble-large{width:115px;height:115px}.bubble-large .bubble-icon{font-size:2rem}.bubble-large .bubble-label{font-size:.78rem}
+  .bubble-medium{width:105px;height:105px}.bubble-medium .bubble-icon{font-size:1.8rem}
+  .bubble-small{width:88px;height:88px}.bubble-small .bubble-icon{font-size:1.5rem}.bubble-small .bubble-label{font-size:.68rem}
+  .content-section{padding:12px;padding-bottom:20px}
+  .home-section{padding:60px 10px 20px;min-height:calc(100vh - 56px)}
+}
 </style>
 </head>
 <body>
@@ -450,13 +480,13 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
       </div>
     </div>
   </header>
-  <div class="app-body">
-    <nav class="sidebar" id="sidebar"></nav>
+  <section id="home" class="home-section">
+    <div class="bubble-container" id="bubbleContainer"></div>
+  </section>
+  <section id="contentArea" class="content-section">
+    <button class="back-home-btn" onclick="scrollToHome()">← 首頁</button>
     <main class="content" id="mainContent"></main>
-  </div>
-  <nav class="bottom-nav" id="bottomNav">
-    <div class="bottom-nav-inner" id="bottomNavInner"></div>
-  </nav>
+  </section>
 </div>
 
 <!-- Modal -->
@@ -675,11 +705,8 @@ async function enterApp() {
   document.getElementById('app').style.display = 'block';
   document.getElementById('headerUser').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles()]);
-  buildNav();
-  applySidebarBg();
+  buildBubbles();
   applyCustomFont();
-  const firstNav = getNavItems()[0];
-  if (firstNav) navigateTo(firstNav.id);
   // Check email prompt
   if ((!currentUser.email || currentUser.email === '') && !localStorage.getItem('email_prompted')) {
     localStorage.setItem('email_prompted', '1');
@@ -779,52 +806,77 @@ function getNavItems() {
   });
 }
 
-function buildNav() {
-  const items = getNavItems();
-  let sidebarHTML = `<div class="nav-section">${roleLabel(userProfile.role, userProfile.role_id)}</div>`;
-  items.forEach(it => {
-    sidebarHTML += `<div class="nav-item" data-page="${it.id}" onclick="navigateTo('${it.id}')">${it.icon} ${it.label}</div>`;
+function buildBubbles() {
+  const bubbleConfig = [
+    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'large', top: '8%', left: '8%', delay: '0s' },
+    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '22%', left: '38%', delay: '0.8s', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
+    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'medium', top: '5%', right: '10%', delay: '1.5s', perm: 'manage_orders' },
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'medium', top: '58%', left: '5%', delay: '2.2s', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '55%', right: '8%', delay: '1.2s', perms: ['manage_users', 'manage_roles'] },
+    { id: 'tutorials', icon: '📖', label: '教學', size: 'small', top: '38%', left: '2%', delay: '2.8s' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '35%', right: '3%', delay: '3.2s' },
+    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '78%', left: '40%', delay: '3.6s', perm: 'change_background' }
+  ];
+  const container = document.getElementById('bubbleContainer');
+  let html = '';
+  bubbleConfig.forEach(b => {
+    // Permission check
+    if (b.perm && !hasPermission(b.perm)) return;
+    if (b.perms && !b.perms.some(p => hasPermission(p))) return;
+    let posStyle = `top:${b.top};`;
+    if (b.left) posStyle += `left:${b.left};`;
+    if (b.right) posStyle += `right:${b.right};`;
+    posStyle += `animation-delay:${b.delay};`;
+    html += `<div class="bubble bubble-${b.size}" data-page="${b.id}" style="${posStyle}" onclick="navigateToBubble('${b.id}')">
+      <span class="bubble-icon">${b.icon}</span>
+      <span class="bubble-label">${b.label}</span>
+    </div>`;
   });
-  if (hasPermission('change_background')) {
-    sidebarHTML += `<div class="nav-item nav-item-bg" onclick="openBgSettingModal()">🎨 客製化</div>`;
-  }
-  document.getElementById('sidebar').innerHTML = sidebarHTML;
+  container.innerHTML = html;
+}
 
-  const bottomInner = document.getElementById('bottomNavInner');
-  const maxBottom = 4;
-  let bhtml = '';
-  const shown = items.slice(0, maxBottom);
-  const hidden = items.slice(maxBottom);
-  shown.forEach(it => {
-    bhtml += `<div class="bnav-item" data-page="${it.id}" onclick="navigateTo('${it.id}')"><span>${it.icon}</span><span>${it.label}</span></div>`;
-  });
-  if (hidden.length > 0) {
-    let moreHtml = '';
-    hidden.forEach(it => {
-      moreHtml += `<div class="mm-item" data-page="${it.id}" onclick="navigateTo('${it.id}');closeMoreMenu()">${it.icon} ${it.label}</div>`;
-    });
-    if (hasPermission('change_background')) {
-      moreHtml += `<div class="mm-item" onclick="openBgSettingModal();closeMoreMenu()">🎨 客製化</div>`;
+function navigateToBubble(pageId) {
+  if (pageId === 'customize') { openBgSettingModal(); return; }
+  // Highlight active bubble
+  document.querySelectorAll('.bubble').forEach(b => b.classList.remove('active'));
+  const activeBubble = document.querySelector(`.bubble[data-page="${pageId}"]`);
+  if (activeBubble) activeBubble.classList.add('active');
+  // Show content section and scroll to it
+  document.getElementById('contentArea').classList.add('active');
+  document.getElementById('contentArea').scrollIntoView({ behavior: 'smooth' });
+  // Render content
+  navigateTo(pageId);
+}
+
+function scrollToHome() {
+  document.getElementById('home').scrollIntoView({ behavior: 'smooth' });
+  document.querySelectorAll('.bubble').forEach(b => b.classList.remove('active'));
+  document.getElementById('contentArea').classList.remove('active');
+}
+
+// Scroll detection: update active bubble based on scroll position
+(function() {
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        const contentArea = document.getElementById('contentArea');
+        if (!contentArea) { ticking = false; return; }
+        const rect = contentArea.getBoundingClientRect();
+        // If content area is mostly out of view (scrolled back to home), deactivate
+        if (rect.top > window.innerHeight * 0.8) {
+          document.querySelectorAll('.bubble').forEach(b => b.classList.remove('active'));
+        }
+        ticking = false;
+      });
+      ticking = true;
     }
-    bhtml += `<div class="bnav-item bnav-more" onclick="toggleMoreMenu(event)"><span>⋯</span><span>更多</span><div class="more-menu" id="moreMenu">${moreHtml}</div></div>`;
-  }
-  bottomInner.innerHTML = bhtml;
-}
-
-function toggleMoreMenu(e) {
-  e.stopPropagation();
-  const m = document.getElementById('moreMenu');
-  m.classList.toggle('show');
-  const close = () => { m.classList.remove('show'); document.removeEventListener('click', close); };
-  if (m.classList.contains('show')) setTimeout(() => document.addEventListener('click', close), 0);
-}
-function closeMoreMenu() { const m = document.getElementById('moreMenu'); if (m) m.classList.remove('show'); }
+  });
+})();
 
 async function navigateTo(pageId) {
   currentPage = pageId;
   hideFloatPanel();
-  document.querySelectorAll('.sidebar .nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === pageId));
-  document.querySelectorAll('.bottom-nav .bnav-item').forEach(n => n.classList.toggle('active', n.dataset.page === pageId));
   const mc = document.getElementById('mainContent');
   mc.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent)"></div></div>';
   const renderers = {
@@ -833,7 +885,8 @@ async function navigateTo(pageId) {
     'order-mgmt': renderOrderMgmt,
     'admin-mgmt': renderAdminMgmt,
     'user-mgmt': renderUserMgmt,
-    'account-settings': renderAccountSettings
+    'account-settings': renderAccountSettings,
+    'tutorials': () => renderTutorials(mc)
   };
   const fn = renderers[pageId];
   if (fn) {
@@ -1115,6 +1168,7 @@ function applyPageBg(pageId) {
 
 function applySidebarBg() {
   const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
   const url = localStorage.getItem('bg_sidebar');
   const opacity = parseInt(localStorage.getItem('bg_opacity_sidebar') || '15', 10);
   if (url) {

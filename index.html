@@ -1303,7 +1303,7 @@ async function renderStockOverview() {
         ${escHtml(catName)} <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">▼</span>
       </div>
       <div id="${scId}"><div class="table-wrap"><table>
-      <thead><tr><th>品項</th>${clinicsToShow.map(c => `<th>${escHtml(c.name)}</th>`).join('')}<th>總計</th></tr></thead><tbody>`;
+      <thead><tr><th>品項</th>${clinicsToShow.map(c => `<th style="white-space:nowrap">${escHtml(c.name)}</th>`).join('')}<th>總計</th></tr></thead><tbody>`;
     mats.forEach(m => {
       let total = 0;
       const cells = clinicsToShow.map(c => {

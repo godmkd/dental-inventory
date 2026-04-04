@@ -805,14 +805,14 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '20%', left: '25%', delay: '0s', duration: '6s', anim: 'float' },
-    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '22%', left: '45%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
-    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '35%', left: '30%', delay: '2.8s', duration: '5s', anim: 'float3' },
-    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '38%', left: '50%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '30%', left: '40%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
-    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '45%', left: '25%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '48%', left: '48%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] },
-    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '42%', left: '55%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' }
+    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '1%', left: '-2%', delay: '2.8s', duration: '5s', anim: 'float3' },
+    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '3%', left: '22%', delay: '0s', duration: '6s', anim: 'float' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '5%', left: '62%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
+    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '22%', left: '48%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '28%', left: '5%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '50%', left: '35%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
+    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '48%', left: '72%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '68%', left: '12%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] }
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
@@ -828,61 +828,8 @@ function buildBubbles() {
     </div>`;
   });
   container.innerHTML = html;
-  layoutBubbles();
 }
 
-function layoutBubbles() {
-  const container = document.getElementById('bubbleContainer');
-  if (!container) return;
-  const bubbles = Array.from(container.querySelectorAll('.bubble'));
-  if (bubbles.length === 0) return;
-  const cw = container.clientWidth;
-  const ch = container.clientHeight;
-  if (cw === 0 || ch === 0) return;
-
-  for (let iter = 0; iter < 100; iter++) {
-    let overlap = false;
-    for (let i = 0; i < bubbles.length; i++) {
-      const a = bubbles[i].getBoundingClientRect();
-      for (let j = i + 1; j < bubbles.length; j++) {
-        const b = bubbles[j].getBoundingClientRect();
-        const ax = a.left + a.width / 2, ay = a.top + a.height / 2, ar = a.width / 2;
-        const bx = b.left + b.width / 2, by = b.top + b.height / 2, br = b.width / 2;
-        const dist = Math.sqrt((ax - bx) ** 2 + (ay - by) ** 2);
-        const minDist = ar + br + 4;
-        if (dist < minDist) {
-          overlap = true;
-          const angle = Math.atan2(by - ay, bx - ax);
-          const push = (minDist - dist) / 2 + 1;
-          const bEl = bubbles[j];
-          const curLeft = parseFloat(bEl.style.left);
-          const curTop = parseFloat(bEl.style.top);
-          bEl.style.left = (curLeft + Math.cos(angle) * push / cw * 100) + '%';
-          bEl.style.top = (curTop + Math.sin(angle) * push / ch * 100) + '%';
-          const aEl = bubbles[i];
-          const aCurLeft = parseFloat(aEl.style.left);
-          const aCurTop = parseFloat(aEl.style.top);
-          aEl.style.left = (aCurLeft - Math.cos(angle) * push / cw * 100) + '%';
-          aEl.style.top = (aCurTop - Math.sin(angle) * push / ch * 100) + '%';
-        }
-      }
-    }
-    if (!overlap) break;
-  }
-
-  bubbles.forEach(b => {
-    let l = parseFloat(b.style.left);
-    let t = parseFloat(b.style.top);
-    const w = b.offsetWidth / cw * 100;
-    const h = b.offsetHeight / ch * 100;
-    if (l < 0) l = 1;
-    if (t < 0) t = 1;
-    if (l + w > 98) l = 98 - w;
-    if (t + h > 95) t = 95 - h;
-    b.style.left = l + '%';
-    b.style.top = t + '%';
-  });
-}
 
 window.addEventListener('resize', () => {
   clearTimeout(window._layoutTimer);

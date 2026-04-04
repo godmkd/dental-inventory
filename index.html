@@ -401,10 +401,10 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .bubble.active{animation:none}
 .bubble .bubble-icon{font-size:2rem;margin-bottom:4px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.2))}
 .bubble .bubble-label{font-size:.78rem;font-weight:600;color:#fff;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.3)}
-.bubble-xlarge{width:42vw;height:42vw;max-width:220px;max-height:220px}.bubble-xlarge .bubble-icon{font-size:3rem}.bubble-xlarge .bubble-label{font-size:1rem}
-.bubble-large{width:36vw;height:36vw;max-width:190px;max-height:190px}.bubble-large .bubble-icon{font-size:2.5rem}.bubble-large .bubble-label{font-size:.9rem}
-.bubble-medium{width:30vw;height:30vw;max-width:155px;max-height:155px}.bubble-medium .bubble-icon{font-size:2.1rem}.bubble-medium .bubble-label{font-size:.82rem}
-.bubble-small{width:25vw;height:25vw;max-width:130px;max-height:130px}.bubble-small .bubble-icon{font-size:1.7rem}.bubble-small .bubble-label{font-size:.75rem}
+.bubble-xlarge{width:32vw;height:32vw;max-width:180px;max-height:180px}.bubble-xlarge .bubble-icon{font-size:2.8rem}.bubble-xlarge .bubble-label{font-size:.95rem}
+.bubble-large{width:27vw;height:27vw;max-width:155px;max-height:155px}.bubble-large .bubble-icon{font-size:2.3rem}.bubble-large .bubble-label{font-size:.85rem}
+.bubble-medium{width:23vw;height:23vw;max-width:130px;max-height:130px}.bubble-medium .bubble-icon{font-size:1.9rem}.bubble-medium .bubble-label{font-size:.78rem}
+.bubble-small{width:19vw;height:19vw;max-width:110px;max-height:110px}.bubble-small .bubble-icon{font-size:1.5rem}.bubble-small .bubble-label{font-size:.7rem}
 .content-section{min-height:100vh;padding:20px;background:#000;display:none}
 .content-section.active{display:block}
 .back-home-btn{position:sticky;top:12px;z-index:50;background:rgba(15,12,41,.85);backdrop-filter:blur(10px);color:var(--text);border:1px solid var(--border);padding:8px 18px;border-radius:20px;cursor:pointer;font-size:.88rem;transition:all .2s;margin-bottom:12px}
@@ -805,14 +805,14 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '2%', left: '2%', delay: '0s', duration: '6s', anim: 'float' },
-    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '2%', left: '52%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
-    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '36%', left: '2%', delay: '2.8s', duration: '5s', anim: 'float3' },
-    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '36%', left: '35%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '38%', left: '73%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
-    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '66%', left: '2%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '66%', left: '40%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] },
-    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '68%', left: '72%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' }
+    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '2%', left: '4%', delay: '0s', duration: '6s', anim: 'float' },
+    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '6%', left: '52%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
+    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '30%', left: '10%', delay: '2.8s', duration: '5s', anim: 'float3' },
+    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '33%', left: '42%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '27%', left: '76%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '56%', left: '5%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '62%', left: '44%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] },
+    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '55%', left: '78%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' }
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';

@@ -2517,8 +2517,10 @@ async function startReceive(dcId, orderId, clinicId) {
 
   // 只顯示已出貨的品項
   const shippedItems = items.filter(i => (i.item_status || 'pending') === 'shipped');
+  const nonShipped = items.filter(i => !['shipped','delivered'].includes(i.item_status || 'pending'));
 
   if (!shippedItems.length) { toast('沒有已出貨的品項可收貨', 'error'); return; }
+  if (nonShipped.length > 0) { toast('有品項尚未出貨，請使用個別收貨', 'error'); return; }
 
   let body = '<p style="margin-bottom:12px"><strong>確認收貨明細：</strong></p>';
   body += '<table style="width:100%"><thead><tr><th>品項</th><th>數量</th></tr></thead><tbody>';

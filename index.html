@@ -336,8 +336,6 @@ td .num,td.num,.stat-value,.mat-card-stock,.item-stock,[data-num]{font-family:va
 .sidebar{position:relative}
 .sidebar.has-bg::before{content:'';position:absolute;inset:0;background-image:var(--sidebar-bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:var(--sidebar-bg-opacity,.15);z-index:0;pointer-events:none}
 .sidebar.has-bg>*{position:relative;z-index:1}
-/* Background image - global body */
-body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background-image:var(--body-bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:var(--body-bg-opacity,.1);z-index:-1;pointer-events:none}
 /* Background settings nav item */
 .nav-item-bg{margin-top:auto;border-top:1px solid var(--border)}
 .sidebar{display:flex;flex-direction:column}
@@ -623,7 +621,6 @@ async function enterApp() {
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles()]);
   buildNav();
   applySidebarBg();
-  applyGlobalBg();
   const firstNav = getNavItems()[0];
   if (firstNav) navigateTo(firstNav.id);
 }
@@ -829,10 +826,8 @@ function openBgSettingModal() {
   const pageName = getPageLabel(pageId);
   const pageBg = localStorage.getItem('bg_' + pageId);
   const sidebarBg = localStorage.getItem('bg_sidebar');
-  const globalBg = localStorage.getItem('bg_global');
   const pageOpacity = parseInt(localStorage.getItem('bg_opacity_' + pageId) || '15', 10);
   const sidebarOpacity = parseInt(localStorage.getItem('bg_opacity_sidebar') || '15', 10);
-  const globalOpacity = parseInt(localStorage.getItem('bg_opacity_global') || '10', 10);
 
   function previewImg(url) {
     return url ? `<img src="${url}" class="bg-preview-thumb">` : '<span style="color:var(--text-lighter);font-size:.82rem">尚未設定</span>';
@@ -870,22 +865,6 @@ function openBgSettingModal() {
         <span id="bgOpVal_sidebar">${sidebarOpacity}%</span>
       </div>
     </div>
-
-    <div class="bg-section">
-      <h4>🌐 整個網頁</h4>
-      <div class="bg-preview-row">
-        ${previewImg(globalBg)}
-        <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖
-          <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'global','global')">
-        </label>
-        ${globalBg ? '<button class="btn btn-danger btn-sm" onclick="removeBg(\'global\',\'global\')">刪除</button>' : ''}
-      </div>
-      <div class="bg-opacity-row">
-        <span style="font-size:.82rem">透明度</span>
-        <input type="range" min="0" max="100" value="${globalOpacity}" oninput="bgOpacityChange(this,'global','global')">
-        <span id="bgOpVal_global">${globalOpacity}%</span>
-      </div>
-    </div>
   `, '<button class="btn btn-ghost" onclick="closeModal()">關閉</button>');
 }
 
@@ -898,9 +877,6 @@ function bgOpacityChange(el, type, key) {
   } else if (type === 'sidebar') {
     localStorage.setItem('bg_opacity_sidebar', val);
     document.getElementById('sidebar').style.setProperty('--sidebar-bg-opacity', val / 100);
-  } else if (type === 'global') {
-    localStorage.setItem('bg_opacity_global', val);
-    document.body.style.setProperty('--body-bg-opacity', val / 100);
   }
 }
 
@@ -922,9 +898,6 @@ async function bgPickFile(input, type, key) {
     } else if (type === 'sidebar') {
       localStorage.setItem('bg_sidebar', url);
       applySidebarBg();
-    } else if (type === 'global') {
-      localStorage.setItem('bg_global', url);
-      applyGlobalBg();
     }
     toast('背景已更新');
     openBgSettingModal(); // refresh modal
@@ -960,10 +933,6 @@ async function removeBg(type, key) {
       localStorage.removeItem('bg_sidebar');
       localStorage.removeItem('bg_opacity_sidebar');
       applySidebarBg();
-    } else if (type === 'global') {
-      localStorage.removeItem('bg_global');
-      localStorage.removeItem('bg_opacity_global');
-      applyGlobalBg();
     }
     toast('背景已移除');
     openBgSettingModal(); // refresh modal
@@ -1002,24 +971,9 @@ function applySidebarBg() {
   }
 }
 
-function applyGlobalBg() {
-  const url = localStorage.getItem('bg_global');
-  const opacity = parseInt(localStorage.getItem('bg_opacity_global') || '10', 10);
-  if (url) {
-    document.body.style.setProperty('--body-bg-url', `url(${url})`);
-    document.body.style.setProperty('--body-bg-opacity', opacity / 100);
-    document.body.classList.add('has-bg');
-  } else {
-    document.body.style.removeProperty('--body-bg-url');
-    document.body.style.removeProperty('--body-bg-opacity');
-    document.body.classList.remove('has-bg');
-  }
-}
-
 function applyAllBg() {
   applyPageBg(currentPage);
   applySidebarBg();
-  applyGlobalBg();
 }
 
 function optionsHTML(arr, valKey, labelKey, selected) {

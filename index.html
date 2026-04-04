@@ -330,7 +330,8 @@ td .num,td.num,.stat-value,.mat-card-stock,.item-stock,[data-num]{font-family:va
 
 /* Background image - page */
 #mainContent{position:relative}
-#mainContent.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background-image:var(--bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:var(--bg-opacity,.15);z-index:0;pointer-events:none}
+#mainContent{position:relative}
+#mainContent.has-bg::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background-image:var(--bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:var(--bg-opacity,.15);z-index:0;pointer-events:none}
 #mainContent.has-bg>*{position:relative;z-index:1}
 /* Background image - sidebar */
 .sidebar{position:relative}

@@ -240,7 +240,11 @@ select option{background:#1a1a2e;color:#e2e8f0}
 
 /* Mat card grid */
 .mat-grid{display:flex;flex-wrap:wrap;gap:8px;padding:4px 0}
-.mat-card{width:calc(33.333% - 6px);background:rgba(255,255,255,.08);backdrop-filter:blur(10px);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:10px 6px 8px;text-align:center;transition:all .25s ease;border:2px solid transparent}
+.mat-card{width:calc(33.333% - 6px);background:rgba(255,255,255,.08);backdrop-filter:blur(10px);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;display:grid;grid-template-columns:32px 1fr 32px;align-items:center;padding:8px 4px;text-align:center;transition:all .25s ease;border:2px solid transparent;gap:2px}
+.mat-card .adj-left,.mat-card .adj-right{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:1.1rem;font-weight:700;border-radius:var(--radius);transition:all .15s;color:var(--text)}
+.mat-card .adj-left:hover,.mat-card .adj-right:hover{background:var(--border-light)}
+.mat-card .adj-left:active,.mat-card .adj-right:active{background:var(--accent);color:#fff}
+.mat-card .mat-card-center{display:flex;flex-direction:column;align-items:center}
 .mat-card:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.12)}
 .mat-card.stock-low{border-color:var(--danger);background:rgba(254,178,178,.08)}
 .mat-card .mat-card-img{width:56px;height:56px;object-fit:cover;border-radius:8px;margin-bottom:4px}
@@ -1398,15 +1402,14 @@ function renderDailyContent() {
       const qty = dailyQtyMap[m.id] || 0;
       const lowCls = stock <= safety ? ' stock-low' : '';
       return `<div class="mat-card${lowCls}" data-name="${m.name.toLowerCase()}">
-        ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
-        <div class="mat-card-name">${escHtml(m.name)}</div>
-        <div class="mat-card-stock">庫存: ${stock}</div>
-        <div class="inline-adjuster">
-          <button class="adj-btn" onclick="adjDailyQty(${m.id},-1)">−</button>
-          <input type="number" id="daily_${m.id}" value="${qty}" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
-          <button class="adj-btn" onclick="adjDailyQty(${m.id},1)">+</button>
+        <button class="adj-left" onclick="adjDailyQty(${m.id},-1)">−</button>
+        <div class="mat-card-center">
+          ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
+          <div class="mat-card-name">${escHtml(m.name)}</div>
+          <div class="mat-card-stock">庫存: ${stock}</div>
+          <input type="number" id="daily_${m.id}" value="${qty}" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
         </div>
-        <button class="btn-reset-item" onclick="resetDailyQty(${m.id})" title="重置">↺</button>
+        <button class="adj-right" onclick="adjDailyQty(${m.id},1)">+</button>
       </div>`;
     }).join('')}</div>`;
   } else {
@@ -1707,15 +1710,14 @@ function renderOrderContent() {
     container.innerHTML = `<div class="mat-grid">${mats.map(m => {
       const qty = orderQtyMap[m.id] || 0;
       return `<div class="mat-card" data-name="${m.name.toLowerCase()}">
-        ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
-        <div class="mat-card-name">${escHtml(m.name)}</div>
-        <div class="mat-card-stock">${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
-        <div class="inline-adjuster">
-          <button class="adj-btn" onclick="adjOrderQty(${m.id},-1)">−</button>
-          <input type="number" id="order_${m.id}" value="${qty}" min="0" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
-          <button class="adj-btn" onclick="adjOrderQty(${m.id},1)">+</button>
+        <button class="adj-left" onclick="adjOrderQty(${m.id},-1)">−</button>
+        <div class="mat-card-center">
+          ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
+          <div class="mat-card-name">${escHtml(m.name)}</div>
+          <div class="mat-card-stock">${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
+          <input type="number" id="order_${m.id}" value="${qty}" min="0" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
         </div>
-        <button class="btn-reset-item" onclick="resetOrderQty(${m.id})" title="重置">↺</button>
+        <button class="adj-right" onclick="adjOrderQty(${m.id},1)">+</button>
       </div>`;
     }).join('')}</div>`;
   } else {

@@ -1,0 +1,1753 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>牙材集中採購管理系統</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --primary:#1a365d;--primary-light:#2a4a7f;--primary-dark:#0f2440;
+  --accent:#3182ce;--accent-hover:#2b6cb0;
+  --danger:#e53e3e;--danger-bg:#fff5f5;--danger-hover:#c53030;
+  --success:#38a169;--success-hover:#2f855a;
+  --warning:#dd6b20;--warning-hover:#c05621;
+  --bg:#f7fafc;--card:#fff;--text:#2d3748;--text-light:#718096;--text-lighter:#a0aec0;
+  --border:#e2e8f0;--border-light:#edf2f7;--radius:8px;--shadow:0 1px 3px rgba(0,0,0,.1);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* Login */
+.login-page{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--primary),var(--primary-light))}
+.login-card{background:var(--card);border-radius:16px;padding:48px 40px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:400px;width:90%}
+.login-card h1{font-size:1.8rem;color:var(--primary);margin-bottom:8px}
+.login-card p{color:var(--text-light);margin-bottom:32px}
+.login-logo{font-size:3rem;margin-bottom:16px}
+.btn-line{background:#06C755;color:#fff;border:none;padding:14px 32px;border-radius:var(--radius);font-size:1.1rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:10px;transition:background .2s;width:100%;justify-content:center}
+.btn-line:hover{background:#05a648}
+.login-loading{display:none;text-align:center;padding:40px;color:#fff;font-size:1.1rem}
+.spinner{width:40px;height:40px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.waiting-msg{background:#fefcbf;color:#744210;padding:20px;border-radius:var(--radius);margin-top:20px;line-height:1.6}
+
+/* App Shell */
+.app{display:none}
+.header{background:linear-gradient(135deg,var(--primary),var(--primary-light));color:#fff;padding:12px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.header h1{font-size:1.2rem;white-space:nowrap}
+.header-right{display:flex;align-items:center;gap:12px}
+.header-user{font-size:.85rem;opacity:.9}
+.btn-logout{background:rgba(255,255,255,.15);color:#fff;border:none;padding:6px 14px;border-radius:var(--radius);cursor:pointer;font-size:.85rem}
+.btn-logout:hover{background:rgba(255,255,255,.25)}
+
+.app-body{display:flex;max-width:1400px;margin:0 auto;min-height:calc(100vh - 56px)}
+.sidebar{width:220px;background:var(--card);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0}
+.sidebar .nav-item{display:flex;align-items:center;gap:10px;padding:12px 20px;cursor:pointer;font-size:.92rem;color:var(--text);transition:all .15s;border-left:3px solid transparent}
+.sidebar .nav-item:hover{background:var(--border-light);color:var(--accent)}
+.sidebar .nav-item.active{background:#ebf8ff;color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .nav-section{font-size:.75rem;color:var(--text-lighter);text-transform:uppercase;padding:16px 20px 6px;letter-spacing:.5px;font-weight:600}
+.content{flex:1;padding:20px;overflow-y:auto;min-width:0}
+
+/* Bottom nav */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);z-index:100;padding:4px 0 env(safe-area-inset-bottom)}
+.bottom-nav-inner{display:flex;justify-content:space-around}
+.bottom-nav .bnav-item{display:flex;flex-direction:column;align-items:center;padding:6px 4px;font-size:.65rem;color:var(--text-light);cursor:pointer;min-width:0;flex:1}
+.bottom-nav .bnav-item.active{color:var(--accent)}
+.bottom-nav .bnav-item span:first-child{font-size:1.3rem;margin-bottom:2px}
+.bottom-nav .bnav-more{position:relative}
+.more-menu{display:none;position:absolute;bottom:100%;right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 -4px 12px rgba(0,0,0,.1);min-width:160px;padding:6px 0;margin-bottom:8px}
+.more-menu.show{display:block}
+.more-menu .mm-item{padding:10px 16px;cursor:pointer;font-size:.9rem;display:flex;align-items:center;gap:8px}
+.more-menu .mm-item:hover{background:var(--border-light)}
+
+@media(max-width:768px){
+  .sidebar{display:none}
+  .bottom-nav{display:block}
+  .content{padding:12px;padding-bottom:80px}
+  .app-body{min-height:calc(100vh - 56px - 60px)}
+  .header h1{font-size:1rem}
+}
+
+/* Common */
+.page-title{font-size:1.3rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.search-box{flex:1;min-width:180px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);font-size:.92rem;outline:none;transition:border-color .2s}
+.search-box:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(49,130,206,.1)}
+.btn{padding:10px 18px;border:none;border-radius:var(--radius);cursor:pointer;font-size:.88rem;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{background:var(--success-hover)}
+.btn-warning{background:var(--warning);color:#fff}.btn-warning:hover{background:var(--warning-hover)}
+.btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{background:var(--danger-hover)}
+.btn-ghost{background:transparent;color:var(--text-light);border:1px solid var(--border)}.btn-ghost:hover{background:var(--border-light)}
+.btn-sm{padding:6px 12px;font-size:.82rem}
+.btn-xs{padding:4px 8px;font-size:.78rem}
+.btn[disabled]{opacity:.5;pointer-events:none}
+
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+.card-title{font-size:1.05rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{background:var(--border-light);padding:10px 12px;text-align:left;font-weight:600;white-space:nowrap;position:sticky;top:0}
+td{padding:10px 12px;border-bottom:1px solid var(--border-light)}
+tr:hover td{background:#fafcff}
+.stock-danger{background:var(--danger-bg);color:var(--danger);font-weight:700}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.78rem;font-weight:500}
+.badge-pending{background:#fefcbf;color:#744210}
+.badge-confirmed{background:#c6f6d5;color:#22543d}
+.badge-shipped{background:#bee3f8;color:#2a4365}
+.badge-delivered{background:#e9d8fd;color:#44337a}
+.badge-cancelled{background:#fed7d7;color:#9b2c2c}
+.text-danger{color:var(--danger)}.text-success{color:var(--success)}.text-muted{color:var(--text-light)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-light)}
+.empty-state span{font-size:2.5rem;display:block;margin-bottom:12px}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border-radius:12px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1;border-radius:12px 12px 0 0}
+.modal-header h3{font-size:1.1rem}
+.modal-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-light);padding:4px}
+.modal-body{padding:20px}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:.85rem;font-weight:500;margin-bottom:5px;color:var(--text)}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:.92rem;outline:none;transition:border-color .2s;font-family:inherit}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(49,130,206,.1)}
+.form-group textarea{resize:vertical;min-height:70px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.form-row{grid-template-columns:1fr}}
+
+.filter-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{padding:6px 14px;border-radius:20px;font-size:.82rem;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);transition:all .15s}
+.chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);text-align:center}
+.stat-card .stat-value{font-size:1.8rem;font-weight:700;color:var(--primary)}
+.stat-card .stat-label{font-size:.82rem;color:var(--text-light);margin-top:4px}
+
+/* Toast */
+.toast-container{position:fixed;top:72px;right:20px;z-index:300;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:.9rem;box-shadow:0 4px 12px rgba(0,0,0,.15);animation:slideIn .3s ease;max-width:360px}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-info{background:var(--accent)}
+@keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+
+/* Confirm */
+.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:250;align-items:center;justify-content:center;padding:20px}
+.confirm-overlay.show{display:flex}
+.confirm-box{background:var(--card);border-radius:12px;padding:24px;max-width:400px;width:100%;text-align:center}
+.confirm-box h3{margin-bottom:12px}
+.confirm-box p{color:var(--text-light);margin-bottom:20px;line-height:1.5}
+.confirm-btns{display:flex;gap:10px;justify-content:center}
+
+.img-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid var(--border)}
+.img-upload-preview{max-width:120px;max-height:120px;object-fit:cover;border-radius:var(--radius);margin-top:8px}
+
+/* Sub tabs */
+.sub-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:0;flex-wrap:wrap}
+.sub-tab{padding:8px 16px;cursor:pointer;font-size:.88rem;color:var(--text-light);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.sub-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+
+/* View toggle */
+.view-toggle{display:flex;gap:4px;margin-left:auto}
+.view-toggle .btn{padding:6px 12px}
+.view-toggle .btn.active{background:var(--accent);color:#fff}
+
+/* Grid view cards */
+.mat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+.mat-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px;text-align:center;cursor:pointer;transition:all .15s;border:2px solid transparent;position:relative}
+.mat-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.mat-card.selected{border-color:var(--accent);background:#ebf8ff}
+.mat-card img{width:80px;height:80px;object-fit:cover;border-radius:6px;margin-bottom:8px}
+.mat-card .mat-card-noimg{width:80px;height:80px;background:var(--border-light);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:2rem}
+.mat-card .mat-card-name{font-size:.85rem;font-weight:600;margin-bottom:4px;line-height:1.2}
+.mat-card .mat-card-stock{font-size:.78rem;color:var(--text-light)}
+.mat-card .mat-card-badge{position:absolute;top:-6px;right:-6px;background:var(--accent);color:#fff;border-radius:50%;width:24px;height:24px;font-size:.75rem;display:flex;align-items:center;justify-content:center;font-weight:700}
+
+/* Floating panel */
+.float-panel{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:2px solid var(--accent);z-index:90;transition:transform .3s;max-height:50vh;overflow-y:auto;box-shadow:0 -4px 20px rgba(0,0,0,.15)}
+.float-panel.collapsed{transform:translateY(calc(100% - 48px))}
+.float-panel-header{padding:12px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--accent);color:#fff;font-weight:600;font-size:.92rem;position:sticky;top:0;z-index:1}
+.float-panel-body{padding:12px 20px}
+.float-panel-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-light);font-size:.88rem}
+.float-panel-item .item-info{flex:1}
+.float-panel-item .item-qty{display:flex;align-items:center;gap:8px}
+.float-panel-item .item-qty input{width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:4px}
+.float-panel-actions{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card)}
+
+/* Order card collapsible */
+.order-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.order-card-header{padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.order-card-header:hover{background:var(--border-light)}
+.order-card-body{display:none;padding:0 20px 16px;border-top:1px solid var(--border-light)}
+.order-card.expanded .order-card-body{display:block}
+.order-item-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-light);flex-wrap:wrap;gap:8px}
+.order-item-row:last-child{border:none}
+.order-item-info{flex:1;min-width:150px}
+.order-item-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Responsive table cards */
+@media(max-width:640px){
+  .responsive-cards thead{display:none}
+  .responsive-cards tbody tr{display:block;background:var(--card);border-radius:var(--radius);padding:12px;margin-bottom:8px;box-shadow:var(--shadow)}
+  .responsive-cards td{display:flex;justify-content:space-between;padding:6px 0;border:none}
+  .responsive-cards td::before{content:attr(data-label);font-weight:600;color:var(--text-light);margin-right:12px}
+  .mat-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+}
+
+/* Qty adjuster in modal */
+.qty-adjuster{display:flex;align-items:center;gap:12px;justify-content:center;margin:16px 0}
+.qty-adjuster .btn{width:44px;height:44px;border-radius:50%;font-size:1.3rem;padding:0;display:flex;align-items:center;justify-content:center}
+.qty-adjuster input{width:80px;text-align:center;font-size:1.4rem;font-weight:700;border:2px solid var(--border);border-radius:var(--radius);padding:8px}
+.qty-type-toggle{display:flex;gap:8px;justify-content:center;margin-bottom:12px}
+.qty-type-toggle .btn.active{box-shadow:0 0 0 3px rgba(49,130,206,.3)}
+</style>
+</head>
+<body>
+
+<!-- Login Page -->
+<div id="loginPage" class="login-page">
+  <div>
+    <div class="login-card">
+      <div class="login-logo">🦷</div>
+      <h1>牙材集中採購管理系統</h1>
+      <p>多診所庫存與採購一站管理</p>
+      <button class="btn-line" onclick="doLogin()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+        LINE 登入
+      </button>
+    </div>
+    <div class="login-loading" id="loginLoading">
+      <div class="spinner"></div>
+      <div>登入中，請稍候...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Waiting for role assignment -->
+<div id="waitingPage" style="display:none" class="login-page">
+  <div class="login-card">
+    <div class="login-logo">⏳</div>
+    <h1>等待角色指派</h1>
+    <div class="waiting-msg">
+      您已成功登入，但尚未被管理者指派角色與診所。<br>請聯繫管理者完成設定後重新整理頁面。
+    </div>
+    <button class="btn btn-ghost" style="margin-top:16px" onclick="doLogout()">登出</button>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app" class="app">
+  <header class="header">
+    <div class="header-inner">
+      <h1>🦷 牙材採購系統</h1>
+      <div class="header-right">
+        <span class="header-user" id="headerUser"></span>
+        <button class="btn-logout" onclick="doLogout()">登出</button>
+      </div>
+    </div>
+  </header>
+  <div class="app-body">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="content" id="mainContent"></main>
+  </div>
+  <nav class="bottom-nav" id="bottomNav">
+    <div class="bottom-nav-inner" id="bottomNavInner"></div>
+  </nav>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalBox">
+    <div class="modal-header">
+      <h3 id="modalTitle"></h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- Confirm -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3 id="confirmTitle">確認</h3>
+    <p id="confirmMsg"></p>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeConfirm(false)">取消</button>
+      <button class="btn btn-primary" onclick="closeConfirm(true)">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Floating panel (used by daily changes & ordering) -->
+<div class="float-panel collapsed" id="floatPanel" style="display:none">
+  <div class="float-panel-header" onclick="toggleFloatPanel()">
+    <span id="floatPanelTitle">清單 (0)</span>
+    <span id="floatPanelArrow">▲</span>
+  </div>
+  <div class="float-panel-body" id="floatPanelBody"></div>
+  <div class="float-panel-actions" id="floatPanelActions"></div>
+</div>
+
+<script>
+// ===================== CONFIG =====================
+const SUPABASE_URL = 'https://kvnwfesbnxzoqpdgauov.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2bndmZXNibnh6b3FwZGdhdW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTAwMjIsImV4cCI6MjA5MDYyNjAyMn0.wpf9rUcPiaTUkDVhVgUaxBJ2rA4WaAMHG7tgSv9BOOQ';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ===================== STATE =====================
+let currentUser = null;
+let userProfile = null;
+let allClinics = [];
+let allCategories = [];
+let allSuppliers = [];
+let allMaterials = [];
+let allUsers = [];
+let currentPage = '';
+let confirmResolve = null;
+
+// Floating panel state
+let floatPanelItems = []; // [{material_id, name, quantity, type, ...}]
+let floatPanelMode = ''; // 'daily' or 'order'
+
+// ===================== INIT =====================
+async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (code) {
+    try {
+      const { data, error } = await sb.auth.exchangeCodeForSession(code);
+      if (error) console.error('Code exchange error:', error);
+    } catch(e) { console.error('Exchange error:', e); }
+    history.replaceState(null, '', window.location.pathname);
+  }
+  if (window.location.hash && window.location.hash.includes('access_token')) {
+    await sb.auth.getSession();
+    history.replaceState(null, '', window.location.pathname);
+  }
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    await loadProfile();
+  } else {
+    showLogin();
+  }
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      document.getElementById('loginLoading').style.display = 'block';
+      await loadProfile();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null; userProfile = null; showLogin();
+    }
+  });
+}
+
+function showLogin() {
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('waitingPage').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginLoading').style.display = 'none';
+}
+
+async function doLogin() {
+  document.getElementById('loginLoading').style.display = 'block';
+  const { data, error } = await sb.auth.signInWithOAuth({
+    provider: 'custom:line',
+    options: { redirectTo: window.location.origin + window.location.pathname, queryParams: { prompt: 'consent' } }
+  });
+  if (error) { toast('登入失敗: ' + error.message, 'error'); document.getElementById('loginLoading').style.display = 'none'; }
+}
+
+async function doLogout() { await sb.auth.signOut(); showLogin(); }
+
+async function loadProfile() {
+  const { data, error } = await sb.from('user_profiles').select('*').eq('id', currentUser.id).single();
+  if (error && error.code === 'PGRST116') {
+    const meta = currentUser.user_metadata || {};
+    const displayName = meta.full_name || meta.name || meta.preferred_username || currentUser.email || '新使用者';
+    const lineId = meta.provider_id || meta.sub || '';
+    const { data: newP, error: e2 } = await sb.from('user_profiles').insert({
+      id: currentUser.id, display_name: displayName, role: 'clinic_manager', line_user_id: lineId, is_active: true
+    }).select().single();
+    if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }
+    userProfile = newP;
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('waitingPage').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    return;
+  }
+  if (error) { toast('載入資料失敗: ' + error.message, 'error'); showLogin(); return; }
+  userProfile = data;
+  if (!data.is_active) { toast('您的帳號已被停用', 'error'); await sb.auth.signOut(); showLogin(); return; }
+  if (data.role === 'clinic_manager' && !data.clinic_id) {
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('waitingPage').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    return;
+  }
+  await enterApp();
+}
+
+async function enterApp() {
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('waitingPage').style.display = 'none';
+  document.getElementById('loginLoading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('headerUser').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role)})`;
+  await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers()]);
+  buildNav();
+  const firstNav = getNavItems()[0];
+  if (firstNav) navigateTo(firstNav.id);
+}
+
+function roleLabel(r) { return { owner: '老闆', admin: '總管理者', clinic_manager: '診所管理者' }[r] || r; }
+function isOwner() { return userProfile.role === 'owner'; }
+function isAdmin() { return userProfile.role === 'admin'; }
+function isManager() { return userProfile.role === 'clinic_manager'; }
+function canSeeAdmin() { return isOwner() || isAdmin(); }
+function canSeePrice() { return isOwner() || isAdmin(); }
+
+// ===================== DATA =====================
+async function loadClinics() { const { data } = await sb.from('clinics').select('*').order('id'); allClinics = data || []; }
+async function loadCategories() { const { data } = await sb.from('categories').select('*').order('sort_order'); allCategories = data || []; }
+async function loadSuppliers() { const { data } = await sb.from('suppliers').select('*').order('name'); allSuppliers = data || []; }
+async function loadMaterials() { const { data } = await sb.from('materials').select('*').order('name'); allMaterials = data || []; }
+async function loadUsers() { const { data } = await sb.from('user_profiles').select('*').order('created_at'); allUsers = data || []; }
+
+function clinicName(id) { return allClinics.find(c => c.id === id)?.name || '-'; }
+function categoryName(id) { return allCategories.find(c => c.id === id)?.name || '-'; }
+function supplierName(id) { return allSuppliers.find(s => s.id === id)?.name || '-'; }
+function materialName(id) { return allMaterials.find(m => m.id === id)?.name || '-'; }
+function materialObj(id) { return allMaterials.find(m => m.id === id); }
+function userName(id) { return allUsers.find(u => u.id === id)?.display_name || '-'; }
+
+// ===================== NAV =====================
+function getNavItems() {
+  const items = [];
+  if (isOwner()) {
+    items.push(
+      { id: 'stock-overview', icon: '📊', label: '庫存總覽' },
+      { id: 'daily-change', icon: '🔄', label: '日常變動' },
+      { id: 'ordering', icon: '📦', label: '叫貨' },
+      { id: 'order-mgmt', icon: '📋', label: '叫貨管理' },
+      { id: 'receiving', icon: '✅', label: '收貨' },
+      { id: 'admin-mgmt', icon: '⚙️', label: '行政管理' },
+      { id: 'user-mgmt', icon: '👥', label: '人員管理' }
+    );
+  } else if (isAdmin()) {
+    items.push(
+      { id: 'stock-overview', icon: '📊', label: '庫存總覽' },
+      { id: 'daily-change', icon: '🔄', label: '日常變動' },
+      { id: 'ordering', icon: '📦', label: '叫貨' },
+      { id: 'order-mgmt', icon: '📋', label: '叫貨管理' },
+      { id: 'receiving', icon: '✅', label: '收貨' },
+      { id: 'admin-mgmt', icon: '⚙️', label: '行政管理' }
+    );
+  } else {
+    items.push(
+      { id: 'stock-overview', icon: '📊', label: '庫存總覽' },
+      { id: 'daily-change', icon: '🔄', label: '日常變動' },
+      { id: 'ordering', icon: '📦', label: '叫貨' },
+      { id: 'receiving', icon: '✅', label: '收貨' }
+    );
+  }
+  return items;
+}
+
+function buildNav() {
+  const items = getNavItems();
+  let sidebarHTML = `<div class="nav-section">${roleLabel(userProfile.role)}</div>`;
+  items.forEach(it => {
+    sidebarHTML += `<div class="nav-item" data-page="${it.id}" onclick="navigateTo('${it.id}')">${it.icon} ${it.label}</div>`;
+  });
+  document.getElementById('sidebar').innerHTML = sidebarHTML;
+
+  const bottomInner = document.getElementById('bottomNavInner');
+  const maxBottom = 4;
+  let bhtml = '';
+  const shown = items.slice(0, maxBottom);
+  const hidden = items.slice(maxBottom);
+  shown.forEach(it => {
+    bhtml += `<div class="bnav-item" data-page="${it.id}" onclick="navigateTo('${it.id}')"><span>${it.icon}</span><span>${it.label}</span></div>`;
+  });
+  if (hidden.length > 0) {
+    let moreHtml = '';
+    hidden.forEach(it => {
+      moreHtml += `<div class="mm-item" data-page="${it.id}" onclick="navigateTo('${it.id}');closeMoreMenu()">${it.icon} ${it.label}</div>`;
+    });
+    bhtml += `<div class="bnav-item bnav-more" onclick="toggleMoreMenu(event)"><span>⋯</span><span>更多</span><div class="more-menu" id="moreMenu">${moreHtml}</div></div>`;
+  }
+  bottomInner.innerHTML = bhtml;
+}
+
+function toggleMoreMenu(e) {
+  e.stopPropagation();
+  const m = document.getElementById('moreMenu');
+  m.classList.toggle('show');
+  const close = () => { m.classList.remove('show'); document.removeEventListener('click', close); };
+  if (m.classList.contains('show')) setTimeout(() => document.addEventListener('click', close), 0);
+}
+function closeMoreMenu() { const m = document.getElementById('moreMenu'); if (m) m.classList.remove('show'); }
+
+function navigateTo(pageId) {
+  currentPage = pageId;
+  hideFloatPanel();
+  document.querySelectorAll('.sidebar .nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === pageId));
+  document.querySelectorAll('.bottom-nav .bnav-item').forEach(n => n.classList.toggle('active', n.dataset.page === pageId));
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent)"></div></div>';
+  const renderers = {
+    'stock-overview': renderStockOverview,
+    'daily-change': renderDailyChange,
+    'ordering': renderOrdering,
+    'order-mgmt': renderOrderMgmt,
+    'receiving': renderReceiving,
+    'admin-mgmt': renderAdminMgmt,
+    'user-mgmt': renderUserMgmt
+  };
+  const fn = renderers[pageId];
+  if (fn) fn();
+  else mc.innerHTML = '<div class="empty-state"><span>🚧</span>頁面建置中</div>';
+}
+
+// ===================== UTILS =====================
+function toast(msg, type = 'success') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+function openModal(title, bodyHtml, footerHtml = '') {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = bodyHtml;
+  document.getElementById('modalFooter').innerHTML = footerHtml;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+
+function showConfirm(title, msg) {
+  return new Promise(resolve => {
+    confirmResolve = resolve;
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').innerHTML = msg;
+    document.getElementById('confirmOverlay').classList.add('show');
+  });
+}
+function closeConfirm(result) {
+  document.getElementById('confirmOverlay').classList.remove('show');
+  if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
+}
+
+function optionsHTML(arr, valKey, labelKey, selected) {
+  return '<option value="">-- 請選擇 --</option>' +
+    arr.map(a => `<option value="${a[valKey]}"${a[valKey] == selected ? ' selected' : ''}>${a[labelKey]}</option>`).join('');
+}
+function fmtDate(d) { if (!d) return '-'; const dt = new Date(d); return dt.toLocaleDateString('zh-TW') + ' ' + dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }); }
+function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString(); }
+function statusBadge(s) {
+  const map = { pending: '待確認', confirmed: '已確認', shipped: '已出貨', delivered: '已到貨', cancelled: '已取消' };
+  return `<span class="badge badge-${s}">${map[s] || s}</span>`;
+}
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Float panel
+function showFloatPanel(mode, title) {
+  floatPanelMode = mode;
+  const fp = document.getElementById('floatPanel');
+  fp.style.display = 'block';
+  fp.classList.remove('collapsed');
+  updateFloatPanel();
+}
+function hideFloatPanel() {
+  document.getElementById('floatPanel').style.display = 'none';
+  floatPanelItems = [];
+  floatPanelMode = '';
+}
+function toggleFloatPanel() {
+  document.getElementById('floatPanel').classList.toggle('collapsed');
+  document.getElementById('floatPanelArrow').textContent =
+    document.getElementById('floatPanel').classList.contains('collapsed') ? '▲' : '▼';
+}
+
+function updateFloatPanel() {
+  const titleEl = document.getElementById('floatPanelTitle');
+  const bodyEl = document.getElementById('floatPanelBody');
+  const actEl = document.getElementById('floatPanelActions');
+  const fp = document.getElementById('floatPanel');
+
+  if (floatPanelItems.length === 0) {
+    fp.classList.add('collapsed');
+  }
+
+  if (floatPanelMode === 'daily') {
+    titleEl.textContent = `變動清單 (${floatPanelItems.length})`;
+    bodyEl.innerHTML = floatPanelItems.length === 0
+      ? '<div style="padding:12px;color:var(--text-light);text-align:center">尚無變動項目</div>'
+      : floatPanelItems.map((it, i) => `
+        <div class="float-panel-item">
+          <div class="item-info">
+            <strong>${escHtml(it.name)}</strong>
+            <span style="color:${it.changeType === 'in' ? 'var(--success)' : 'var(--danger)'}">
+              ${it.changeType === 'in' ? '+' : '-'}${it.quantity}
+            </span>
+          </div>
+          <button class="btn btn-danger btn-xs" onclick="removeFloatItem(${i})">✕</button>
+        </div>`).join('');
+    actEl.innerHTML = floatPanelItems.length > 0
+      ? `<button class="btn btn-ghost btn-sm" onclick="floatPanelItems=[];updateFloatPanel()">清空</button>
+         <button class="btn btn-primary btn-sm" onclick="submitDailyChanges()">確認送出</button>`
+      : '';
+  } else if (floatPanelMode === 'order') {
+    titleEl.textContent = `叫貨清單 (${floatPanelItems.length})`;
+    bodyEl.innerHTML = floatPanelItems.length === 0
+      ? '<div style="padding:12px;color:var(--text-light);text-align:center">尚無叫貨項目</div>'
+      : floatPanelItems.map((it, i) => `
+        <div class="float-panel-item">
+          <div class="item-info">
+            <strong>${escHtml(it.name)}</strong>
+            <span> x${it.quantity}</span>
+          </div>
+          <div class="item-qty">
+            <button class="btn btn-ghost btn-xs" onclick="floatItemQty(${i},-1)">-</button>
+            <span>${it.quantity}</span>
+            <button class="btn btn-ghost btn-xs" onclick="floatItemQty(${i},1)">+</button>
+            <button class="btn btn-danger btn-xs" onclick="removeFloatItem(${i})">✕</button>
+          </div>
+        </div>`).join('');
+    actEl.innerHTML = floatPanelItems.length > 0
+      ? `<button class="btn btn-ghost btn-sm" onclick="floatPanelItems=[];updateFloatPanel()">清空</button>
+         <button class="btn btn-primary btn-sm" onclick="submitOrdering()">送出叫貨</button>`
+      : '';
+  }
+}
+
+function removeFloatItem(idx) {
+  floatPanelItems.splice(idx, 1);
+  updateFloatPanel();
+  // Update card selection indicators
+  refreshCardBadges();
+}
+
+function floatItemQty(idx, delta) {
+  floatPanelItems[idx].quantity += delta;
+  if (floatPanelItems[idx].quantity <= 0) floatPanelItems.splice(idx, 1);
+  updateFloatPanel();
+  refreshCardBadges();
+}
+
+function refreshCardBadges() {
+  document.querySelectorAll('.mat-card').forEach(card => {
+    const mid = parseInt(card.dataset.mid);
+    const item = floatPanelItems.find(x => x.material_id === mid);
+    const badge = card.querySelector('.mat-card-badge');
+    if (item) {
+      if (badge) badge.textContent = item.quantity;
+      else {
+        const b = document.createElement('div');
+        b.className = 'mat-card-badge';
+        b.textContent = item.quantity;
+        card.appendChild(b);
+      }
+      card.classList.add('selected');
+    } else {
+      if (badge) badge.remove();
+      card.classList.remove('selected');
+    }
+  });
+}
+
+// ============================================================
+// 1. 庫存總覽
+// ============================================================
+async function renderStockOverview() {
+  const mc = document.getElementById('mainContent');
+  const { data: inv } = await sb.from('clinic_inventory').select('*');
+  const clinicsToShow = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  const invMap = {};
+  (inv || []).forEach(i => { invMap[`${i.clinic_id}_${i.material_id}`] = i; });
+
+  const matsByCat = {};
+  allMaterials.forEach(m => {
+    const catId = m.category_id || 0;
+    if (!matsByCat[catId]) matsByCat[catId] = [];
+    matsByCat[catId].push(m);
+  });
+
+  let html = `<div class="page-title">📊 庫存總覽</div>`;
+  for (const catId of Object.keys(matsByCat)) {
+    const catName = catId == 0 ? '未分類' : categoryName(parseInt(catId));
+    const mats = matsByCat[catId];
+    html += `<div class="card"><div class="card-title">${escHtml(catName)}</div><div class="table-wrap"><table>
+      <thead><tr><th>品項</th>${clinicsToShow.map(c => `<th>${escHtml(c.name)}</th>`).join('')}<th>總計</th></tr></thead><tbody>`;
+    mats.forEach(m => {
+      let total = 0;
+      const cells = clinicsToShow.map(c => {
+        const rec = invMap[`${c.id}_${m.id}`];
+        const stock = rec ? rec.current_stock : 0;
+        const safety = rec ? rec.safety_stock : 5;
+        total += stock;
+        const cls = stock <= safety ? 'stock-danger' : '';
+        return `<td class="${cls}">${stock}</td>`;
+      }).join('');
+      html += `<tr><td><strong>${escHtml(m.name)}</strong><br><small class="text-muted">${escHtml(m.spec || '')} ${escHtml(m.unit)}</small></td>${cells}<td><strong>${total}</strong></td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  }
+  if (Object.keys(matsByCat).length === 0) {
+    html += '<div class="card"><div class="empty-state"><span>📦</span>尚無品項資料</div></div>';
+  }
+  mc.innerHTML = html;
+}
+
+// ============================================================
+// 2. 日常變動 (renamed from 日常消耗)
+// ============================================================
+let dailyViewMode = 'grid';
+let dailyClinicId = null;
+let dailyInvMap = {};
+
+async function renderDailyChange() {
+  const mc = document.getElementById('mainContent');
+  floatPanelItems = [];
+  floatPanelMode = 'daily';
+
+  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  dailyClinicId = dailyClinicId || (myClinics[0] ? myClinics[0].id : null);
+
+  // Load inventory for selected clinic
+  if (dailyClinicId) {
+    const { data: inv } = await sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId);
+    dailyInvMap = {};
+    (inv || []).forEach(i => { dailyInvMap[i.material_id] = i; });
+  }
+
+  mc.innerHTML = `
+    <div class="page-title">🔄 日常變動</div>
+    <div class="toolbar">
+      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="dailyClinicId=parseInt(this.value);renderDailyChange()">
+        ${myClinics.map(c => `<option value="${c.id}"${c.id === dailyClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
+      </select>` : `<strong>${escHtml(clinicName(dailyClinicId))}</strong>`}
+      <input class="search-box" placeholder="搜尋品項..." oninput="filterDailyCards(this.value)" id="dailySearch">
+      <div class="view-toggle">
+        <button class="btn btn-ghost btn-sm ${dailyViewMode === 'grid' ? 'active' : ''}" onclick="dailyViewMode='grid';renderDailyContent()">圖示</button>
+        <button class="btn btn-ghost btn-sm ${dailyViewMode === 'list' ? 'active' : ''}" onclick="dailyViewMode='list';renderDailyContent()">清單</button>
+      </div>
+    </div>
+    <div class="filter-chips" id="dailyCatChips"></div>
+    <div id="dailyContent"></div>`;
+
+  // Category chips
+  let chipHtml = `<span class="chip active" onclick="dailyFilterCat(0,this)">全部</span>`;
+  allCategories.forEach(c => { chipHtml += `<span class="chip" onclick="dailyFilterCat(${c.id},this)">${escHtml(c.name)}</span>`; });
+  document.getElementById('dailyCatChips').innerHTML = chipHtml;
+
+  window._dailyFilterCatId = 0;
+  renderDailyContent();
+  showFloatPanel('daily');
+}
+
+window.dailyFilterCat = function(catId, el) {
+  window._dailyFilterCatId = catId;
+  document.querySelectorAll('#dailyCatChips .chip').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderDailyContent();
+};
+
+function renderDailyContent() {
+  const container = document.getElementById('dailyContent');
+  let mats = allMaterials;
+  if (window._dailyFilterCatId) mats = mats.filter(m => m.category_id === window._dailyFilterCatId);
+
+  if (dailyViewMode === 'grid') {
+    container.innerHTML = `<div class="mat-grid">${mats.map(m => {
+      const inv = dailyInvMap[m.id];
+      const stock = inv ? inv.current_stock : 0;
+      const inPanel = floatPanelItems.find(x => x.material_id === m.id);
+      return `<div class="mat-card ${inPanel ? 'selected' : ''}" data-mid="${m.id}" data-name="${m.name.toLowerCase()}" onclick="openDailyAdjust(${m.id})">
+        ${inPanel ? `<div class="mat-card-badge">${inPanel.quantity}</div>` : ''}
+        ${m.image_url ? `<img src="${m.image_url}" alt="">` : `<div class="mat-card-noimg">📦</div>`}
+        <div class="mat-card-name">${escHtml(m.name)}</div>
+        <div class="mat-card-stock">庫存: ${stock} ${escHtml(m.unit)}</div>
+      </div>`;
+    }).join('')}</div>`;
+  } else {
+    container.innerHTML = `<div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>品項</th><th>庫存</th><th>操作</th></tr></thead>
+      <tbody>${mats.map(m => {
+        const inv = dailyInvMap[m.id];
+        const stock = inv ? inv.current_stock : 0;
+        return `<tr data-name="${m.name.toLowerCase()}">
+          <td><strong>${escHtml(m.name)}</strong><br><small class="text-muted">${escHtml(m.spec || '')} ${escHtml(m.unit)}</small></td>
+          <td>${stock}</td>
+          <td>
+            <button class="btn btn-warning btn-sm" onclick="addDailyItem(${m.id},'out',1)">-1</button>
+            <button class="btn btn-success btn-sm" onclick="addDailyItem(${m.id},'in',1)">+1</button>
+            <button class="btn btn-ghost btn-sm" onclick="openDailyAdjust(${m.id})">自訂</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div></div>`;
+  }
+}
+
+window.filterDailyCards = function(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.mat-card, #dailyContent tr').forEach(el => {
+    const name = el.dataset.name || '';
+    el.style.display = name.includes(q) ? '' : 'none';
+  });
+};
+
+function openDailyAdjust(matId) {
+  const m = materialObj(matId);
+  if (!m) return;
+  const inv = dailyInvMap[matId];
+  const stock = inv ? inv.current_stock : 0;
+
+  openModal(`${m.name} - 調整庫存`, `
+    <div style="text-align:center;margin-bottom:12px">
+      ${m.image_url ? `<img src="${m.image_url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px">` : ''}
+      <div style="margin-top:8px;color:var(--text-light)">目前庫存: <strong>${stock}</strong> ${escHtml(m.unit)}</div>
+    </div>
+    <div class="qty-type-toggle">
+      <button class="btn btn-warning btn-sm active" id="btnTypeOut" onclick="setDailyType('out')">消耗 (減少)</button>
+      <button class="btn btn-success btn-sm" id="btnTypeIn" onclick="setDailyType('in')">入庫 (增加)</button>
+    </div>
+    <div class="qty-adjuster">
+      <button class="btn btn-ghost" onclick="adjDailyQty(-1)">−</button>
+      <input type="number" id="dailyAdjQty" value="1" min="1">
+      <button class="btn btn-ghost" onclick="adjDailyQty(1)">+</button>
+    </div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="confirmDailyAdjust(${matId})">加入變動清單</button>`);
+  window._dailyAdjType = 'out';
+}
+
+window.setDailyType = function(type) {
+  window._dailyAdjType = type;
+  document.getElementById('btnTypeOut').classList.toggle('active', type === 'out');
+  document.getElementById('btnTypeIn').classList.toggle('active', type === 'in');
+};
+window.adjDailyQty = function(delta) {
+  const el = document.getElementById('dailyAdjQty');
+  el.value = Math.max(1, parseInt(el.value || 1) + delta);
+};
+
+function confirmDailyAdjust(matId) {
+  const m = materialObj(matId);
+  const qty = parseInt(document.getElementById('dailyAdjQty').value) || 1;
+  addDailyItem(matId, window._dailyAdjType, qty);
+  closeModal();
+}
+
+function addDailyItem(matId, changeType, quantity) {
+  const m = materialObj(matId);
+  if (!m) return;
+  const existing = floatPanelItems.find(x => x.material_id === matId && x.changeType === changeType);
+  if (existing) {
+    existing.quantity += quantity;
+  } else {
+    floatPanelItems.push({ material_id: matId, name: m.name, quantity, changeType });
+  }
+  const fp = document.getElementById('floatPanel');
+  fp.classList.remove('collapsed');
+  updateFloatPanel();
+  refreshCardBadges();
+  toast(`${changeType === 'in' ? '+' : '-'}${quantity} ${m.name}`, 'info');
+}
+
+async function submitDailyChanges() {
+  if (!floatPanelItems.length) { toast('清單是空的', 'error'); return; }
+  if (!dailyClinicId) { toast('請選擇診所', 'error'); return; }
+
+  if (!await showConfirm('確認送出', `將送出 ${floatPanelItems.length} 項變動，確定嗎？`)) return;
+
+  try {
+    for (const it of floatPanelItems) {
+      const { data: inv } = await sb.from('clinic_inventory')
+        .select('*').eq('clinic_id', dailyClinicId).eq('material_id', it.material_id).single();
+
+      if (it.changeType === 'out') {
+        if (!inv) { toast(`${it.name} 無庫存紀錄`, 'error'); continue; }
+        if (inv.current_stock < it.quantity) { toast(`${it.name} 庫存不足 (${inv.current_stock})`, 'error'); continue; }
+        await sb.from('clinic_inventory').update({ current_stock: inv.current_stock - it.quantity }).eq('id', inv.id);
+      } else {
+        if (inv) {
+          await sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id);
+        } else {
+          await sb.from('clinic_inventory').insert({ clinic_id: dailyClinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 });
+        }
+      }
+      await sb.from('inventory_logs').insert({
+        clinic_id: dailyClinicId, material_id: it.material_id,
+        type: it.changeType === 'in' ? 'in' : 'out',
+        quantity: it.quantity,
+        operator_id: currentUser.id, operator_name: userProfile.display_name,
+        notes: it.changeType === 'in' ? '日常入庫' : '日常消耗'
+      });
+    }
+    toast('所有變動已送出');
+    floatPanelItems = [];
+    renderDailyChange();
+  } catch (e) {
+    toast('送出失敗: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// 3. 叫貨
+// ============================================================
+let orderViewMode = 'grid';
+let orderClinicId = null;
+
+async function renderOrdering() {
+  const mc = document.getElementById('mainContent');
+  floatPanelItems = [];
+  floatPanelMode = 'order';
+
+  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  orderClinicId = orderClinicId || (myClinics[0] ? myClinics[0].id : null);
+
+  mc.innerHTML = `
+    <div class="page-title">📦 叫貨</div>
+    <div class="toolbar">
+      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="orderClinicId=parseInt(this.value)">
+        ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
+      </select>` : `<strong>${escHtml(clinicName(orderClinicId))}</strong>`}
+      <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderCards(this.value)">
+      <div class="view-toggle">
+        <button class="btn btn-ghost btn-sm ${orderViewMode === 'grid' ? 'active' : ''}" onclick="orderViewMode='grid';renderOrderContent()">圖示</button>
+        <button class="btn btn-ghost btn-sm ${orderViewMode === 'list' ? 'active' : ''}" onclick="orderViewMode='list';renderOrderContent()">清單</button>
+      </div>
+    </div>
+    <div class="filter-chips" id="orderCatChips"></div>
+    <div id="orderContent"></div>`;
+
+  let chipHtml = `<span class="chip active" onclick="orderFilterCat(0,this)">全部</span>`;
+  allCategories.forEach(c => { chipHtml += `<span class="chip" onclick="orderFilterCat(${c.id},this)">${escHtml(c.name)}</span>`; });
+  document.getElementById('orderCatChips').innerHTML = chipHtml;
+  window._orderFilterCatId = 0;
+
+  renderOrderContent();
+  showFloatPanel('order');
+}
+
+window.orderFilterCat = function(catId, el) {
+  window._orderFilterCatId = catId;
+  document.querySelectorAll('#orderCatChips .chip').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderOrderContent();
+};
+
+function renderOrderContent() {
+  const container = document.getElementById('orderContent');
+  let mats = allMaterials;
+  if (window._orderFilterCatId) mats = mats.filter(m => m.category_id === window._orderFilterCatId);
+
+  if (orderViewMode === 'grid') {
+    container.innerHTML = `<div class="mat-grid">${mats.map(m => {
+      const inPanel = floatPanelItems.find(x => x.material_id === m.id);
+      return `<div class="mat-card ${inPanel ? 'selected' : ''}" data-mid="${m.id}" data-name="${m.name.toLowerCase()}" onclick="openOrderAdjust(${m.id})">
+        ${inPanel ? `<div class="mat-card-badge">${inPanel.quantity}</div>` : ''}
+        ${m.image_url ? `<img src="${m.image_url}" alt="">` : `<div class="mat-card-noimg">📦</div>`}
+        <div class="mat-card-name">${escHtml(m.name)}</div>
+        <div class="mat-card-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)}</div>
+      </div>`;
+    }).join('')}</div>`;
+  } else {
+    container.innerHTML = `<div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>品項</th><th>規格</th>${canSeePrice() ? '<th>單價</th>' : ''}<th>操作</th></tr></thead>
+      <tbody>${mats.map(m => `<tr data-name="${m.name.toLowerCase()}">
+        <td><strong>${escHtml(m.name)}</strong></td>
+        <td>${escHtml(m.spec || '')} ${escHtml(m.unit)}</td>
+        ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}
+        <td><button class="btn btn-primary btn-sm" onclick="openOrderAdjust(${m.id})">加入</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+  }
+}
+
+window.filterOrderCards = function(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.mat-card, #orderContent tr').forEach(el => {
+    const name = el.dataset.name || '';
+    el.style.display = name.includes(q) ? '' : 'none';
+  });
+};
+
+function openOrderAdjust(matId) {
+  const m = materialObj(matId);
+  if (!m) return;
+  const existing = floatPanelItems.find(x => x.material_id === matId);
+  const currentQty = existing ? existing.quantity : 1;
+
+  openModal(`${m.name} - 叫貨數量`, `
+    <div style="text-align:center;margin-bottom:12px">
+      ${m.image_url ? `<img src="${m.image_url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px">` : ''}
+      <div style="margin-top:8px;color:var(--text-light)">${escHtml(m.spec || '')} ${escHtml(m.unit)}</div>
+      ${canSeePrice() ? `<div>單價: ${fmtMoney(m.unit_price)}</div>` : ''}
+    </div>
+    <div class="qty-adjuster">
+      <button class="btn btn-ghost" onclick="adjOrderQty(-1)">−</button>
+      <input type="number" id="orderAdjQty" value="${currentQty}" min="1">
+      <button class="btn btn-ghost" onclick="adjOrderQty(1)">+</button>
+    </div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="confirmOrderAdjust(${matId})">加入叫貨清單</button>`);
+}
+
+window.adjOrderQty = function(delta) {
+  const el = document.getElementById('orderAdjQty');
+  el.value = Math.max(1, parseInt(el.value || 1) + delta);
+};
+
+function confirmOrderAdjust(matId) {
+  const m = materialObj(matId);
+  const qty = parseInt(document.getElementById('orderAdjQty').value) || 1;
+  const existing = floatPanelItems.find(x => x.material_id === matId);
+  if (existing) {
+    existing.quantity = qty;
+  } else {
+    floatPanelItems.push({ material_id: matId, name: m.name, quantity: qty, unit_price: m.unit_price || 0 });
+  }
+  const fp = document.getElementById('floatPanel');
+  fp.classList.remove('collapsed');
+  updateFloatPanel();
+  refreshCardBadges();
+  closeModal();
+  toast(`${m.name} x${qty} 已加入`, 'info');
+}
+
+async function submitOrdering() {
+  if (!floatPanelItems.length) { toast('清單是空的', 'error'); return; }
+  const cid = orderClinicId || userProfile.clinic_id;
+  if (!cid) { toast('請選擇診所', 'error'); return; }
+
+  if (!await showConfirm('送出叫貨', `共 ${floatPanelItems.length} 項品項，確定送出？`)) return;
+
+  try {
+    const totalAmount = floatPanelItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
+    const { data: order, error: e1 } = await sb.from('orders').insert({
+      status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes: ''
+    }).select().single();
+    if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
+
+    const orderItems = floatPanelItems.map(it => ({
+      order_id: order.id, material_id: it.material_id, clinic_id: cid,
+      quantity: it.quantity, unit_price: it.unit_price || 0
+    }));
+    const { error: e2 } = await sb.from('order_items').insert(orderItems);
+    if (e2) { toast('明細建立失敗: ' + e2.message, 'error'); return; }
+
+    toast('叫貨單已送出');
+    floatPanelItems = [];
+    hideFloatPanel();
+    renderOrdering();
+  } catch (e) {
+    toast('錯誤: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// 4. 叫貨管理 (admin/owner)
+// ============================================================
+let orderMgmtFilter = 'all';
+
+async function renderOrderMgmt() {
+  const mc = document.getElementById('mainContent');
+  const { data: orders } = await sb.from('orders').select('*').order('created_at', { ascending: false });
+
+  mc.innerHTML = `
+    <div class="page-title">📋 叫貨管理</div>
+    <div class="sub-tabs">
+      <div class="sub-tab ${orderMgmtFilter === 'all' ? 'active' : ''}" onclick="orderMgmtFilter='all';renderOrderMgmt()">全部</div>
+      <div class="sub-tab ${orderMgmtFilter === 'pending' ? 'active' : ''}" onclick="orderMgmtFilter='pending';renderOrderMgmt()">待確認</div>
+      <div class="sub-tab ${orderMgmtFilter === 'confirmed' ? 'active' : ''}" onclick="orderMgmtFilter='confirmed';renderOrderMgmt()">已確認</div>
+      <div class="sub-tab ${orderMgmtFilter === 'shipped' ? 'active' : ''}" onclick="orderMgmtFilter='shipped';renderOrderMgmt()">已出貨</div>
+      <div class="sub-tab ${orderMgmtFilter === 'delivered' ? 'active' : ''}" onclick="orderMgmtFilter='delivered';renderOrderMgmt()">已到貨</div>
+    </div>
+    <div id="orderMgmtList"></div>`;
+
+  const filtered = orderMgmtFilter === 'all' ? (orders || []) : (orders || []).filter(o => o.status === orderMgmtFilter);
+  renderOrderMgmtList(filtered);
+}
+
+async function renderOrderMgmtList(orders) {
+  const el = document.getElementById('orderMgmtList');
+  if (!orders.length) {
+    el.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>沒有叫貨單</div></div>';
+    return;
+  }
+  el.innerHTML = orders.map(o => `
+    <div class="order-card" id="oc_${o.id}">
+      <div class="order-card-header" onclick="toggleOrderCard(${o.id})">
+        <div>
+          <strong>#${o.id}</strong> ${statusBadge(o.status)}
+          <span class="text-muted" style="font-size:.82rem;margin-left:8px">${fmtDate(o.created_at)}</span>
+        </div>
+        <div>
+          <span style="font-size:.85rem">${userName(o.created_by)} | ${fmtMoney(o.total_amount)}</span>
+          <span style="margin-left:8px">▼</span>
+        </div>
+      </div>
+      <div class="order-card-body" id="ocb_${o.id}"></div>
+    </div>`).join('');
+}
+
+async function toggleOrderCard(orderId) {
+  const card = document.getElementById('oc_' + orderId);
+  const body = document.getElementById('ocb_' + orderId);
+  if (card.classList.contains('expanded')) {
+    card.classList.remove('expanded');
+    return;
+  }
+  card.classList.add('expanded');
+
+  if (body.innerHTML) return; // already loaded
+
+  body.innerHTML = '<div style="padding:16px;text-align:center"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent);width:24px;height:24px;border-width:3px"></div></div>';
+
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (!items || !items.length) { body.innerHTML = '<div style="padding:16px;color:var(--text-light)">無明細</div>'; return; }
+
+  let html = '<div style="padding:16px 0">';
+  items.forEach(it => {
+    const mat = materialObj(it.material_id);
+    const price = it.is_custom_price && it.custom_price != null ? it.custom_price : it.unit_price;
+    // Use notes field to track item_status if not a column
+    const itemStatus = it.item_status || it.notes_status || 'pending';
+
+    html += `<div class="order-item-row" id="oi_${it.id}">
+      <div class="order-item-info">
+        <strong>${mat ? escHtml(mat.name) : materialName(it.material_id)}</strong>
+        <span class="text-muted"> | ${escHtml(clinicName(it.clinic_id))} | x${it.quantity}</span>
+        <br><small>單價: ${it.is_custom_price ? '<span class="text-success">優惠</span> ' : ''}${fmtMoney(price)}
+        | 小計: ${fmtMoney(price * it.quantity)}</small>
+        <br>${statusBadge(itemStatus)}
+      </div>
+      <div class="order-item-actions">
+        ${itemStatus === 'pending' ? `
+          <button class="btn btn-ghost btn-xs" onclick="editItemPrice(${it.id},${it.unit_price},${it.custom_price || 0},${it.is_custom_price ? 1 : 0})">💰 改價</button>
+          <button class="btn btn-success btn-xs" onclick="setItemStatus(${it.id},${orderId},'confirmed')">✓ 確認</button>
+          <button class="btn btn-danger btn-xs" onclick="setItemStatus(${it.id},${orderId},'cancelled')">✕ 取消</button>
+        ` : ''}
+        ${itemStatus === 'confirmed' ? `
+          <button class="btn btn-primary btn-xs" onclick="setItemStatus(${it.id},${orderId},'shipped')">📦 出貨</button>
+          <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'pending')">↩ 回待確認</button>
+          <button class="btn btn-danger btn-xs" onclick="setItemStatus(${it.id},${orderId},'cancelled')">✕ 取消</button>
+        ` : ''}
+        ${itemStatus === 'shipped' ? `
+          <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'confirmed')">↩ 回已確認</button>
+        ` : ''}
+        ${itemStatus === 'cancelled' ? `
+          <button class="btn btn-ghost btn-xs" onclick="setItemStatus(${it.id},${orderId},'pending')">↩ 恢復</button>
+        ` : ''}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+function editItemPrice(itemId, unitPrice, customPrice, isCustom) {
+  openModal('修改價格', `
+    <div class="form-group"><label>原價</label><input value="${unitPrice}" disabled></div>
+    <div class="form-group"><label><input type="checkbox" id="epIsCustom" ${isCustom ? 'checked' : ''} onchange="document.getElementById('epCustomPrice').disabled=!this.checked"> 使用優惠價</label></div>
+    <div class="form-group"><label>優惠價格</label><input id="epCustomPrice" type="number" step="0.01" value="${customPrice || unitPrice}" ${isCustom ? '' : 'disabled'}></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveItemPrice(${itemId})">儲存</button>`);
+}
+
+async function saveItemPrice(itemId) {
+  const isCustom = document.getElementById('epIsCustom').checked;
+  const customPrice = parseFloat(document.getElementById('epCustomPrice').value) || 0;
+  const { error } = await sb.from('order_items').update({
+    is_custom_price: isCustom,
+    custom_price: isCustom ? customPrice : null
+  }).eq('id', itemId);
+  if (error) { toast('儲存失敗: ' + error.message, 'error'); return; }
+  toast('價格已更新');
+  closeModal();
+  // Re-render the order card
+  const row = document.getElementById('oi_' + itemId);
+  if (row) {
+    const cardBody = row.closest('.order-card-body');
+    if (cardBody) {
+      cardBody.innerHTML = '';
+      const cardEl = cardBody.closest('.order-card');
+      cardEl.classList.remove('expanded');
+      cardEl.querySelector('.order-card-header').click();
+    }
+  }
+}
+
+async function setItemStatus(itemId, orderId, newStatus) {
+  // Try to update item_status column; fallback to notes
+  let { error } = await sb.from('order_items').update({ item_status: newStatus }).eq('id', itemId);
+  if (error) {
+    // Fallback: use notes field to store status
+    const notesVal = `__status:${newStatus}`;
+    ({ error } = await sb.from('order_items').update({ notes: notesVal }).eq('id', itemId));
+    if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
+  }
+
+  toast(`品項狀態已改為 ${statusLabelText(newStatus)}`);
+
+  // Check if we need to create delivery_confirmations (when item shipped)
+  if (newStatus === 'shipped') {
+    await checkAutoShipOrder(orderId);
+  }
+
+  // Check if all items shipped → auto mark order delivered
+  await checkAutoDeliverOrder(orderId);
+
+  // Refresh card
+  const cardBody = document.getElementById('ocb_' + orderId);
+  if (cardBody) {
+    cardBody.innerHTML = '';
+    const cardEl = document.getElementById('oc_' + orderId);
+    cardEl.classList.remove('expanded');
+    toggleOrderCard(orderId);
+  }
+}
+
+function statusLabelText(s) {
+  return { pending: '待確認', confirmed: '已確認', shipped: '已出貨', delivered: '已到貨', cancelled: '已取消' }[s] || s;
+}
+
+async function checkAutoShipOrder(orderId) {
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (!items) return;
+
+  // Check: any items shipped? → create delivery confirmations for those clinics
+  const shippedItems = items.filter(i => (i.item_status || 'pending') === 'shipped');
+  if (shippedItems.length > 0) {
+    const clinicIds = [...new Set(shippedItems.map(i => i.clinic_id))];
+    // Check existing delivery_confirmations
+    const { data: existingDcs } = await sb.from('delivery_confirmations').select('clinic_id').eq('order_id', orderId);
+    const existingClinicIds = (existingDcs || []).map(d => d.clinic_id);
+    const newClinicIds = clinicIds.filter(c => !existingClinicIds.includes(c));
+    if (newClinicIds.length > 0) {
+      await sb.from('delivery_confirmations').insert(
+        newClinicIds.map(cid => ({ order_id: orderId, clinic_id: cid, status: 'pending' }))
+      );
+    }
+    // Update order status to shipped if not already
+    await sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId);
+  }
+}
+
+async function checkAutoDeliverOrder(orderId) {
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  if (!items) return;
+  const activeItems = items.filter(i => (i.item_status || 'pending') !== 'cancelled');
+  if (activeItems.length === 0) return;
+  const allShippedOrDelivered = activeItems.every(i => ['shipped', 'delivered'].includes(i.item_status || 'pending'));
+  if (allShippedOrDelivered) {
+    await sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId);
+  }
+}
+
+// ============================================================
+// 5. 收貨
+// ============================================================
+async function renderReceiving() {
+  const mc = document.getElementById('mainContent');
+  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  const clinicIds = myClinics.map(c => c.id);
+
+  const { data: dcs } = await sb.from('delivery_confirmations').select('*, orders(*)').in('clinic_id', clinicIds).order('created_at', { ascending: false });
+
+  const pending = (dcs || []).filter(d => d.status === 'pending');
+  const confirmed = (dcs || []).filter(d => d.status === 'confirmed');
+
+  mc.innerHTML = `
+    <div class="page-title">✅ 收貨</div>
+    <div class="sub-tabs">
+      <div class="sub-tab active" onclick="showReceiveSub('pending')">待收貨 (${pending.length})</div>
+      <div class="sub-tab" onclick="showReceiveSub('confirmed')">已收貨</div>
+    </div>
+    <div id="receiveContent"></div>`;
+
+  window._receivePending = pending;
+  window._receiveConfirmed = confirmed;
+  window.showReceiveSub = function(tab) {
+    document.querySelectorAll('.sub-tab').forEach((t, i) => t.classList.toggle('active', i === (tab === 'pending' ? 0 : 1)));
+    renderReceiveContent(tab);
+  };
+  renderReceiveContent('pending');
+}
+
+async function renderReceiveContent(tab) {
+  const el = document.getElementById('receiveContent');
+  const items = tab === 'pending' ? window._receivePending : window._receiveConfirmed;
+
+  if (!items.length) {
+    el.innerHTML = `<div class="card"><div class="empty-state"><span>📦</span>${tab === 'pending' ? '目前沒有待收貨項目' : '尚無已收貨紀錄'}</div></div>`;
+    return;
+  }
+
+  el.innerHTML = items.map(d => `
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span>叫貨單 #${d.order_id} - ${escHtml(clinicName(d.clinic_id))}</span>
+        ${statusBadge(d.status)}
+      </div>
+      <div style="font-size:.85rem;color:var(--text-light);margin-bottom:10px">
+        ${d.orders ? '建立: ' + fmtDate(d.orders.created_at) : ''}
+        ${d.confirmed_at ? ' | 收貨: ' + fmtDate(d.confirmed_at) : ''}
+      </div>
+      <div id="rcDetail_${d.id}"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${d.status === 'pending' ? `
+          <button class="btn btn-success btn-sm" onclick="startReceive(${d.id},${d.order_id},${d.clinic_id})">確認收貨</button>
+          <button class="btn btn-warning btn-sm" onclick="rushDelivery(${d.id})">🔔 催貨</button>
+        ` : ''}
+        ${d.status === 'confirmed' ? `
+          <button class="btn btn-ghost btn-sm" onclick="undoReceive(${d.id},${d.order_id},${d.clinic_id})">↩ 反悔收貨</button>
+        ` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="viewReceiveDetail(${d.id},${d.order_id},${d.clinic_id})">查看明細</button>
+      </div>
+    </div>`).join('');
+}
+
+async function viewReceiveDetail(dcId, orderId, clinicId) {
+  const el = document.getElementById('rcDetail_' + dcId);
+  if (el.innerHTML) { el.innerHTML = ''; return; }
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  if (!items || !items.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-light)">無明細</div>'; return; }
+  el.innerHTML = `<div class="table-wrap" style="margin-bottom:12px"><table>
+    <thead><tr><th>品項</th><th>數量</th><th>狀態</th></tr></thead>
+    <tbody>${items.map(it => {
+      const itemStatus = it.item_status || 'pending';
+      return `<tr><td>${materialName(it.material_id)}</td><td>${it.quantity}</td><td>${statusBadge(itemStatus)}</td></tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+async function rushDelivery(dcId) {
+  const now = new Date().toISOString();
+  const { data: dc } = await sb.from('delivery_confirmations').select('notes').eq('id', dcId).single();
+  const newNotes = (dc?.notes || '') + `\n催貨: ${fmtDate(now)} by ${userProfile.display_name}`;
+  const { error } = await sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId);
+  if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
+  toast('已記錄催貨');
+}
+
+async function startReceive(dcId, orderId, clinicId) {
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  if (!items || !items.length) { toast('無明細', 'error'); return; }
+
+  // Only show items that are shipped
+  const shippedItems = items.filter(i => (i.item_status || 'pending') === 'shipped' || (i.item_status || 'pending') === 'confirmed');
+
+  let body = '<p style="margin-bottom:12px"><strong>確認收貨明細：</strong></p>';
+  body += '<table style="width:100%"><thead><tr><th>品項</th><th>數量</th></tr></thead><tbody>';
+  (shippedItems.length > 0 ? shippedItems : items).forEach(it => {
+    body += `<tr><td>${materialName(it.material_id)}</td><td>+${it.quantity}</td></tr>`;
+  });
+  body += '</tbody></table>';
+  body += '<p style="margin-top:12px;color:var(--danger);font-size:.85rem">收貨後庫存將自動增加</p>';
+
+  openModal('確認收貨 #' + orderId, body,
+    `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-success" onclick="doReceive(${dcId},${orderId},${clinicId})">✓ 確認收貨</button>`);
+  window._receiveItems = shippedItems.length > 0 ? shippedItems : items;
+}
+
+async function doReceive(dcId, orderId, clinicId) {
+  const items = window._receiveItems;
+  try {
+    for (const it of items) {
+      const { data: inv } = await sb.from('clinic_inventory')
+        .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single();
+      if (inv) {
+        await sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id);
+      } else {
+        await sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 });
+      }
+      await sb.from('inventory_logs').insert({
+        clinic_id: clinicId, material_id: it.material_id, type: 'receive', quantity: it.quantity,
+        operator_id: currentUser.id, operator_name: userProfile.display_name, notes: '叫貨單#' + orderId
+      });
+      // Update item status to delivered
+      await sb.from('order_items').update({ item_status: 'delivered' }).eq('id', it.id);
+    }
+
+    await sb.from('delivery_confirmations').update({
+      status: 'confirmed', confirmed_by: currentUser.id, confirmed_at: new Date().toISOString()
+    }).eq('id', dcId);
+
+    // Check all delivery confirmations → auto mark order delivered
+    const { data: allDcs } = await sb.from('delivery_confirmations').select('status').eq('order_id', orderId);
+    if (allDcs && allDcs.every(d => d.status === 'confirmed')) {
+      await sb.from('orders').update({ status: 'delivered', delivered_at: new Date().toISOString() }).eq('id', orderId);
+    }
+
+    toast('收貨完成，庫存已更新');
+    closeModal();
+    renderReceiving();
+  } catch (e) {
+    toast('收貨失敗: ' + e.message, 'error');
+  }
+}
+
+async function undoReceive(dcId, orderId, clinicId) {
+  if (!await showConfirm('反悔收貨', '確定要反悔收貨？庫存將回扣。')) return;
+
+  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  try {
+    for (const it of (items || [])) {
+      if ((it.item_status || 'pending') === 'delivered') {
+        const { data: inv } = await sb.from('clinic_inventory')
+          .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single();
+        if (inv) {
+          await sb.from('clinic_inventory').update({ current_stock: Math.max(0, inv.current_stock - it.quantity) }).eq('id', inv.id);
+        }
+        await sb.from('inventory_logs').insert({
+          clinic_id: clinicId, material_id: it.material_id, type: 'out', quantity: it.quantity,
+          operator_id: currentUser.id, operator_name: userProfile.display_name, notes: '反悔收貨#' + orderId
+        });
+        await sb.from('order_items').update({ item_status: 'shipped' }).eq('id', it.id);
+      }
+    }
+
+    await sb.from('delivery_confirmations').update({
+      status: 'pending', confirmed_by: null, confirmed_at: null
+    }).eq('id', dcId);
+
+    // Revert order status
+    await sb.from('orders').update({ status: 'shipped', delivered_at: null }).eq('id', orderId);
+
+    toast('已反悔收貨，庫存已回扣');
+    renderReceiving();
+  } catch (e) {
+    toast('失敗: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// 6. 行政管理 (合併頁面)
+// ============================================================
+let adminSubTab = 'clinics';
+
+async function renderAdminMgmt() {
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+    <div class="page-title">⚙️ 行政管理</div>
+    <div class="sub-tabs">
+      <div class="sub-tab ${adminSubTab === 'clinics' ? 'active' : ''}" onclick="adminSubTab='clinics';renderAdminContent()">🏥 診所</div>
+      <div class="sub-tab ${adminSubTab === 'suppliers' ? 'active' : ''}" onclick="adminSubTab='suppliers';renderAdminContent()">🏭 廠商</div>
+      <div class="sub-tab ${adminSubTab === 'materials' ? 'active' : ''}" onclick="adminSubTab='materials';renderAdminContent()">📦 品項</div>
+      <div class="sub-tab ${adminSubTab === 'categories' ? 'active' : ''}" onclick="adminSubTab='categories';renderAdminContent()">📁 類別</div>
+    </div>
+    <div id="adminContent"></div>`;
+  renderAdminContent();
+}
+
+async function renderAdminContent() {
+  document.querySelectorAll('.sub-tab').forEach(t => {
+    const tab = t.textContent.includes('診所') ? 'clinics' : t.textContent.includes('廠商') ? 'suppliers' : t.textContent.includes('品項') ? 'materials' : 'categories';
+    t.classList.toggle('active', tab === adminSubTab);
+  });
+  const el = document.getElementById('adminContent');
+  if (adminSubTab === 'clinics') await renderAdminClinics(el);
+  else if (adminSubTab === 'suppliers') await renderAdminSuppliers(el);
+  else if (adminSubTab === 'materials') await renderAdminMaterials(el);
+  else await renderAdminCategories(el);
+}
+
+// --- Clinics CRUD ---
+async function renderAdminClinics(el) {
+  await loadClinics();
+  el.innerHTML = `
+    <div class="toolbar"><button class="btn btn-primary" onclick="editClinic()">＋ 新增診所</button></div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>名稱</th><th>地址</th><th>電話</th><th>備註</th><th>操作</th></tr></thead>
+      <tbody>${allClinics.map(c => `<tr>
+        <td>${escHtml(c.name)}</td><td>${escHtml(c.address || '-')}</td><td>${escHtml(c.phone || '-')}</td><td>${escHtml(c.notes || '-')}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="editClinic(${c.id})">編輯</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteClinic(${c.id})">刪除</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function editClinic(id) {
+  const c = id ? allClinics.find(x => x.id === id) : {};
+  openModal(id ? '編輯診所' : '新增診所', `
+    <div class="form-group"><label>名稱 *</label><input id="fClinicName" value="${escHtml(c.name || '')}"></div>
+    <div class="form-group"><label>地址</label><input id="fClinicAddr" value="${escHtml(c.address || '')}"></div>
+    <div class="form-group"><label>電話</label><input id="fClinicPhone" value="${escHtml(c.phone || '')}"></div>
+    <div class="form-group"><label>備註</label><textarea id="fClinicNotes">${escHtml(c.notes || '')}</textarea></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveClinic(${id || 'null'})">儲存</button>`);
+}
+
+async function saveClinic(id) {
+  const obj = { name: document.getElementById('fClinicName').value.trim(), address: document.getElementById('fClinicAddr').value.trim(), phone: document.getElementById('fClinicPhone').value.trim(), notes: document.getElementById('fClinicNotes').value.trim() };
+  if (!obj.name) { toast('請輸入診所名稱', 'error'); return; }
+  let err;
+  if (id) { ({ error: err } = await sb.from('clinics').update(obj).eq('id', id)); }
+  else { ({ error: err } = await sb.from('clinics').insert(obj)); }
+  if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
+  toast(id ? '已更新' : '已新增'); closeModal(); await loadClinics(); renderAdminContent();
+}
+
+async function deleteClinic(id) {
+  if (!await showConfirm('刪除診所', '確定要刪除此診所？相關庫存資料也會一併刪除。')) return;
+  const { error } = await sb.from('clinics').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除'); await loadClinics(); renderAdminContent();
+}
+
+// --- Suppliers CRUD ---
+async function renderAdminSuppliers(el) {
+  await loadSuppliers();
+  el.innerHTML = `
+    <div class="toolbar"><button class="btn btn-primary" onclick="editSupplier()">＋ 新增廠商</button></div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>名稱</th><th>聯絡人</th><th>電話</th><th>備註</th><th>操作</th></tr></thead>
+      <tbody>${allSuppliers.map(s => `<tr>
+        <td>${escHtml(s.name)}</td><td>${escHtml(s.contact || '-')}</td><td>${escHtml(s.phone || '-')}</td><td>${escHtml(s.notes || '-')}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="editSupplier(${s.id})">編輯</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${s.id})">刪除</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function editSupplier(id) {
+  const s = id ? allSuppliers.find(x => x.id === id) : {};
+  openModal(id ? '編輯廠商' : '新增廠商', `
+    <div class="form-group"><label>名稱 *</label><input id="fSupName" value="${escHtml(s.name || '')}"></div>
+    <div class="form-row">
+      <div class="form-group"><label>聯絡人</label><input id="fSupContact" value="${escHtml(s.contact || '')}"></div>
+      <div class="form-group"><label>電話</label><input id="fSupPhone" value="${escHtml(s.phone || '')}"></div>
+    </div>
+    <div class="form-group"><label>備註</label><textarea id="fSupNotes">${escHtml(s.notes || '')}</textarea></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveSupplier(${id || 'null'})">儲存</button>`);
+}
+
+async function saveSupplier(id) {
+  const obj = { name: document.getElementById('fSupName').value.trim(), contact: document.getElementById('fSupContact').value.trim(), phone: document.getElementById('fSupPhone').value.trim(), notes: document.getElementById('fSupNotes').value.trim() };
+  if (!obj.name) { toast('請輸入名稱', 'error'); return; }
+  let err;
+  if (id) { ({ error: err } = await sb.from('suppliers').update(obj).eq('id', id)); }
+  else { ({ error: err } = await sb.from('suppliers').insert(obj)); }
+  if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
+  toast('已儲存'); closeModal(); await loadSuppliers(); renderAdminContent();
+}
+
+async function deleteSupplier(id) {
+  if (!await showConfirm('刪除廠商', '確定刪除此廠商？')) return;
+  const { error } = await sb.from('suppliers').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除'); await loadSuppliers(); renderAdminContent();
+}
+
+// --- Materials CRUD ---
+async function renderAdminMaterials(el) {
+  await loadMaterials();
+  el.innerHTML = `
+    <div class="toolbar">
+      <input class="search-box" placeholder="搜尋品項..." oninput="filterAdminMats(this.value)">
+      <button class="btn btn-primary" onclick="editMaterial()">＋ 新增品項</button>
+    </div>
+    <div class="filter-chips" id="adminMatChips">
+      <span class="chip active" onclick="adminMatFilter(0,this)">全部</span>
+      ${allCategories.map(c => `<span class="chip" onclick="adminMatFilter(${c.id},this)">${escHtml(c.name)}</span>`).join('')}
+    </div>
+    <div class="card"><div class="table-wrap"><table id="adminMatTable">
+      <thead><tr><th>圖片</th><th>名稱</th><th>類別</th><th>規格</th><th>單位</th><th>廠商</th>${canSeePrice() ? '<th>單價</th>' : ''}<th>操作</th></tr></thead>
+      <tbody>${allMaterials.map(m => `<tr data-name="${m.name.toLowerCase()}" data-cat="${m.category_id || 0}">
+        <td>${m.image_url ? `<img class="img-thumb" src="${m.image_url}" onclick="window.open('${m.image_url}')">` : '-'}</td>
+        <td><strong>${escHtml(m.name)}</strong></td><td>${categoryName(m.category_id)}</td>
+        <td>${escHtml(m.spec || '-')}</td><td>${escHtml(m.unit)}</td><td>${supplierName(m.supplier_id)}</td>
+        ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="editMaterial(${m.id})">編輯</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMaterial(${m.id})">刪除</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+  window._adminMatCatFilter = 0;
+}
+
+window.filterAdminMats = function(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#adminMatTable tbody tr').forEach(tr => {
+    const name = tr.dataset.name || '';
+    const catMatch = !window._adminMatCatFilter || parseInt(tr.dataset.cat) === window._adminMatCatFilter;
+    tr.style.display = name.includes(q) && catMatch ? '' : 'none';
+  });
+};
+
+window.adminMatFilter = function(catId, chipEl) {
+  window._adminMatCatFilter = catId;
+  document.querySelectorAll('#adminMatChips .chip').forEach(c => c.classList.remove('active'));
+  if (chipEl) chipEl.classList.add('active');
+  filterAdminMats(document.querySelector('#adminContent .search-box')?.value || '');
+};
+
+function editMaterial(id) {
+  const m = id ? allMaterials.find(x => x.id === id) : {};
+  openModal(id ? '編輯品項' : '新增品項', `
+    <div class="form-group"><label>名稱 *</label><input id="fMatName" value="${escHtml(m.name || '')}"></div>
+    <div class="form-row">
+      <div class="form-group"><label>類別</label><select id="fMatCat">${optionsHTML(allCategories, 'id', 'name', m.category_id)}</select></div>
+      <div class="form-group"><label>廠商</label><select id="fMatSup">${optionsHTML(allSuppliers, 'id', 'name', m.supplier_id)}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>規格</label><input id="fMatSpec" value="${escHtml(m.spec || '')}"></div>
+      <div class="form-group"><label>單位</label><input id="fMatUnit" value="${escHtml(m.unit || '個')}"></div>
+    </div>
+    <div class="form-group"><label>單價</label><input id="fMatPrice" type="number" step="0.01" value="${m.unit_price || 0}"></div>
+    <div class="form-group"><label>圖片</label>
+      <input id="fMatImage" type="file" accept="image/*" onchange="previewMatImage(this)">
+      ${m.image_url ? `<img class="img-upload-preview" id="matImgPreview" src="${m.image_url}">` : '<img class="img-upload-preview" id="matImgPreview" style="display:none">'}
+      <input type="hidden" id="fMatImageUrl" value="${m.image_url || ''}">
+    </div>
+    <div class="form-group"><label>備註</label><textarea id="fMatNotes">${escHtml(m.notes || '')}</textarea></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" id="btnSaveMat" onclick="saveMaterial(${id || 'null'})">儲存</button>`);
+}
+
+function previewMatImage(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const prev = document.getElementById('matImgPreview');
+      prev.src = e.target.result; prev.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+async function saveMaterial(id) {
+  const btn = document.getElementById('btnSaveMat');
+  btn.disabled = true; btn.textContent = '儲存中...';
+  try {
+    let imageUrl = document.getElementById('fMatImageUrl').value;
+    const fileInput = document.getElementById('fMatImage');
+    if (fileInput.files && fileInput.files[0]) {
+      const file = fileInput.files[0];
+      const ext = file.name.split('.').pop();
+      const path = `materials/${Date.now()}.${ext}`;
+      const { error: upErr } = await sb.storage.from('material-images').upload(path, file);
+      if (upErr) { toast('圖片上傳失敗: ' + upErr.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
+      const { data: urlData } = sb.storage.from('material-images').getPublicUrl(path);
+      imageUrl = urlData.publicUrl;
+    }
+    const obj = {
+      name: document.getElementById('fMatName').value.trim(),
+      category_id: document.getElementById('fMatCat').value || null,
+      supplier_id: document.getElementById('fMatSup').value || null,
+      spec: document.getElementById('fMatSpec').value.trim(),
+      unit: document.getElementById('fMatUnit').value.trim() || '個',
+      unit_price: parseFloat(document.getElementById('fMatPrice').value) || 0,
+      image_url: imageUrl,
+      notes: document.getElementById('fMatNotes').value.trim()
+    };
+    if (!obj.name) { toast('請輸入名稱', 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
+    let err;
+    if (id) { ({ error: err } = await sb.from('materials').update(obj).eq('id', id)); }
+    else { ({ error: err } = await sb.from('materials').insert(obj)); }
+    if (err) { toast('儲存失敗: ' + err.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
+    toast('已儲存'); closeModal(); await loadMaterials(); renderAdminContent();
+  } catch (e) { toast('錯誤: ' + e.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; }
+}
+
+async function deleteMaterial(id) {
+  if (!await showConfirm('刪除品項', '確定刪除此品項？')) return;
+  const { error } = await sb.from('materials').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除'); await loadMaterials(); renderAdminContent();
+}
+
+// --- Categories CRUD ---
+async function renderAdminCategories(el) {
+  await loadCategories();
+  el.innerHTML = `
+    <div class="toolbar"><button class="btn btn-primary" onclick="editCategory()">＋ 新增類別</button></div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>排序</th><th>名稱</th><th>操作</th></tr></thead>
+      <tbody>${allCategories.map(c => `<tr>
+        <td>${c.sort_order}</td><td>${escHtml(c.name)}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="editCategory(${c.id})">編輯</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCategory(${c.id})">刪除</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function editCategory(id) {
+  const c = id ? allCategories.find(x => x.id === id) : {};
+  openModal(id ? '編輯類別' : '新增類別', `
+    <div class="form-group"><label>名稱 *</label><input id="fCatName" value="${escHtml(c.name || '')}"></div>
+    <div class="form-group"><label>排序</label><input id="fCatSort" type="number" value="${c.sort_order || 0}"></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
+     <button class="btn btn-primary" onclick="saveCategory(${id || 'null'})">儲存</button>`);
+}
+
+async function saveCategory(id) {
+  const obj = { name: document.getElementById('fCatName').value.trim(), sort_order: parseInt(document.getElementById('fCatSort').value) || 0 };
+  if (!obj.name) { toast('請輸入名稱', 'error'); return; }
+  let err;
+  if (id) { ({ error: err } = await sb.from('categories').update(obj).eq('id', id)); }
+  else { ({ error: err } = await sb.from('categories').insert(obj)); }
+  if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
+  toast('已儲存'); closeModal(); await loadCategories(); renderAdminContent();
+}
+
+async function deleteCategory(id) {
+  if (!await showConfirm('刪除類別', '確定刪除此類別？')) return;
+  const { error } = await sb.from('categories').delete().eq('id', id);
+  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+  toast('已刪除'); await loadCategories(); renderAdminContent();
+}
+
+// ============================================================
+// 7. 人員管理 (owner only)
+// ============================================================
+async function renderUserMgmt() {
+  await loadUsers();
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+    <div class="page-title">👥 人員管理</div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>姓名</th><th>角色</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
+      <tbody>${allUsers.map(u => `<tr>
+        <td>${escHtml(u.display_name)}</td>
+        <td>${roleLabel(u.role)}</td>
+        <td>${u.clinic_id ? escHtml(clinicName(u.clinic_id)) : '<span class="text-muted">未指派</span>'}</td>
+        <td>${u.is_active ? '<span class="text-success">啟用</span>' : '<span class="text-danger">停用</span>'}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">編輯</button>
+          <button class="btn ${u.is_active ? 'btn-warning' : 'btn-success'} btn-sm" onclick="toggleUserActive('${u.id}',${!u.is_active})">${u.is_active ? '停用' : '啟用'}</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function editUser(id) {
+  const u = allUsers.find(x => x.id === id);
+  if (!u) return;
+  openModal('編輯人員', `
+    <div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>
+    <div class="form-row">
+      <div class="form

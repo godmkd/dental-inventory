@@ -646,6 +646,7 @@ async function enterApp() {
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles()]);
   buildNav();
   applySidebarBg();
+  applyCustomFont();
   const firstNav = getNavItems()[0];
   if (firstNav) navigateTo(firstNav.id);
   // Check email prompt
@@ -867,7 +868,7 @@ function openBgSettingModal() {
     return url ? `<img src="${url}" class="bg-preview-thumb">` : '<span style="color:var(--text-lighter);font-size:.82rem">尚未設定</span>';
   }
 
-  openModal('🎨 客製化', `
+  openModal('🎨 客製化管理', `
     <div class="bg-section">
       <h4>📄 目前頁面（${pageName}）</h4>
       <div class="bg-preview-row">
@@ -915,7 +916,63 @@ function openBgSettingModal() {
         <span id="bgOpVal_global">${globalOpacity}%</span>
       </div>
     </div>
+
+    <div class="bg-section">
+      <h4>🔤 字體設定</h4>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div>
+          <label style="font-size:.85rem;display:block;margin-bottom:4px">字體</label>
+          <select id="customFont" onchange="applyCustomFont()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text)">
+            <option value="">預設（系統字體）</option>
+            <option value="Noto Sans TC">Noto Sans TC</option>
+            <option value="LXGW WenKai TC">霞鶩文楷</option>
+            <option value="Kosugi Maru">小杉丸ゴシック</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:.85rem;display:block;margin-bottom:4px">大小</label>
+          <select id="customFontSize" onchange="applyCustomFont()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text)">
+            <option value="13">極小</option>
+            <option value="14">小</option>
+            <option value="15">中</option>
+            <option value="16" selected>標準</option>
+            <option value="18">大</option>
+            <option value="20">特大</option>
+          </select>
+        </div>
+      </div>
+    </div>
   `, '<button class="btn btn-ghost" onclick="closeModal()">關閉</button>');
+
+  // set select values from localStorage
+  const savedFont = localStorage.getItem('custom_font') || '';
+  const savedSize = localStorage.getItem('custom_font_size') || '16';
+  const fontEl = document.getElementById('customFont');
+  const sizeEl = document.getElementById('customFontSize');
+  if (fontEl) fontEl.value = savedFont;
+  if (sizeEl) sizeEl.value = savedSize;
+}
+
+function applyCustomFont() {
+  const font = document.getElementById("customFont")?.value || localStorage.getItem("custom_font") || "";
+  const size = document.getElementById("customFontSize")?.value || localStorage.getItem("custom_font_size") || "16";
+  if (font) {
+    if (!document.querySelector("link[data-custom-font]")) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.dataset.customFont = "1";
+      document.head.appendChild(link);
+    }
+    const fontLink = document.querySelector("link[data-custom-font]");
+    fontLink.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(font) + ":wght@300;400;500;700&display=swap";
+    document.body.style.fontFamily = font + ", sans-serif";
+    localStorage.setItem("custom_font", font);
+  } else {
+    document.body.style.fontFamily = "";
+    localStorage.removeItem("custom_font");
+  }
+  document.body.style.fontSize = size + "px";
+  localStorage.setItem("custom_font_size", size);
 }
 
 function bgOpacityChange(el, type, key) {

@@ -758,13 +758,10 @@ function userName(id) { return allUsers.find(u => u.id === id)?.display_name || 
 function getNavItems() {
   const all = [
     { id: 'stock-overview', icon: '📊', label: '庫存總覽' },
-    { id: 'daily-change', icon: '🔄', label: '日常變動', perm: 'daily_changes' },
-    { id: 'ordering', icon: '📦', label: '叫貨', perm: 'create_orders' },
+    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
     { id: 'order-mgmt', icon: '📋', label: '叫貨管理', perm: 'manage_orders' },
-    { id: 'receiving', icon: '✅', label: '收貨', perm: 'receive_orders' },
     { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
     { id: 'user-mgmt', icon: '👥', label: '人員管理', perms: ['manage_users', 'manage_roles'] },
-    { id: 'tutorials', icon: '📖', label: '教學' },
     { id: 'account-settings', icon: '⚙️', label: '帳戶設定' }
   ];
   return all.filter(it => {
@@ -825,13 +822,10 @@ async function navigateTo(pageId) {
   mc.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent)"></div></div>';
   const renderers = {
     'stock-overview': renderStockOverview,
-    'daily-change': renderDailyChange,
-    'ordering': renderOrdering,
+    'material-mgmt': renderMaterialMgmt,
     'order-mgmt': renderOrderMgmt,
-    'receiving': renderReceiving,
     'admin-mgmt': renderAdminMgmt,
     'user-mgmt': renderUserMgmt,
-    'tutorials': renderTutorials,
     'account-settings': renderAccountSettings
   };
   const fn = renderers[pageId];
@@ -1333,8 +1327,34 @@ async function renderStockOverview() {
 let dailyClinicId = null;
 let dailyInvMap = {};
 
-async function renderDailyChange() {
+// ===================== MATERIAL MGMT (牙材管理) =====================
+async function renderMaterialMgmt() {
   const mc = document.getElementById('mainContent');
+  if (!window.matMgmtTab) window.matMgmtTab = 'daily';
+  const tabs = [
+    { id: 'daily', icon: '🔄', label: '日常變動', perm: 'daily_changes' },
+    { id: 'ordering', icon: '📦', label: '叫貨', perm: 'create_orders' },
+    { id: 'receiving', icon: '✅', label: '收貨', perm: 'receive_orders' },
+    { id: 'tutorials', icon: '📖', label: '教學' }
+  ];
+  const visibleTabs = tabs.filter(t => !t.perm || hasPermission(t.perm));
+  if (!visibleTabs.find(t => t.id === window.matMgmtTab)) {
+    window.matMgmtTab = visibleTabs[0] ? visibleTabs[0].id : 'daily';
+  }
+  mc.innerHTML = `
+    <div class="page-title">🦷 牙材管理</div>
+    <div class="sub-tabs">
+      ${visibleTabs.map(t => `<div class="sub-tab${window.matMgmtTab === t.id ? ' active' : ''}" onclick="window.matMgmtTab='${t.id}';renderMaterialMgmt()">${t.icon} ${t.label}</div>`).join('')}
+    </div>
+    <div id="matMgmtContent"></div>`;
+  const container = document.getElementById('matMgmtContent');
+  const renderMap = { daily: renderDailyChange, ordering: renderOrdering, receiving: renderReceiving, tutorials: renderTutorials };
+  const fn = renderMap[window.matMgmtTab];
+  if (fn) await fn(container);
+}
+
+async function renderDailyChange(container) {
+  const mc = container || (currentPage === 'material-mgmt' ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
 
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
@@ -1650,8 +1670,8 @@ window.cancelDailyLog = async function(logId) {
 // ============================================================
 let orderClinicId = null;
 
-async function renderOrdering() {
-  const mc = document.getElementById('mainContent');
+async function renderOrdering(container) {
+  const mc = container || (currentPage === 'material-mgmt' ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
   orderConfirmItems = [];
 
@@ -2726,8 +2746,8 @@ async function checkAutoDeliverOrder(orderId) {
 // ============================================================
 let receiveClinicId = null;
 
-async function renderReceiving() {
-  const mc = document.getElementById('mainContent');
+async function renderReceiving(container) {
+  const mc = container || (currentPage === 'material-mgmt' ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
@@ -3867,8 +3887,8 @@ function getTutorials() {
 }
 function saveTutorials(arr) { localStorage.setItem('tutorials', JSON.stringify(arr)); }
 
-async function renderTutorials() {
-  const mc = document.getElementById('mainContent');
+async function renderTutorials(container) {
+  const mc = container || (currentPage === 'material-mgmt' ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   const tutorials = getTutorials();
   const canManage = hasPermission('manage_materials') || hasPermission('all');
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);

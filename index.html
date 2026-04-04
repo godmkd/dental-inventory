@@ -738,7 +738,7 @@ function toggleMoreMenu(e) {
 }
 function closeMoreMenu() { const m = document.getElementById('moreMenu'); if (m) m.classList.remove('show'); }
 
-function navigateTo(pageId) {
+async function navigateTo(pageId) {
   currentPage = pageId;
   hideFloatPanel();
   document.querySelectorAll('.sidebar .nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === pageId));
@@ -756,16 +756,23 @@ function navigateTo(pageId) {
     'account-settings': renderAccountSettings
   };
   const fn = renderers[pageId];
-  if (fn) fn();
-  else mc.innerHTML = '<div class="empty-state"><span>🚧</span>頁面建置中</div>';
+  if (fn) {
+    await fn();
+  } else {
+    mc.innerHTML = '<div class="empty-state"><span>🚧</span>頁面建置中</div>';
+  }
+  // After render completes, add bg button and apply bg
   applyBgImage(pageId);
   if (hasPermission('change_background')) {
-    const btn = document.createElement('button');
-    btn.className = 'bg-setting-btn';
-    btn.title = '更換背景圖';
-    btn.textContent = '🖼️';
-    btn.onclick = () => showBgSetting(pageId);
-    mc.prepend(btn);
+    const existBtn = mc.querySelector('.bg-setting-btn');
+    if (!existBtn) {
+      const btn = document.createElement('button');
+      btn.className = 'bg-setting-btn';
+      btn.title = '更換背景圖';
+      btn.textContent = '🖼️';
+      btn.onclick = () => showBgSetting(pageId);
+      mc.prepend(btn);
+    }
   }
 }
 

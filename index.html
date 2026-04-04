@@ -2438,18 +2438,21 @@ async function toggleOrderCard(orderId) {
         <strong>${mat ? escHtml(mat.name) : materialName(it.material_id)}</strong>
         <br>
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0">
-          <label style="font-size:.82rem;color:var(--text-light)">數量(${escHtml(orderUnit)}):</label>
+          <label style="font-size:.82rem;color:var(--text-light)">數量:</label>
           <input type="number" id="oiq_${it.id}" value="${orderQty}" min="0" step="0.01"
             style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:.88rem"
             onchange="onOrderItemQtyChange(${it.id},${orderId},this.value)">
+          <span style="font-size:.8rem;color:var(--text-light)">${escHtml(orderUnit)}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:4px 0">
           <label style="font-size:.82rem;color:var(--text-light)">換算:</label>
           <input type="number" id="oir_${it.id}" value="${ratio}" min="0.01" step="0.01"
             style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:.88rem"
             onchange="onOrderItemRatioChange(${it.id},${orderId},this.value)">
-          <span style="font-size:.8rem;color:var(--text-light)">1${escHtml(orderUnit)}=${ratio}${escHtml(dailyUnit)}</span>
+          <span style="font-size:.8rem;color:var(--text-light)">${escHtml(dailyUnit)}/${escHtml(orderUnit)}</span>
         </div>
-        <small>單價: ${it.is_custom_price ? '<span class="text-success">優惠</span> ' : ''}${fmtMoney(price)}
-        | 小計: <span id="ois_${it.id}">${fmtMoney(subtotal)}</span></small>
+        <div style="font-size:.85rem;margin:4px 0">單價: ${it.is_custom_price ? '<span class="text-success">優惠</span> ' : ''}${fmtMoney(price)}
+        | 小計: <span id="ois_${it.id}">${fmtMoney(subtotal)}</span></div>
         <br>${statusBadge(itemStatus)}
       </div>
       <div class="order-item-actions">
@@ -2558,7 +2561,7 @@ function updateOrderItemSubtotal(itemId, qtyInOrderUnit) {
   if (!row) return;
   const priceMatch = row.innerHTML.match(/單價:.*?\$([0-9,]+(?:\.\d+)?)/);
   const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 0;
-  subtotalEl.textContent = fmtMoney(qtyInOrderUnit * price);
+  subtotalEl.innerHTML = fmtMoney(qtyInOrderUnit * price);
 }
 
 // Confirm button: convert qty to daily units (qty * ratio) and set confirmed

@@ -884,6 +884,18 @@ async function removeBgImage(pageId) {
   toast('背景已移除');
 }
 
+function ensureBgBtn() {
+  const mc = document.getElementById('mainContent');
+  if (!mc || !hasPermission('change_background')) return;
+  if (mc.querySelector('.bg-setting-btn')) return;
+  const btn = document.createElement('button');
+  btn.className = 'bg-setting-btn';
+  btn.title = '更換背景圖';
+  btn.textContent = '🖼️';
+  btn.onclick = () => showBgSetting(currentPage);
+  mc.prepend(btn);
+}
+
 function applyBgImage(pageId) {
   const mc = document.getElementById('mainContent');
   const url = localStorage.getItem('bg_' + pageId);
@@ -1748,7 +1760,7 @@ window.cancelOrderItemMgmt = async function(orderId, itemId) {
       await recomputeOrderStatus(orderId);
       toast('品項已取消');
     }
-    renderOrderMgmt();
+    renderOrderMgmt().then(ensureBgBtn);
   } catch (e) { toast('取消失敗: ' + e.message, 'error'); }
 };
 
@@ -1773,7 +1785,7 @@ window.cancelWholeOrder = async function(orderId) {
     await sb.from('order_items').delete().eq('order_id', orderId);
     await sb.from('orders').delete().eq('id', orderId);
     toast('叫貨單已取消');
-    renderOrderMgmt();
+    renderOrderMgmt().then(ensureBgBtn);
   } catch (e) { toast('取消失敗: ' + e.message, 'error'); }
 };
 
@@ -2197,7 +2209,7 @@ window.confirmAllItems = async function(orderId) {
     }
     await recomputeOrderStatus(orderId);
     toast(`已確認 ${pendingItems.length} 個品項`);
-    renderOrderMgmt();
+    renderOrderMgmt().then(ensureBgBtn);
   } catch (e) { toast('全部確認失敗: ' + e.message, 'error'); }
 };
 
@@ -2214,7 +2226,7 @@ window.shipAllItems = async function(orderId) {
     await checkAutoShipOrder(orderId);
     await recomputeOrderStatus(orderId);
     toast(`已出貨 ${confirmedItems.length} 個品項`);
-    renderOrderMgmt();
+    renderOrderMgmt().then(ensureBgBtn);
   } catch (e) { toast('全部出貨失敗: ' + e.message, 'error'); }
 };
 
@@ -2376,7 +2388,7 @@ async function setItemStatus(itemId, orderId, newStatus) {
   await recomputeOrderStatus(orderId);
 
   // Refresh entire order management list so cards move to correct tab
-  renderOrderMgmt();
+  renderOrderMgmt().then(ensureBgBtn);
 }
 
 function statusLabelText(s) {
@@ -2638,7 +2650,7 @@ async function undoReceiveSingle(itemId, dcId, orderId, clinicId) {
     await recomputeOrderStatus(orderId);
 
     toast('已將品項回到待收貨');
-    renderReceiving();
+    renderReceiving().then(ensureBgBtn);
   } catch (e) {
     toast('操作失敗: ' + e.message, 'error');
   }
@@ -2714,7 +2726,7 @@ async function doReceiveSingle(itemId, dcId, orderId, clinicId) {
 
     toast(allDelivered ? '收貨完成，整單已確認' : '已收貨此品項');
     closeModal();
-    renderReceiving();
+    renderReceiving().then(ensureBgBtn);
   } catch (e) {
     toast('收貨失敗: ' + e.message, 'error');
   }
@@ -2793,7 +2805,7 @@ async function doReceive(dcId, orderId, clinicId) {
 
     toast('收貨完成，庫存已更新');
     closeModal();
-    renderReceiving();
+    renderReceiving().then(ensureBgBtn);
   } catch (e) {
     toast('收貨失敗: ' + e.message, 'error');
   }
@@ -2827,7 +2839,7 @@ async function undoReceive(dcId, orderId, clinicId) {
     await recomputeOrderStatus(orderId);
 
     toast('已反悔收貨，庫存已回扣');
-    renderReceiving();
+    renderReceiving().then(ensureBgBtn);
   } catch (e) {
     toast('失敗: ' + e.message, 'error');
   }
@@ -3432,9 +3444,9 @@ async function renderUserMgmt() {
 
   const el = document.getElementById('usersContent');
   if (window.usersSubTab === 'roles' && hasPermission('manage_roles')) {
-    await renderAdminRoles(el);
+    await renderAdminRoles(el); ensureBgBtn();
   } else {
-    await renderUsersList(el);
+    await renderUsersList(el); ensureBgBtn();
   }
 }
 

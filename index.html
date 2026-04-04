@@ -462,6 +462,21 @@ async function init() {
       await loadProfile();
     } else if (event === 'SIGNED_OUT') {
       currentUser = null; userProfile = null; showLogin();
+    } else if (event === 'TOKEN_REFRESHED' && session) {
+      currentUser = session.user;
+    }
+  });
+
+  // Auto refresh session when page becomes visible (after tab switch or phone wake)
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && currentUser) {
+      try {
+        const { data, error } = await sb.auth.refreshSession();
+        if (error || !data.session) {
+          toast('登入已過期，請重新登入', 'error');
+          showLogin();
+        }
+      } catch(e) { /* ignore */ }
     }
   });
 }

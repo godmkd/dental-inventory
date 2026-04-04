@@ -334,6 +334,12 @@ td .num,td.num,.stat-value,.mat-card-stock,.item-stock,[data-num]{font-family:va
 #mainContent.has-bg>*{position:relative;z-index:1}
 .bg-setting-btn{position:absolute;top:12px;right:12px;z-index:10;background:rgba(255,255,255,.85);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:1rem;line-height:1;transition:all .2s;backdrop-filter:blur(4px)}
 .bg-setting-btn:hover{background:var(--card);box-shadow:var(--shadow)}
+.cat-drag-item{cursor:grab;transition:opacity .2s;user-select:none}
+.cat-drag-item:active{cursor:grabbing}
+.cat-drag-item.dragging{opacity:.4}
+.cat-drag-over{border-top:2px solid var(--accent)}
+.sort-confirm-bar{position:sticky;bottom:0;background:#fef3c7;padding:12px;border-radius:8px;display:flex;gap:8px;justify-content:center;margin-top:12px}
+.drag-handle{cursor:grab;font-size:1.2em;color:#999;padding:0 8px;letter-spacing:2px}
 </style>
 </head>
 <body>
@@ -3096,37 +3102,120 @@ async function deleteMaterial(id) {
 }
 
 // --- Categories CRUD ---
+let catSortChanged = false;
+let catOrigOrder = [];
+let dragCatId = null;
+
 async function renderAdminCategories(el) {
   await loadCategories();
+  catOrigOrder = allCategories.map(c => c.id);
+  catSortChanged = false;
   el.innerHTML = `
     <div class="toolbar"><button class="btn btn-primary" onclick="editCategory()">＋ 新增類別</button></div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>排序</th><th>名稱</th><th>操作</th></tr></thead>
-      <tbody>${allCategories.map(c => `<tr>
-        <td>${c.sort_order}</td><td>${escHtml(c.name)}</td>
+      <thead><tr><th></th><th>名稱</th><th>操作</th></tr></thead>
+      <tbody id="catSortBody">${allCategories.map(c => `<tr class="cat-drag-item" draggable="true" data-cat-id="${c.id}"
+            ondragstart="catDragStart(event,${c.id})" ondragover="catDragOver(event)" ondragleave="catDragLeave(event)" ondrop="catDrop(event,${c.id})" ondragend="catDragEnd(event)">
+        <td><span class="drag-handle">⠿</span></td><td>${escHtml(c.name)}</td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editCategory(${c.id})">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteCategory(${c.id})">刪除</button>
         </td>
       </tr>`).join('')}</tbody>
-    </table></div></div>`;
+    </table></div></div>
+    <div id="catSortBar" style="display:none" class="sort-confirm-bar">
+      <button class="btn btn-primary" onclick="saveCatSort()">✓ 確認排序</button>
+      <button class="btn btn-ghost" onclick="cancelCatSort()">✕ 取消</button>
+    </div>`;
+}
+
+function catDragStart(e, id) {
+  dragCatId = id;
+  e.target.closest('tr').classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function catDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('tr.cat-drag-item');
+  if (tr) {
+    document.querySelectorAll('.cat-drag-over').forEach(el => el.classList.remove('cat-drag-over'));
+    tr.classList.add('cat-drag-over');
+  }
+}
+function catDragLeave(e) {
+  const tr = e.target.closest('tr.cat-drag-item');
+  if (tr) tr.classList.remove('cat-drag-over');
+}
+function catDragEnd(e) {
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  document.querySelectorAll('.cat-drag-over').forEach(el => el.classList.remove('cat-drag-over'));
+}
+function catDrop(e, targetId) {
+  e.preventDefault();
+  document.querySelectorAll('.cat-drag-over').forEach(el => el.classList.remove('cat-drag-over'));
+  if (dragCatId === targetId) return;
+  const fromIdx = allCategories.findIndex(c => c.id === dragCatId);
+  const toIdx = allCategories.findIndex(c => c.id === targetId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = allCategories.splice(fromIdx, 1);
+  allCategories.splice(toIdx, 0, moved);
+  // re-render tbody
+  const tbody = document.getElementById('catSortBody');
+  tbody.innerHTML = allCategories.map(c => `<tr class="cat-drag-item" draggable="true" data-cat-id="${c.id}"
+        ondragstart="catDragStart(event,${c.id})" ondragover="catDragOver(event)" ondragleave="catDragLeave(event)" ondrop="catDrop(event,${c.id})" ondragend="catDragEnd(event)">
+    <td><span class="drag-handle">⠿</span></td><td>${escHtml(c.name)}</td>
+    <td>
+      <button class="btn btn-ghost btn-sm" onclick="editCategory(${c.id})">編輯</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteCategory(${c.id})">刪除</button>
+    </td>
+  </tr>`).join('');
+  catSortChanged = true;
+  document.getElementById('catSortBar').style.display = 'flex';
+  dragCatId = null;
+}
+
+async function saveCatSort() {
+  for (let i = 0; i < allCategories.length; i++) {
+    const { error } = await sb.from('categories').update({ sort_order: i }).eq('id', allCategories[i].id);
+    if (error) { toast('排序儲存失敗: ' + error.message, 'error'); return; }
+    allCategories[i].sort_order = i;
+  }
+  catSortChanged = false;
+  document.getElementById('catSortBar').style.display = 'none';
+  toast('排序已儲存');
+}
+
+async function cancelCatSort() {
+  // restore original order
+  const ordered = [];
+  for (const id of catOrigOrder) {
+    const c = allCategories.find(x => x.id === id);
+    if (c) ordered.push(c);
+  }
+  allCategories = ordered;
+  catSortChanged = false;
+  renderAdminContent();
 }
 
 function editCategory(id) {
   const c = id ? allCategories.find(x => x.id === id) : {};
   openModal(id ? '編輯類別' : '新增類別', `
     <div class="form-group"><label>名稱 *</label><input id="fCatName" value="${escHtml(c.name || '')}"></div>
-    <div class="form-group"><label>排序</label><input id="fCatSort" type="number" value="${c.sort_order || 0}"></div>
   `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
      <button class="btn btn-primary" onclick="saveCategory(${id || 'null'})">儲存</button>`);
 }
 
 async function saveCategory(id) {
-  const obj = { name: document.getElementById('fCatName').value.trim(), sort_order: parseInt(document.getElementById('fCatSort').value) || 0 };
+  const obj = { name: document.getElementById('fCatName').value.trim() };
   if (!obj.name) { toast('請輸入名稱', 'error'); return; }
   let err;
   if (id) { ({ error: err } = await sb.from('categories').update(obj).eq('id', id)); }
-  else { ({ error: err } = await sb.from('categories').insert(obj)); }
+  else {
+    const maxSort = allCategories.length > 0 ? Math.max(...allCategories.map(c => c.sort_order || 0)) : -1;
+    obj.sort_order = maxSort + 1;
+    ({ error: err } = await sb.from('categories').insert(obj));
+  }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
   toast('已儲存'); closeModal(); await loadCategories(); renderAdminContent();
 }

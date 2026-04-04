@@ -3401,6 +3401,7 @@ async function saveRole(id) {
     ({ error: err } = await sb.from('roles').update(obj).eq('id', id));
   } else {
     obj.is_system = false;
+    obj.name = displayName.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '_').replace(/_+/g, '_') + '_' + Date.now();
     ({ error: err } = await sb.from('roles').insert(obj));
   }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }

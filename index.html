@@ -48,7 +48,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .btn-logout:hover{background:rgba(255,255,255,.3)}
 
 .app-body{display:flex;max-width:1400px;margin:0 auto;min-height:calc(100vh - 56px)}
-.sidebar{width:220px;background:rgba(15,12,41,.95);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0;color:#e2e8f0}
+.sidebar{width:180px;min-width:180px;max-width:180px;background:rgba(15,12,41,.95);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0;color:#e2e8f0;overflow-y:auto}
 .sidebar .nav-item{display:flex;align-items:center;gap:10px;padding:12px 20px;cursor:pointer;font-size:.92rem;color:var(--text);transition:all .25s ease;border-left:3px solid transparent}
 .sidebar .nav-item:hover{background:linear-gradient(90deg,rgba(99,179,237,.15),transparent);color:var(--accent)}
 .sidebar .nav-item.active{background:rgba(99,179,237,.15);color:var(--accent);border-left-color:var(--accent);font-weight:600}
@@ -70,7 +70,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .more-menu .mm-item{color:var(--text)}
 .more-menu .mm-item:hover{background:rgba(255,255,255,.08)}
 
-@media(max-width:768px){
+@media(max-width:900px){
   .sidebar{display:none}
   .bottom-nav{display:block}
   .content{padding:12px;padding-bottom:80px}

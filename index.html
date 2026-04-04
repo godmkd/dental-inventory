@@ -852,13 +852,12 @@ async function renderStockOverview() {
   });
 
   let html = `<div class="page-title">📊 庫存總覽</div>`;
-  let stockCatIdx = 0;
   for (const catId of Object.keys(matsByCat)) {
     const catName = catId == 0 ? '未分類' : categoryName(parseInt(catId));
     const mats = matsByCat[catId];
-    const scId = 'stockCat_' + stockCatIdx++;
+    const scId = 'stockCat_' + catId;
     html += `<div class="card" style="overflow:hidden">
-      <div class="card-title" style="cursor:pointer;user-select:none" onclick="const b=document.getElementById('${scId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼'">
+      <div class="card-title" style="cursor:pointer;user-select:none" onclick="const b=document.getElementById('${scId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._collapsedCategories.add('${catId}');else window._collapsedCategories.delete('${catId}')">
         ${escHtml(catName)} <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">▼</span>
       </div>
       <div id="${scId}"><div class="table-wrap"><table>
@@ -881,6 +880,16 @@ async function renderStockOverview() {
     html += '<div class="card"><div class="empty-state"><span>📦</span>尚無品項資料</div></div>';
   }
   mc.innerHTML = html;
+
+  // 恢復收合狀態
+  for (const cid of window._collapsedCategories) {
+    const b = document.getElementById('stockCat_' + cid);
+    if (b) {
+      b.style.display = 'none';
+      const arrow = b.parentElement.querySelector('.sc-arrow');
+      if (arrow) arrow.textContent = '▶';
+    }
+  }
 }
 
 // ============================================================
@@ -1610,6 +1619,14 @@ let orderMgmtFilter = 'all';
 let orderMgmtTab = 'list'; // 'list' | 'summary' | 'rush'
 window.orderSortAsc = false; // false = 新到舊, true = 舊到新
 
+// --- 記住展開狀態 ---
+if (!window._expandedOrders) window._expandedOrders = new Set();
+if (!window._collapsedCategories) window._collapsedCategories = new Set();
+if (!window._expandedReceive) window._expandedReceive = new Set();
+if (!window._expandedConfirmedReceive) window._expandedConfirmedReceive = new Set();
+if (!window._collapsedSuppliers) window._collapsedSuppliers = new Set();
+if (!window._expandedRushClinics) window._expandedRushClinics = new Set();
+
 async function renderOrderMgmt() {
   const mc = document.getElementById('mainContent');
 
@@ -1705,6 +1722,12 @@ async function renderOrderMgmtList(orders) {
       <div class="order-card-body" id="ocb_${o.id}"></div>
     </div>`;
   }).join('');
+
+  // 恢復展開狀態
+  for (const oid of window._expandedOrders) {
+    const card = document.getElementById('oc_' + oid);
+    if (card) toggleOrderCard(oid);
+  }
 }
 
 // ---- 叫貨總覽 ----
@@ -1912,9 +1935,11 @@ async function toggleOrderCard(orderId) {
   const body = document.getElementById('ocb_' + orderId);
   if (card.classList.contains('expanded')) {
     card.classList.remove('expanded');
+    window._expandedOrders.delete(orderId);
     return;
   }
   card.classList.add('expanded');
+  window._expandedOrders.add(orderId);
 
   if (body.innerHTML) return; // already loaded
 
@@ -2363,6 +2388,15 @@ async function renderReceiveContent(tab) {
       </div>
     </div>`;
   }).join('');
+
+  // 恢復展開的明細
+  const expandSet = tab === 'pending' ? window._expandedReceive : window._expandedConfirmedReceive;
+  for (const d of items) {
+    if (expandSet.has(d.id)) {
+      if (tab === 'pending') loadReceiveItems(d.id, d.order_id, d.clinic_id);
+      else loadConfirmedReceiveItems(d.id, d.order_id, d.clinic_id);
+    }
+  }
 }
 
 async function viewReceiveDetail(dcId, orderId, clinicId) {
@@ -2381,7 +2415,8 @@ async function viewReceiveDetail(dcId, orderId, clinicId) {
 
 async function loadConfirmedReceiveItems(dcId, orderId, clinicId) {
   const el = document.getElementById('rcDetail_' + dcId);
-  if (el.innerHTML) { el.innerHTML = ''; return; }
+  if (el.innerHTML) { el.innerHTML = ''; window._expandedConfirmedReceive.delete(dcId); return; }
+  window._expandedConfirmedReceive.add(dcId);
   const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
   if (!items || !items.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-light)">無明細</div>'; return; }
   el.innerHTML = `<div class="table-wrap" style="margin-bottom:12px"><table>
@@ -2447,7 +2482,8 @@ window.undoReceiveSingle = undoReceiveSingle;
 
 async function loadReceiveItems(dcId, orderId, clinicId) {
   const el = document.getElementById('rcDetail_' + dcId);
-  if (el.innerHTML) { el.innerHTML = ''; return; }
+  if (el.innerHTML) { el.innerHTML = ''; window._expandedReceive.delete(dcId); return; }
+  window._expandedReceive.add(dcId);
   const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
   if (!items || !items.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-light)">無明細</div>'; return; }
   el.innerHTML = `<div class="table-wrap" style="margin-bottom:12px"><table>

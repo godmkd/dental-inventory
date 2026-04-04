@@ -357,6 +357,27 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .cat-drag-over{border-top:2px solid var(--accent)}
 .sort-confirm-bar{position:sticky;bottom:0;background:#fef3c7;padding:12px;border-radius:8px;display:flex;gap:8px;justify-content:center;margin-top:12px}
 .drag-handle{cursor:grab;font-size:1.2em;color:#999;padding:0 8px;letter-spacing:2px}
+/* Tutorial page */
+.tutorial-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.tutorial-card-header{padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.tutorial-card-header:hover{background:var(--border-light)}
+.tutorial-card-header h4{margin:0;font-size:.95rem;font-weight:600}
+.tutorial-card-body{display:none;padding:16px 20px;border-top:1px solid var(--border-light)}
+.tutorial-card.expanded .tutorial-card-body{display:block}
+.tutorial-images{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.tutorial-images img{width:120px;height:90px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid var(--border);transition:transform .2s}
+.tutorial-images img:hover{transform:scale(1.05)}
+.tutorial-content{white-space:pre-wrap;line-height:1.6;font-size:.9rem;color:var(--text)}
+/* Image lightbox */
+.lightbox-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;align-items:center;justify-content:center;cursor:pointer}
+.lightbox-overlay.show{display:flex}
+.lightbox-overlay img{max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px}
+/* Usage hint */
+.usage-hint{margin-bottom:16px}
+.usage-hint-toggle{font-size:.82rem;color:var(--text-light);cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:4px}
+.usage-hint-toggle:hover{color:var(--accent)}
+.usage-hint-body{font-size:.8rem;color:var(--text-light);line-height:1.5;margin-top:6px;padding:8px 12px;background:var(--border-light);border-radius:var(--radius);display:none}
+.usage-hint.open .usage-hint-body{display:block}
 </style>
 </head>
 <body>
@@ -626,6 +647,11 @@ async function enterApp() {
   applySidebarBg();
   const firstNav = getNavItems()[0];
   if (firstNav) navigateTo(firstNav.id);
+  // Check email prompt
+  if ((!currentUser.email || currentUser.email === '') && !localStorage.getItem('email_prompted')) {
+    localStorage.setItem('email_prompted', '1');
+    toast('建議到帳戶設定綁定電子信箱，方便日後登入', 'info');
+  }
 }
 
 const ALL_PERMISSIONS = [
@@ -712,6 +738,7 @@ function getNavItems() {
     { id: 'receiving', icon: '✅', label: '收貨', perm: 'receive_orders' },
     { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
     { id: 'user-mgmt', icon: '👥', label: '人員管理', perms: ['manage_users', 'manage_roles'] },
+    { id: 'tutorials', icon: '📖', label: '教學' },
     { id: 'account-settings', icon: '⚙️', label: '帳戶設定' }
   ];
   return all.filter(it => {
@@ -775,6 +802,7 @@ async function navigateTo(pageId) {
     'receiving': renderReceiving,
     'admin-mgmt': renderAdminMgmt,
     'user-mgmt': renderUserMgmt,
+    'tutorials': renderTutorials,
     'account-settings': renderAccountSettings
   };
   const fn = renderers[pageId];
@@ -1034,6 +1062,35 @@ function statusBadge(s) {
 }
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+function usageHint(pageId) {
+  const hints = {
+    'stock-overview': '查看各診所各品項的庫存量，紅色表示低於安全庫存。點擊類別可收合/展開。',
+    'daily-change': '調整品項數量，正數為入庫，負數為消耗。調好後按確定送出。',
+    'ordering': '選擇需要的品項和數量，加入叫貨清單後送出。',
+    'order-mgmt': '管理所有叫貨單，可確認、出貨、取消。叫貨總覽查看彙總。',
+    'receiving': '確認已到貨的品項，可個別或全部收貨。',
+    'admin-mgmt': '管理診所、廠商、品項、類別資料。',
+    'user-mgmt': '管理系統使用者和角色權限。'
+  };
+  const text = hints[pageId];
+  if (!text) return '';
+  const lsKey = 'hint_open_' + pageId;
+  const isOpen = localStorage.getItem(lsKey) === '1';
+  return `<div class="usage-hint ${isOpen ? 'open' : ''}" id="usageHint_${pageId}">
+    <div class="usage-hint-toggle" onclick="toggleUsageHint('${pageId}')">💡 使用說明 <span style="font-size:.7rem">${isOpen ? '▼' : '▶'}</span></div>
+    <div class="usage-hint-body">${text}</div>
+  </div>`;
+}
+
+function toggleUsageHint(pageId) {
+  const el = document.getElementById('usageHint_' + pageId);
+  if (!el) return;
+  const isOpen = el.classList.toggle('open');
+  localStorage.setItem('hint_open_' + pageId, isOpen ? '1' : '0');
+  const arrow = el.querySelector('.usage-hint-toggle span');
+  if (arrow) arrow.textContent = isOpen ? '▼' : '▶';
+}
+
 // Float panel
 function showFloatPanel(mode, title) {
   floatPanelMode = mode;
@@ -1140,7 +1197,7 @@ async function renderStockOverview() {
     matsByCat[catId].push(m);
   });
 
-  let html = `<div class="page-title">📊 庫存總覽</div>`;
+  let html = `<div class="page-title">📊 庫存總覽</div>${usageHint('stock-overview')}`;
   for (const catId of Object.keys(matsByCat)) {
     const catName = catId == 0 ? '未分類' : categoryName(parseInt(catId));
     const mats = matsByCat[catId];
@@ -1201,6 +1258,7 @@ async function renderDailyChange() {
 
   mc.innerHTML = `
     <div class="page-title">🔄 日常變動</div>
+    ${usageHint('daily-change')}
     <div class="toolbar">
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="dailyClinicId=parseInt(this.value);renderDailyChange()">
         ${myClinics.map(c => `<option value="${c.id}"${c.id === dailyClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
@@ -1512,6 +1570,7 @@ async function renderOrdering() {
 
   mc.innerHTML = `
     <div class="page-title">📦 叫貨</div>
+    ${usageHint('ordering')}
     <div class="toolbar">
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="orderClinicId=parseInt(this.value);loadConfirmedOrders()">
         ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
@@ -1923,6 +1982,7 @@ async function renderOrderMgmt() {
 
   mc.innerHTML = `
     <div class="page-title">📋 叫貨管理</div>
+    ${usageHint('order-mgmt')}
     <div class="sub-tabs" style="margin-bottom:4px">
       <div class="sub-tab ${orderMgmtTab === 'list' ? 'active' : ''}" onclick="orderMgmtTab='list';renderOrderMgmt()">各單管理</div>
       <div class="sub-tab ${orderMgmtTab === 'summary' ? 'active' : ''}" onclick="orderMgmtTab='summary';renderOrderMgmt()">叫貨總覽</div>
@@ -2588,6 +2648,7 @@ async function renderReceiving() {
 
   mc.innerHTML = `
     <div class="page-title">✅ 收貨</div>
+    ${usageHint('receiving')}
     <div class="toolbar">
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="receiveClinicId=parseInt(this.value);renderReceiving()">
         ${myClinics.map(c => `<option value="${c.id}"${c.id === receiveClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
@@ -2968,6 +3029,7 @@ async function renderAdminMgmt() {
   const mc = document.getElementById('mainContent');
   mc.innerHTML = `
     <div class="page-title">⚙️ 行政管理</div>
+    ${usageHint('admin-mgmt')}
     <div class="sub-tabs" id="adminSubTabs">
       <div class="sub-tab ${adminSubTab === 'clinics' ? 'active' : ''}" data-tab="clinics" onclick="adminSubTab='clinics';renderAdminContent()">🏥 診所</div>
       <div class="sub-tab ${adminSubTab === 'suppliers' ? 'active' : ''}" data-tab="suppliers" onclick="adminSubTab='suppliers';renderAdminContent()">🏭 廠商</div>
@@ -3550,6 +3612,7 @@ async function renderUserMgmt() {
   const mc = document.getElementById('mainContent');
   mc.innerHTML = `
     <div class="page-title">👥 人員管理</div>
+    ${usageHint('user-mgmt')}
     <div class="sub-tabs" id="usersSubTabs">
       <div class="sub-tab ${window.usersSubTab === 'users' ? 'active' : ''}" onclick="window.usersSubTab='users';renderUserMgmt()">👤 人員</div>
       ${hasPermission('manage_roles') ? `<div class="sub-tab ${window.usersSubTab === 'roles' ? 'active' : ''}" onclick="window.usersSubTab='roles';renderUserMgmt()">🔐 角色</div>` : ''}
@@ -3705,8 +3768,168 @@ async function updateDisplayName() {
   toast('名稱已更新');
 }
 
+// ===================== TUTORIALS =====================
+function getTutorials() {
+  try { return JSON.parse(localStorage.getItem('tutorials') || '[]'); } catch(e) { return []; }
+}
+function saveTutorials(arr) { localStorage.setItem('tutorials', JSON.stringify(arr)); }
+
+async function renderTutorials() {
+  const mc = document.getElementById('mainContent');
+  const tutorials = getTutorials();
+  const canManage = hasPermission('manage_materials') || hasPermission('all');
+  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+
+  // Filter tutorials by clinic
+  const filterClinicId = window._tutorialFilterClinic || '';
+  let filtered = tutorials;
+  if (filterClinicId !== '') {
+    const cid = parseInt(filterClinicId);
+    filtered = tutorials.filter(t => !t.clinic_id || t.clinic_id === cid);
+  } else if (!canSeeAdmin()) {
+    // Non-admin: only see "全部" or own clinic
+    filtered = tutorials.filter(t => !t.clinic_id || t.clinic_id === userProfile.clinic_id);
+  }
+
+  let clinicOpts = '<option value="">全部診所</option>';
+  const clinicList = canSeeAdmin() ? allClinics : myClinics;
+  clinicList.forEach(c => {
+    clinicOpts += `<option value="${c.id}"${filterClinicId == c.id ? ' selected' : ''}>${escHtml(c.name)}</option>`;
+  });
+
+  let html = `<div class="page-title">📖 教學</div>
+    <div class="toolbar">
+      <select class="search-box" style="flex:none;width:auto" onchange="window._tutorialFilterClinic=this.value;renderTutorials()">
+        ${clinicOpts}
+      </select>
+      ${canManage ? '<button class="btn btn-primary btn-sm" onclick="openTutorialModal()">＋ 新增教學</button>' : ''}
+    </div>`;
+
+  if (filtered.length === 0) {
+    html += '<div class="empty-state"><span>📖</span>尚無教學文章</div>';
+  } else {
+    filtered.forEach(t => {
+      const clinicLabel = t.clinic_id ? clinicName(t.clinic_id) : '全部診所';
+      html += `<div class="tutorial-card" id="tut_${t.id}">
+        <div class="tutorial-card-header" onclick="document.getElementById('tut_${t.id}').classList.toggle('expanded')">
+          <h4>${escHtml(t.title)}</h4>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="badge badge-confirmed" style="font-size:.72rem">${escHtml(clinicLabel)}</span>
+            ${canManage ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openTutorialModal('${t.id}')">✏️</button><button class="btn btn-danger btn-xs" onclick="event.stopPropagation();deleteTutorial('${t.id}')">🗑</button>` : ''}
+          </div>
+        </div>
+        <div class="tutorial-card-body">
+          <div class="tutorial-content">${escHtml(t.content || '')}</div>
+          ${t.images && t.images.length > 0 ? `<div class="tutorial-images">${t.images.map(img => `<img src="${img}" onclick="openLightbox('${img}')">`).join('')}</div>` : ''}
+          <div style="margin-top:8px;font-size:.75rem;color:var(--text-lighter)">作者：${escHtml(t.author || '-')} ｜ ${fmtDate(t.created_at)}</div>
+        </div>
+      </div>`;
+    });
+  }
+  mc.innerHTML = html;
+}
+
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightboxOverlay').classList.add('show');
+}
+
+function openTutorialModal(editId) {
+  const tutorials = getTutorials();
+  const t = editId ? tutorials.find(x => x.id === editId) : null;
+  const isEdit = !!t;
+
+  let clinicOpts = '<option value="">全部診所</option>';
+  allClinics.forEach(c => {
+    clinicOpts += `<option value="${c.id}"${t && t.clinic_id == c.id ? ' selected' : ''}>${escHtml(c.name)}</option>`;
+  });
+
+  const body = `
+    <div class="form-group">
+      <label>標題</label>
+      <input id="tutTitle" value="${isEdit ? escHtml(t.title) : ''}">
+    </div>
+    <div class="form-group">
+      <label>內容</label>
+      <textarea id="tutContent" rows="6">${isEdit ? escHtml(t.content || '') : ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label>適用診所</label>
+      <select id="tutClinic">${clinicOpts}</select>
+    </div>
+    <div class="form-group">
+      <label>圖片（可多張）</label>
+      <input type="file" id="tutImages" accept="image/*" multiple>
+      ${isEdit && t.images && t.images.length > 0 ? `<div style="margin-top:6px;font-size:.8rem;color:var(--text-light)">已有 ${t.images.length} 張圖片（重新上傳會替換）</div>` : ''}
+    </div>`;
+
+  const footer = `
+    <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+    <button class="btn btn-primary" onclick="saveTutorial('${editId || ''}')">${isEdit ? '更新' : '新增'}</button>`;
+
+  openModal(isEdit ? '編輯教學' : '新增教學', body, footer);
+}
+
+async function saveTutorial(editId) {
+  const title = document.getElementById('tutTitle').value.trim();
+  const content = document.getElementById('tutContent').value;
+  const clinicVal = document.getElementById('tutClinic').value;
+  const clinic_id = clinicVal ? parseInt(clinicVal) : null;
+  const fileInput = document.getElementById('tutImages');
+
+  if (!title) { toast('請輸入標題', 'error'); return; }
+
+  let images = [];
+  // If editing and no new files, keep old images
+  const tutorials = getTutorials();
+  const existing = editId ? tutorials.find(x => x.id === editId) : null;
+
+  if (fileInput.files.length > 0) {
+    for (const file of fileInput.files) {
+      const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsDataURL(file); });
+      images.push(dataUrl);
+    }
+  } else if (existing) {
+    images = existing.images || [];
+  }
+
+  if (editId && existing) {
+    existing.title = title;
+    existing.content = content;
+    existing.clinic_id = clinic_id;
+    existing.images = images;
+  } else {
+    tutorials.push({
+      id: Date.now().toString(),
+      title,
+      content,
+      images,
+      clinic_id,
+      created_at: new Date().toISOString(),
+      author: userProfile.display_name || '-'
+    });
+  }
+  saveTutorials(tutorials);
+  closeModal();
+  toast(editId ? '教學已更新' : '教學已新增');
+  renderTutorials();
+}
+
+async function deleteTutorial(id) {
+  const ok = await showConfirm('刪除教學', '確定要刪除這篇教學文章嗎？');
+  if (!ok) return;
+  const tutorials = getTutorials().filter(t => t.id !== id);
+  saveTutorials(tutorials);
+  toast('教學已刪除');
+  renderTutorials();
+}
+
 // ===================== START =====================
 init();
 </script>
+<!-- Lightbox -->
+<div class="lightbox-overlay" id="lightboxOverlay" onclick="this.classList.remove('show')">
+  <img id="lightboxImg" src="">
+</div>
 </body>
 </html>

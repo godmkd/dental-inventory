@@ -562,12 +562,22 @@ async function init() {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser) {
       try {
-        const { data, error } = await withTimeout(sb.auth.refreshSession());
-        if (error || !data.session) {
-          toast('登入已過期，請重新登入', 'error');
-          showLogin();
+        const { data, error } = await sb.auth.refreshSession();
+        if (error || !data?.session) {
+          // Try getSession as fallback
+          const { data: d2 } = await sb.auth.getSession();
+          if (!d2?.session) {
+            toast('登入已過期，請重新登入', 'error');
+            showLogin();
+            return;
+          }
         }
-      } catch(e) { /* ignore */ }
+        // Session OK — re-render current page
+        if (currentPage) navigateTo(currentPage);
+      } catch(e) {
+        // Network error — don't logout, just retry on next visibility change
+        console.warn('Session refresh failed:', e);
+      }
     }
   });
 }
@@ -837,7 +847,7 @@ async function navigateTo(pageId) {
 }
 
 // ===================== UTILS =====================
-async function withTimeout(promise, ms = 10000) {
+async function withTimeout(promise, ms = 20000) {
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("請求逾時")), ms));
   return Promise.race([promise, timeout]);
 }

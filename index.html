@@ -1273,6 +1273,7 @@ function refreshCardBadges() {
 // ============================================================
 async function renderStockOverview() {
   const mc = document.getElementById('mainContent');
+  await Promise.all([loadClinics(), loadCategories(), loadMaterials()]);
   const { data: inv } = await sb.from('clinic_inventory').select('*');
   const clinicsToShow = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   const invMap = {};
@@ -1334,6 +1335,7 @@ let dailyInvMap = {};
 
 async function renderDailyChange() {
   const mc = document.getElementById('mainContent');
+  await Promise.all([loadClinics(), loadMaterials()]);
 
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   dailyClinicId = dailyClinicId || (myClinics[0] ? myClinics[0].id : null);
@@ -1650,6 +1652,7 @@ let orderClinicId = null;
 
 async function renderOrdering() {
   const mc = document.getElementById('mainContent');
+  await Promise.all([loadClinics(), loadMaterials()]);
   orderConfirmItems = [];
 
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
@@ -2065,6 +2068,7 @@ if (!window._expandedRushClinics) window._expandedRushClinics = new Set();
 
 async function renderOrderMgmt() {
   const mc = document.getElementById('mainContent');
+  await loadMaterials();
 
   mc.innerHTML = `
     <div class="page-title">📋 叫貨管理</div>
@@ -2724,6 +2728,7 @@ let receiveClinicId = null;
 
 async function renderReceiving() {
   const mc = document.getElementById('mainContent');
+  await Promise.all([loadClinics(), loadMaterials()]);
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
   const clinicIds = receiveClinicId ? [receiveClinicId] : myClinics.map(c => c.id);
@@ -3113,6 +3118,7 @@ let adminSubTab = 'clinics';
 
 async function renderAdminMgmt() {
   const mc = document.getElementById('mainContent');
+  await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials()]);
   mc.innerHTML = `
     <div class="page-title">⚙️ 行政管理</div>
     ${usageHint('admin-mgmt')}
@@ -3696,6 +3702,7 @@ window.usersSubTab = 'users';
 
 async function renderUserMgmt() {
   const mc = document.getElementById('mainContent');
+  await Promise.all([loadUsers(), loadRoles(), loadClinics()]);
   mc.innerHTML = `
     <div class="page-title">👥 人員管理</div>
     ${usageHint('user-mgmt')}

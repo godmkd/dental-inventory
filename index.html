@@ -1302,8 +1302,8 @@ async function renderStockOverview() {
       <div class="card-title" style="cursor:pointer;user-select:none" onclick="const b=document.getElementById('${scId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._collapsedCategories.add('${catId}');else window._collapsedCategories.delete('${catId}')">
         ${escHtml(catName)} <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">▼</span>
       </div>
-      <div id="${scId}"><div class="table-wrap"><table>
-      <thead><tr><th>品項</th>${clinicsToShow.map(c => `<th style="white-space:nowrap">${escHtml(c.name)}</th>`).join('')}<th>總計</th></tr></thead><tbody>`;
+      <div id="${scId}"><div class="table-wrap"><table style="min-width:max-content">
+      <thead><tr><th style="white-space:nowrap">品項</th>${clinicsToShow.map(c => `<th style="white-space:nowrap;min-width:60px">${escHtml(c.name)}</th>`).join('')}<th style="white-space:nowrap">總計</th></tr></thead><tbody>`;
     mats.forEach(m => {
       let total = 0;
       const cells = clinicsToShow.map(c => {

@@ -327,6 +327,13 @@ td .num,td.num,.stat-value,.mat-card-stock,.item-stock,[data-num]{font-family:va
 .order-confirm-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-light);font-size:.9rem}
 .order-confirm-item:last-child{border-bottom:none}
 .order-confirm-actions{margin-top:12px;display:flex;gap:10px;justify-content:flex-end}
+
+/* Background image */
+#mainContent{position:relative}
+#mainContent.has-bg::before{content:'';position:absolute;inset:0;background-image:var(--bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:.15;z-index:0;pointer-events:none}
+#mainContent.has-bg>*{position:relative;z-index:1}
+.bg-setting-btn{position:absolute;top:12px;right:12px;z-index:10;background:rgba(255,255,255,.85);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:1rem;line-height:1;transition:all .2s;backdrop-filter:blur(4px)}
+.bg-setting-btn:hover{background:var(--card);box-shadow:var(--shadow)}
 </style>
 </head>
 <body>
@@ -610,7 +617,8 @@ const ALL_PERMISSIONS = [
   { key: 'receive_orders', label: '收貨' },
   { key: 'manage_clinics', label: '管理診所' },
   { key: 'manage_users', label: '管理人員' },
-  { key: 'manage_roles', label: '管理角色' }
+  { key: 'manage_roles', label: '管理角色' },
+  { key: 'change_background', label: '更換頁面背景' }
 ];
 
 function roleLabel(roleStr, roleId) {
@@ -744,6 +752,15 @@ function navigateTo(pageId) {
   const fn = renderers[pageId];
   if (fn) fn();
   else mc.innerHTML = '<div class="empty-state"><span>🚧</span>頁面建置中</div>';
+  applyBgImage(pageId);
+  if (hasPermission('change_background')) {
+    const btn = document.createElement('button');
+    btn.className = 'bg-setting-btn';
+    btn.title = '更換背景圖';
+    btn.textContent = '🖼️';
+    btn.onclick = () => showBgSetting(pageId);
+    mc.prepend(btn);
+  }
 }
 
 // ===================== UTILS =====================
@@ -775,6 +792,94 @@ function showConfirm(title, msg) {
 function closeConfirm(result) {
   document.getElementById('confirmOverlay').classList.remove('show');
   if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
+}
+
+// ===================== BACKGROUND IMAGE =====================
+function showBgSetting(pageId) {
+  const currentBg = localStorage.getItem('bg_' + pageId);
+  const previewHtml = currentBg ? `<div style="margin-bottom:12px"><img src="${currentBg}" style="max-width:100%;max-height:150px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border)"></div>` : '';
+  openModal('🖼️ 更換頁面背景', `
+    ${previewHtml}
+    <div class="form-group">
+      <label>選擇背景圖</label>
+      <input type="file" accept="image/*" id="bgFileInput" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius)">
+    </div>
+    <div id="bgUploadPreview" style="margin-top:8px"></div>
+  `, `
+    ${currentBg ? '<button class="btn btn-danger" onclick="removeBgImage(\'' + pageId + '\')">取消背景</button>' : ''}
+    <button class="btn btn-ghost" onclick="closeModal()">關閉</button>
+    <button class="btn btn-primary" id="bgSaveBtn" disabled onclick="saveBgFromModal(\'' + pageId + '\')">套用背景</button>
+  `);
+  const fileInput = document.getElementById('bgFileInput');
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    document.getElementById('bgSaveBtn').disabled = false;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('bgUploadPreview').innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:150px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border)">`;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveBgFromModal(pageId) {
+  const fileInput = document.getElementById('bgFileInput');
+  const file = fileInput && fileInput.files[0];
+  if (!file) return;
+  document.getElementById('bgSaveBtn').disabled = true;
+  document.getElementById('bgSaveBtn').textContent = '上傳中...';
+  await setBgImage(pageId, file);
+  closeModal();
+}
+
+async function setBgImage(pageId, file) {
+  try {
+    const canvas = document.createElement('canvas');
+    const img = new Image();
+    const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsDataURL(file); });
+    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = dataUrl; });
+    const MAX = 1920;
+    let w = img.width, h = img.height;
+    if (w > MAX || h > MAX) { const ratio = Math.min(MAX / w, MAX / h); w = Math.round(w * ratio); h = Math.round(h * ratio); }
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    const compressed = canvas.toDataURL('image/jpeg', 0.8);
+    const blob = await (await fetch(compressed)).blob();
+    const path = `backgrounds/${pageId}.jpg`;
+    const { error } = await sb.storage.from('materials').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+    if (error) throw error;
+    const { data: urlData } = sb.storage.from('materials').getPublicUrl(path);
+    const url = urlData.publicUrl + '?t=' + Date.now();
+    localStorage.setItem('bg_' + pageId, url);
+    applyBgImage(pageId);
+    toast('背景已更新');
+  } catch (e) {
+    console.error('setBgImage error:', e);
+    toast('背景上傳失敗：' + (e.message || e), 'error');
+  }
+}
+
+async function removeBgImage(pageId) {
+  localStorage.removeItem('bg_' + pageId);
+  try {
+    await sb.storage.from('materials').remove([`backgrounds/${pageId}.jpg`]);
+  } catch (e) { console.warn('remove bg file error:', e); }
+  applyBgImage(pageId);
+  closeModal();
+  toast('背景已移除');
+}
+
+function applyBgImage(pageId) {
+  const mc = document.getElementById('mainContent');
+  const url = localStorage.getItem('bg_' + pageId);
+  if (url) {
+    mc.style.setProperty('--bg-url', `url(${url})`);
+    mc.classList.add('has-bg');
+  } else {
+    mc.style.removeProperty('--bg-url');
+    mc.classList.remove('has-bg');
+  }
 }
 
 function optionsHTML(arr, valKey, labelKey, selected) {

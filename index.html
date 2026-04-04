@@ -328,12 +328,28 @@ td .num,td.num,.stat-value,.mat-card-stock,.item-stock,[data-num]{font-family:va
 .order-confirm-item:last-child{border-bottom:none}
 .order-confirm-actions{margin-top:12px;display:flex;gap:10px;justify-content:flex-end}
 
-/* Background image */
+/* Background image - page */
 #mainContent{position:relative}
-#mainContent.has-bg::before{content:'';position:absolute;inset:0;background-image:var(--bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:.15;z-index:0;pointer-events:none}
+#mainContent.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background-image:var(--bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:var(--bg-opacity,.15);z-index:0;pointer-events:none}
 #mainContent.has-bg>*{position:relative;z-index:1}
-.bg-setting-btn{position:absolute;top:12px;right:12px;z-index:10;background:rgba(255,255,255,.85);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:1rem;line-height:1;transition:all .2s;backdrop-filter:blur(4px)}
-.bg-setting-btn:hover{background:var(--card);box-shadow:var(--shadow)}
+/* Background image - sidebar */
+.sidebar{position:relative}
+.sidebar.has-bg::before{content:'';position:absolute;inset:0;background-image:var(--sidebar-bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:var(--sidebar-bg-opacity,.15);z-index:0;pointer-events:none}
+.sidebar.has-bg>*{position:relative;z-index:1}
+/* Background image - global body */
+body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background-image:var(--body-bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:var(--body-bg-opacity,.1);z-index:-1;pointer-events:none}
+/* Background settings nav item */
+.nav-item-bg{margin-top:auto;border-top:1px solid var(--border)}
+.sidebar{display:flex;flex-direction:column}
+/* Bg setting modal */
+.bg-section{margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border-light)}
+.bg-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.bg-section h4{margin-bottom:10px;font-size:.95rem}
+.bg-preview-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.bg-preview-thumb{width:80px;height:50px;object-fit:cover;border-radius:6px;border:1px solid var(--border)}
+.bg-opacity-row{display:flex;align-items:center;gap:10px;margin-top:6px}
+.bg-opacity-row input[type=range]{flex:1;accent-color:var(--accent)}
+.bg-opacity-row span{font-size:.82rem;color:var(--text-light);min-width:36px;text-align:right}
 .cat-drag-item{cursor:grab;transition:opacity .2s;user-select:none}
 .cat-drag-item:active{cursor:grabbing}
 .cat-drag-item.dragging{opacity:.4}
@@ -606,6 +622,8 @@ async function enterApp() {
   document.getElementById('headerUser').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles()]);
   buildNav();
+  applySidebarBg();
+  applyGlobalBg();
   const firstNav = getNavItems()[0];
   if (firstNav) navigateTo(firstNav.id);
 }
@@ -710,6 +728,9 @@ function buildNav() {
   items.forEach(it => {
     sidebarHTML += `<div class="nav-item" data-page="${it.id}" onclick="navigateTo('${it.id}')">${it.icon} ${it.label}</div>`;
   });
+  if (hasPermission('change_background')) {
+    sidebarHTML += `<div class="nav-item nav-item-bg" onclick="openBgSettingModal()">🎨 背景設定</div>`;
+  }
   document.getElementById('sidebar').innerHTML = sidebarHTML;
 
   const bottomInner = document.getElementById('bottomNavInner');
@@ -762,19 +783,8 @@ async function navigateTo(pageId) {
   } else {
     mc.innerHTML = '<div class="empty-state"><span>🚧</span>頁面建置中</div>';
   }
-  // After render completes, add bg button and apply bg
-  applyBgImage(pageId);
-  if (hasPermission('change_background')) {
-    const existBtn = mc.querySelector('.bg-setting-btn');
-    if (!existBtn) {
-      const btn = document.createElement('button');
-      btn.className = 'bg-setting-btn';
-      btn.title = '更換背景圖';
-      btn.textContent = '🖼️';
-      btn.onclick = () => showBgSetting(pageId);
-      mc.prepend(btn);
-    }
-  }
+  // After render completes, apply bg
+  applyPageBg(pageId);
 }
 
 // ===================== UTILS =====================
@@ -809,106 +819,207 @@ function closeConfirm(result) {
 }
 
 // ===================== BACKGROUND IMAGE =====================
-function showBgSetting(pageId) {
-  window._bgPageId = pageId;
-  const currentBg = localStorage.getItem('bg_' + pageId);
-  const previewHtml = currentBg ? `<div style="margin-bottom:12px"><img src="${currentBg}" style="max-width:100%;max-height:150px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border)"></div>` : '';
-  openModal('🖼️ 更換頁面背景', `
-    ${previewHtml}
-    <div class="form-group">
-      <label>選擇背景圖</label>
-      <input type="file" accept="image/*" id="bgFileInput" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius)">
+function getPageLabel(pageId) {
+  const item = getNavItems().find(i => i.id === pageId);
+  return item ? item.label : pageId;
+}
+
+function openBgSettingModal() {
+  const pageId = currentPage;
+  const pageName = getPageLabel(pageId);
+  const pageBg = localStorage.getItem('bg_' + pageId);
+  const sidebarBg = localStorage.getItem('bg_sidebar');
+  const globalBg = localStorage.getItem('bg_global');
+  const pageOpacity = parseInt(localStorage.getItem('bg_opacity_' + pageId) || '15', 10);
+  const sidebarOpacity = parseInt(localStorage.getItem('bg_opacity_sidebar') || '15', 10);
+  const globalOpacity = parseInt(localStorage.getItem('bg_opacity_global') || '10', 10);
+
+  function previewImg(url) {
+    return url ? `<img src="${url}" class="bg-preview-thumb">` : '<span style="color:var(--text-lighter);font-size:.82rem">尚未設定</span>';
+  }
+
+  openModal('🎨 背景設定', `
+    <div class="bg-section">
+      <h4>📄 目前頁面（${pageName}）</h4>
+      <div class="bg-preview-row">
+        ${previewImg(pageBg)}
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖
+          <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'page','${pageId}')">
+        </label>
+        ${pageBg ? `<button class="btn btn-danger btn-sm" onclick="removeBg('page','${pageId}')">刪除</button>` : ''}
+      </div>
+      <div class="bg-opacity-row">
+        <span style="font-size:.82rem">透明度</span>
+        <input type="range" min="0" max="100" value="${pageOpacity}" oninput="bgOpacityChange(this,'page','${pageId}')">
+        <span id="bgOpVal_page">${pageOpacity}%</span>
+      </div>
     </div>
-    <div id="bgUploadPreview" style="margin-top:8px"></div>
-  `, `
-    ${currentBg ? '<button class="btn btn-danger" onclick="removeBgImage(window._bgPageId)">取消背景</button>' : ''}
-    <button class="btn btn-ghost" onclick="closeModal()">關閉</button>
-    <button class="btn btn-primary" id="bgSaveBtn" disabled onclick="saveBgFromModal(window._bgPageId)">套用背景</button>
-  `);
-  const fileInput = document.getElementById('bgFileInput');
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files[0];
-    if (!file) return;
-    document.getElementById('bgSaveBtn').disabled = false;
-    const reader = new FileReader();
-    reader.onload = e => {
-      document.getElementById('bgUploadPreview').innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:150px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border)">`;
-    };
-    reader.readAsDataURL(file);
-  });
+
+    <div class="bg-section">
+      <h4>📋 側邊欄</h4>
+      <div class="bg-preview-row">
+        ${previewImg(sidebarBg)}
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖
+          <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'sidebar','sidebar')">
+        </label>
+        ${sidebarBg ? '<button class="btn btn-danger btn-sm" onclick="removeBg(\'sidebar\',\'sidebar\')">刪除</button>' : ''}
+      </div>
+      <div class="bg-opacity-row">
+        <span style="font-size:.82rem">透明度</span>
+        <input type="range" min="0" max="100" value="${sidebarOpacity}" oninput="bgOpacityChange(this,'sidebar','sidebar')">
+        <span id="bgOpVal_sidebar">${sidebarOpacity}%</span>
+      </div>
+    </div>
+
+    <div class="bg-section">
+      <h4>🌐 整個網頁</h4>
+      <div class="bg-preview-row">
+        ${previewImg(globalBg)}
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖
+          <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'global','global')">
+        </label>
+        ${globalBg ? '<button class="btn btn-danger btn-sm" onclick="removeBg(\'global\',\'global\')">刪除</button>' : ''}
+      </div>
+      <div class="bg-opacity-row">
+        <span style="font-size:.82rem">透明度</span>
+        <input type="range" min="0" max="100" value="${globalOpacity}" oninput="bgOpacityChange(this,'global','global')">
+        <span id="bgOpVal_global">${globalOpacity}%</span>
+      </div>
+    </div>
+  `, '<button class="btn btn-ghost" onclick="closeModal()">關閉</button>');
 }
 
-async function saveBgFromModal(pageId) {
-  const fileInput = document.getElementById('bgFileInput');
-  const file = fileInput && fileInput.files[0];
+function bgOpacityChange(el, type, key) {
+  const val = parseInt(el.value, 10);
+  document.getElementById('bgOpVal_' + type).textContent = val + '%';
+  if (type === 'page') {
+    localStorage.setItem('bg_opacity_' + key, val);
+    document.getElementById('mainContent').style.setProperty('--bg-opacity', val / 100);
+  } else if (type === 'sidebar') {
+    localStorage.setItem('bg_opacity_sidebar', val);
+    document.getElementById('sidebar').style.setProperty('--sidebar-bg-opacity', val / 100);
+  } else if (type === 'global') {
+    localStorage.setItem('bg_opacity_global', val);
+    document.body.style.setProperty('--body-bg-opacity', val / 100);
+  }
+}
+
+async function bgPickFile(input, type, key) {
+  const file = input.files[0];
   if (!file) return;
-  document.getElementById('bgSaveBtn').disabled = true;
-  document.getElementById('bgSaveBtn').textContent = '上傳中...';
-  await setBgImage(pageId, file);
-  closeModal();
-}
-
-async function setBgImage(pageId, file) {
   try {
-    const canvas = document.createElement('canvas');
-    const img = new Image();
-    const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsDataURL(file); });
-    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = dataUrl; });
-    const MAX = 1920;
-    let w = img.width, h = img.height;
-    if (w > MAX || h > MAX) { const ratio = Math.min(MAX / w, MAX / h); w = Math.round(w * ratio); h = Math.round(h * ratio); }
-    canvas.width = w; canvas.height = h;
-    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    const compressed = canvas.toDataURL('image/jpeg', 0.8);
-    const blob = await (await fetch(compressed)).blob();
-    const path = `backgrounds/${pageId}.jpg`;
-    // Delete old file first, then upload new
-    try { await sb.storage.from('materials').remove([path]); } catch(e) {}
-    const { error } = await sb.storage.from('materials').upload(path, blob, { contentType: 'image/jpeg' });
+    toast('上傳中...', 'info');
+    const compressed = await compressBgImage(file);
+    const storagePath = `backgrounds/${key}.jpg`;
+    try { await sb.storage.from('materials').remove([storagePath]); } catch(e) {}
+    const { error } = await sb.storage.from('materials').upload(storagePath, compressed, { contentType: 'image/jpeg' });
     if (error) throw error;
-    const { data: urlData } = sb.storage.from('materials').getPublicUrl(path);
+    const { data: urlData } = sb.storage.from('materials').getPublicUrl(storagePath);
     const url = urlData.publicUrl + '?t=' + Date.now();
-    localStorage.setItem('bg_' + pageId, url);
-    applyBgImage(pageId);
+    if (type === 'page') {
+      localStorage.setItem('bg_' + key, url);
+      applyPageBg(key);
+    } else if (type === 'sidebar') {
+      localStorage.setItem('bg_sidebar', url);
+      applySidebarBg();
+    } else if (type === 'global') {
+      localStorage.setItem('bg_global', url);
+      applyGlobalBg();
+    }
     toast('背景已更新');
+    openBgSettingModal(); // refresh modal
   } catch (e) {
-    console.error('setBgImage error:', e);
+    console.error('bgPickFile error:', e);
     toast('背景上傳失敗：' + (e.message || e), 'error');
   }
 }
 
-async function removeBgImage(pageId) {
-  localStorage.removeItem('bg_' + pageId);
+async function compressBgImage(file) {
+  const canvas = document.createElement('canvas');
+  const img = new Image();
+  const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsDataURL(file); });
+  await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = dataUrl; });
+  const MAX = 1920;
+  let w = img.width, h = img.height;
+  if (w > MAX || h > MAX) { const ratio = Math.min(MAX / w, MAX / h); w = Math.round(w * ratio); h = Math.round(h * ratio); }
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  const compressed = canvas.toDataURL('image/jpeg', 0.8);
+  return await (await fetch(compressed)).blob();
+}
+
+async function removeBg(type, key) {
   try {
-    await sb.storage.from('materials').remove([`backgrounds/${pageId}.jpg`]);
-  } catch (e) { console.warn('remove bg file error:', e); }
-  applyBgImage(pageId);
-  closeModal();
-  toast('背景已移除');
+    const storagePath = `backgrounds/${key}.jpg`;
+    try { await sb.storage.from('materials').remove([storagePath]); } catch(e) {}
+    if (type === 'page') {
+      localStorage.removeItem('bg_' + key);
+      localStorage.removeItem('bg_opacity_' + key);
+      applyPageBg(key);
+    } else if (type === 'sidebar') {
+      localStorage.removeItem('bg_sidebar');
+      localStorage.removeItem('bg_opacity_sidebar');
+      applySidebarBg();
+    } else if (type === 'global') {
+      localStorage.removeItem('bg_global');
+      localStorage.removeItem('bg_opacity_global');
+      applyGlobalBg();
+    }
+    toast('背景已移除');
+    openBgSettingModal(); // refresh modal
+  } catch (e) {
+    toast('刪除失敗：' + (e.message || e), 'error');
+  }
 }
 
-function ensureBgBtn() {
-  const mc = document.getElementById('mainContent');
-  if (!mc || !hasPermission('change_background')) return;
-  if (mc.querySelector('.bg-setting-btn')) return;
-  const btn = document.createElement('button');
-  btn.className = 'bg-setting-btn';
-  btn.title = '更換背景圖';
-  btn.textContent = '🖼️';
-  btn.onclick = () => showBgSetting(currentPage);
-  mc.prepend(btn);
-}
-
-function applyBgImage(pageId) {
+function applyPageBg(pageId) {
   const mc = document.getElementById('mainContent');
   const url = localStorage.getItem('bg_' + pageId);
+  const opacity = parseInt(localStorage.getItem('bg_opacity_' + pageId) || '15', 10);
   if (url) {
     mc.style.setProperty('--bg-url', `url(${url})`);
+    mc.style.setProperty('--bg-opacity', opacity / 100);
     mc.classList.add('has-bg');
   } else {
     mc.style.removeProperty('--bg-url');
+    mc.style.removeProperty('--bg-opacity');
     mc.classList.remove('has-bg');
   }
+}
+
+function applySidebarBg() {
+  const sidebar = document.getElementById('sidebar');
+  const url = localStorage.getItem('bg_sidebar');
+  const opacity = parseInt(localStorage.getItem('bg_opacity_sidebar') || '15', 10);
+  if (url) {
+    sidebar.style.setProperty('--sidebar-bg-url', `url(${url})`);
+    sidebar.style.setProperty('--sidebar-bg-opacity', opacity / 100);
+    sidebar.classList.add('has-bg');
+  } else {
+    sidebar.style.removeProperty('--sidebar-bg-url');
+    sidebar.style.removeProperty('--sidebar-bg-opacity');
+    sidebar.classList.remove('has-bg');
+  }
+}
+
+function applyGlobalBg() {
+  const url = localStorage.getItem('bg_global');
+  const opacity = parseInt(localStorage.getItem('bg_opacity_global') || '10', 10);
+  if (url) {
+    document.body.style.setProperty('--body-bg-url', `url(${url})`);
+    document.body.style.setProperty('--body-bg-opacity', opacity / 100);
+    document.body.classList.add('has-bg');
+  } else {
+    document.body.style.removeProperty('--body-bg-url');
+    document.body.style.removeProperty('--body-bg-opacity');
+    document.body.classList.remove('has-bg');
+  }
+}
+
+function applyAllBg() {
+  applyPageBg(currentPage);
+  applySidebarBg();
+  applyGlobalBg();
 }
 
 function optionsHTML(arr, valKey, labelKey, selected) {
@@ -1763,7 +1874,7 @@ window.cancelOrderItemMgmt = async function(orderId, itemId) {
       await recomputeOrderStatus(orderId);
       toast('品項已取消');
     }
-    renderOrderMgmt().then(ensureBgBtn);
+    renderOrderMgmt();
   } catch (e) { toast('取消失敗: ' + e.message, 'error'); }
 };
 
@@ -1788,7 +1899,7 @@ window.cancelWholeOrder = async function(orderId) {
     await sb.from('order_items').delete().eq('order_id', orderId);
     await sb.from('orders').delete().eq('id', orderId);
     toast('叫貨單已取消');
-    renderOrderMgmt().then(ensureBgBtn);
+    renderOrderMgmt();
   } catch (e) { toast('取消失敗: ' + e.message, 'error'); }
 };
 
@@ -2212,7 +2323,7 @@ window.confirmAllItems = async function(orderId) {
     }
     await recomputeOrderStatus(orderId);
     toast(`已確認 ${pendingItems.length} 個品項`);
-    renderOrderMgmt().then(ensureBgBtn);
+    renderOrderMgmt();
   } catch (e) { toast('全部確認失敗: ' + e.message, 'error'); }
 };
 
@@ -2229,7 +2340,7 @@ window.shipAllItems = async function(orderId) {
     await checkAutoShipOrder(orderId);
     await recomputeOrderStatus(orderId);
     toast(`已出貨 ${confirmedItems.length} 個品項`);
-    renderOrderMgmt().then(ensureBgBtn);
+    renderOrderMgmt();
   } catch (e) { toast('全部出貨失敗: ' + e.message, 'error'); }
 };
 
@@ -2391,7 +2502,7 @@ async function setItemStatus(itemId, orderId, newStatus) {
   await recomputeOrderStatus(orderId);
 
   // Refresh entire order management list so cards move to correct tab
-  renderOrderMgmt().then(ensureBgBtn);
+  renderOrderMgmt();
 }
 
 function statusLabelText(s) {
@@ -2653,7 +2764,7 @@ async function undoReceiveSingle(itemId, dcId, orderId, clinicId) {
     await recomputeOrderStatus(orderId);
 
     toast('已將品項回到待收貨');
-    renderReceiving().then(ensureBgBtn);
+    renderReceiving();
   } catch (e) {
     toast('操作失敗: ' + e.message, 'error');
   }
@@ -2729,7 +2840,7 @@ async function doReceiveSingle(itemId, dcId, orderId, clinicId) {
 
     toast(allDelivered ? '收貨完成，整單已確認' : '已收貨此品項');
     closeModal();
-    renderReceiving().then(ensureBgBtn);
+    renderReceiving();
   } catch (e) {
     toast('收貨失敗: ' + e.message, 'error');
   }
@@ -2808,7 +2919,7 @@ async function doReceive(dcId, orderId, clinicId) {
 
     toast('收貨完成，庫存已更新');
     closeModal();
-    renderReceiving().then(ensureBgBtn);
+    renderReceiving();
   } catch (e) {
     toast('收貨失敗: ' + e.message, 'error');
   }
@@ -2842,7 +2953,7 @@ async function undoReceive(dcId, orderId, clinicId) {
     await recomputeOrderStatus(orderId);
 
     toast('已反悔收貨，庫存已回扣');
-    renderReceiving().then(ensureBgBtn);
+    renderReceiving();
   } catch (e) {
     toast('失敗: ' + e.message, 'error');
   }
@@ -3447,10 +3558,8 @@ async function renderUserMgmt() {
 
   const el = document.getElementById('usersContent');
   if (window.usersSubTab === 'roles' && hasPermission('manage_roles')) {
-    await renderAdminRoles(el); ensureBgBtn();
-  } else {
-    await renderUsersList(el); ensureBgBtn();
-  }
+    await renderAdminRoles(el);  } else {
+    await renderUsersList(el);  }
 }
 
 async function renderUsersList(el) {

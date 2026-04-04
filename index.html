@@ -530,16 +530,16 @@ async function init() {
   const code = params.get('code');
   if (code) {
     try {
-      const { data, error } = await sb.auth.exchangeCodeForSession(code);
+      const { data, error } = await withTimeout(sb.auth.exchangeCodeForSession(code));
       if (error) console.error('Code exchange error:', error);
     } catch(e) { console.error('Exchange error:', e); }
     history.replaceState(null, '', window.location.pathname);
   }
   if (window.location.hash && window.location.hash.includes('access_token')) {
-    await sb.auth.getSession();
+    await withTimeout(sb.auth.getSession());
     history.replaceState(null, '', window.location.pathname);
   }
-  const { data: { session } } = await sb.auth.getSession();
+  const { data: { session } } = await withTimeout(sb.auth.getSession());
   if (session) {
     currentUser = session.user;
     await loadProfile();
@@ -562,7 +562,7 @@ async function init() {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser) {
       try {
-        const { data, error } = await sb.auth.refreshSession();
+        const { data, error } = await withTimeout(sb.auth.refreshSession());
         if (error || !data.session) {
           toast('登入已過期，請重新登入', 'error');
           showLogin();
@@ -594,7 +594,7 @@ async function doEmailLogin() {
   const password = document.getElementById('loginPassword').value;
   if (!email || !password) { toast('請輸入信箱和密碼', 'error'); return; }
   document.getElementById('loginLoading').style.display = 'block';
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  const { data, error } = await withTimeout(sb.auth.signInWithPassword({ email, password }));
   if (error) {
     toast('登入失敗: ' + error.message, 'error');
     document.getElementById('loginLoading').style.display = 'none';
@@ -610,32 +610,32 @@ async function doEmailLogin() {
 
 async function doLogin() {
   document.getElementById('loginLoading').style.display = 'block';
-  const { data, error } = await sb.auth.signInWithOAuth({
+  const { data, error } = await withTimeout(sb.auth.signInWithOAuth({
     provider: 'custom:line',
     options: { redirectTo: window.location.origin + window.location.pathname, queryParams: { prompt: 'consent' } }
-  });
+  }));
   if (error) { toast('登入失敗: ' + error.message, 'error'); document.getElementById('loginLoading').style.display = 'none'; }
 }
 
-async function doLogout() { await sb.auth.signOut(); showLogin(); }
+async function doLogout() { await withTimeout(sb.auth.signOut()); showLogin(); }
 
 async function setWaitEmail() {
   const email = document.getElementById('waitEmail').value.trim();
   if (!email) { toast('請輸入信箱', 'error'); return; }
-  const { error } = await sb.auth.updateUser({ email });
+  const { error } = await withTimeout(sb.auth.updateUser({ email }));
   if (error) { toast('設定失敗: ' + error.message, 'error'); return; }
   toast('驗證信已寄出，請到信箱點擊連結');
 }
 
 async function loadProfile() {
-  const { data, error } = await sb.from('user_profiles').select('*, roles(*)').eq('id', currentUser.id).single();
+  const { data, error } = await withTimeout(sb.from('user_profiles').select('*, roles(*)').eq('id', currentUser.id).single());
   if (error && error.code === 'PGRST116') {
     const meta = currentUser.user_metadata || {};
     const displayName = meta.full_name || meta.name || meta.preferred_username || currentUser.email || '新使用者';
     const lineId = meta.provider_id || meta.sub || '';
-    const { data: newP, error: e2 } = await sb.from('user_profiles').insert({
+    const { data: newP, error: e2 } = await withTimeout(sb.from('user_profiles').insert({
       id: currentUser.id, display_name: displayName, role: 'clinic_manager', line_user_id: lineId, is_active: true
-    }).select().single();
+    }).select().single());
     if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }
     userProfile = newP;
     document.getElementById('loginPage').style.display = 'none';
@@ -645,7 +645,7 @@ async function loadProfile() {
   }
   if (error) { toast('載入資料失敗: ' + error.message, 'error'); showLogin(); return; }
   userProfile = data;
-  if (!data.is_active) { toast('您的帳號已被停用', 'error'); await sb.auth.signOut(); showLogin(); return; }
+  if (!data.is_active) { toast('您的帳號已被停用', 'error'); await withTimeout(sb.auth.signOut()); showLogin(); return; }
   if (data.role === 'clinic_manager' && !data.clinic_id) {
     document.getElementById('loginPage').style.display = 'none';
     document.getElementById('waitingPage').style.display = 'flex';
@@ -734,12 +734,12 @@ function canSeeAdmin() { return hasPermission('view_all_inventory'); }
 function canSeePrice() { return hasPermission('view_prices'); }
 
 // ===================== DATA =====================
-async function loadClinics() { const { data } = await sb.from('clinics').select('*').order('id'); allClinics = data || []; }
-async function loadCategories() { const { data } = await sb.from('categories').select('*').order('sort_order'); allCategories = data || []; }
-async function loadSuppliers() { const { data } = await sb.from('suppliers').select('*').order('name'); allSuppliers = data || []; }
-async function loadMaterials() { const { data } = await sb.from('materials').select('*').order('name'); allMaterials = data || []; }
-async function loadUsers() { const { data } = await sb.from('user_profiles').select('*').order('created_at'); allUsers = data || []; }
-async function loadRoles() { const { data } = await sb.from('roles').select('*').order('id'); allRoles = data || []; }
+async function loadClinics() { const { data } = await withTimeout(sb.from('clinics').select('*').order('id')); allClinics = data || []; }
+async function loadCategories() { const { data } = await withTimeout(sb.from('categories').select('*').order('sort_order')); allCategories = data || []; }
+async function loadSuppliers() { const { data } = await withTimeout(sb.from('suppliers').select('*').order('name')); allSuppliers = data || []; }
+async function loadMaterials() { const { data } = await withTimeout(sb.from('materials').select('*').order('name')); allMaterials = data || []; }
+async function loadUsers() { const { data } = await withTimeout(sb.from('user_profiles').select('*').order('created_at')); allUsers = data || []; }
+async function loadRoles() { const { data } = await withTimeout(sb.from('roles').select('*').order('id')); allRoles = data || []; }
 
 function clinicName(id) { return allClinics.find(c => c.id === id)?.name || '-'; }
 function categoryName(id) { return allCategories.find(c => c.id === id)?.name || '-'; }
@@ -824,7 +824,11 @@ async function navigateTo(pageId) {
   };
   const fn = renderers[pageId];
   if (fn) {
-    await fn();
+    try {
+      await fn();
+    } catch(e) {
+      mc.innerHTML = '<div style="padding:20px;text-align:center;color:var(--danger)">載入失敗：' + e.message + '<br><button onclick="navigateTo(currentPage)" class="btn btn-primary" style="margin-top:12px">重試</button></div>';
+    }
   } else {
     mc.innerHTML = '<div class="empty-state"><span>🚧</span>頁面建置中</div>';
   }
@@ -833,6 +837,11 @@ async function navigateTo(pageId) {
 }
 
 // ===================== UTILS =====================
+async function withTimeout(promise, ms = 10000) {
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("請求逾時")), ms));
+  return Promise.race([promise, timeout]);
+}
+
 function toast(msg, type = 'success') {
   const c = document.getElementById('toastContainer');
   const t = document.createElement('div');
@@ -1015,8 +1024,8 @@ async function bgPickFile(input, type, key) {
     toast('上傳中...', 'info');
     const compressed = await compressBgImage(file);
     const storagePath = `backgrounds/${key}.jpg`;
-    try { await sb.storage.from('materials').remove([storagePath]); } catch(e) {}
-    const { error } = await sb.storage.from('materials').upload(storagePath, compressed, { contentType: 'image/jpeg' });
+    try { await withTimeout(sb.storage.from('materials').remove([storagePath])); } catch(e) {}
+    const { error } = await withTimeout(sb.storage.from('materials').upload(storagePath, compressed, { contentType: 'image/jpeg' }));
     if (error) throw error;
     const { data: urlData } = sb.storage.from('materials').getPublicUrl(storagePath);
     const url = urlData.publicUrl + '?t=' + Date.now();
@@ -1055,7 +1064,7 @@ async function compressBgImage(file) {
 async function removeBg(type, key) {
   try {
     const storagePath = `backgrounds/${key}.jpg`;
-    try { await sb.storage.from('materials').remove([storagePath]); } catch(e) {}
+    try { await withTimeout(sb.storage.from('materials').remove([storagePath])); } catch(e) {}
     if (type === 'page') {
       localStorage.removeItem('bg_' + key);
       localStorage.removeItem('bg_opacity_' + key);
@@ -1262,7 +1271,7 @@ function refreshCardBadges() {
 async function renderStockOverview() {
   const mc = document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadCategories(), loadMaterials()]);
-  const { data: inv } = await sb.from('clinic_inventory').select('*');
+  const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*'));
   const clinicsToShow = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   const invMap = {};
   (inv || []).forEach(i => { invMap[`${i.clinic_id}_${i.material_id}`] = i; });
@@ -1355,7 +1364,7 @@ async function renderDailyChange(container) {
   dailyClinicId = dailyClinicId || (myClinics[0] ? myClinics[0].id : null);
 
   if (dailyClinicId) {
-    const { data: inv } = await sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId);
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId));
     dailyInvMap = {};
     (inv || []).forEach(i => { dailyInvMap[i.material_id] = i; });
   }
@@ -1555,32 +1564,32 @@ async function submitDailyChanges() {
 
   try {
     for (const it of items) {
-      const { data: inv } = await sb.from('clinic_inventory')
-        .select('*').eq('clinic_id', dailyClinicId).eq('material_id', it.material_id).single();
+      const { data: inv } = await withTimeout(sb.from('clinic_inventory')
+        .select('*').eq('clinic_id', dailyClinicId).eq('material_id', it.material_id).single());
 
       if (it.changeType === 'out') {
         if (!inv) { toast(`${it.name} 無庫存紀錄`, 'error'); continue; }
         if (inv.current_stock < it.quantity) { toast(`${it.name} 庫存不足 (${inv.current_stock})`, 'error'); continue; }
-        await sb.from('clinic_inventory').update({ current_stock: inv.current_stock - it.quantity }).eq('id', inv.id);
+        await withTimeout(sb.from('clinic_inventory').update({ current_stock: inv.current_stock - it.quantity }).eq('id', inv.id));
       } else {
         if (inv) {
-          await sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id);
+          await withTimeout(sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id));
         } else {
-          await sb.from('clinic_inventory').insert({ clinic_id: dailyClinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 });
+          await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: dailyClinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 }));
         }
       }
-      await sb.from('inventory_logs').insert({
+      await withTimeout(sb.from('inventory_logs').insert({
         clinic_id: dailyClinicId, material_id: it.material_id,
         type: it.changeType === 'in' ? 'in' : 'out',
         quantity: it.quantity,
         operator_id: currentUser.id, operator_name: userProfile.display_name,
         notes: it.changeType === 'in' ? '日常入庫' : '日常消耗'
-      });
+      }));
     }
     toast('所有變動已送出');
     dailyQtyMap = {};
     // Reload inventory
-    const { data: invData } = await sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId);
+    const { data: invData } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId));
     dailyInvMap = {};
     (invData || []).forEach(i => { dailyInvMap[i.material_id] = i; });
     renderDailyContent();
@@ -1604,11 +1613,11 @@ async function loadDailyConfirmedLogs() {
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
   const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
-  const { data: logs } = await sb.from('inventory_logs').select('*')
+  const { data: logs } = await withTimeout(sb.from('inventory_logs').select('*')
     .eq('clinic_id', dailyClinicId)
     .gte('created_at', todayStart.toISOString())
     .lte('created_at', todayEnd.toISOString())
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false }));
 
   const items = logs || [];
   titleEl.textContent = `✅ 已確認變動 (${items.length})`;
@@ -1634,22 +1643,22 @@ async function loadDailyConfirmedLogs() {
 window.cancelDailyLog = async function(logId) {
   if (!await showConfirm('取消變動', '確定要取消這筆變動？庫存將反向調整。')) return;
   try {
-    const { data: log, error: e1 } = await sb.from('inventory_logs').select('*').eq('id', logId).single();
+    const { data: log, error: e1 } = await withTimeout(sb.from('inventory_logs').select('*').eq('id', logId).single());
     if (e1 || !log) { toast('找不到該筆紀錄', 'error'); return; }
 
-    const { data: inv } = await sb.from('clinic_inventory').select('*')
-      .eq('clinic_id', log.clinic_id).eq('material_id', log.material_id).single();
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*')
+      .eq('clinic_id', log.clinic_id).eq('material_id', log.material_id).single());
 
     if (inv) {
       const newStock = log.type === 'out' ? inv.current_stock + log.quantity : inv.current_stock - log.quantity;
-      await sb.from('clinic_inventory').update({ current_stock: Math.max(0, newStock) }).eq('id', inv.id);
+      await withTimeout(sb.from('clinic_inventory').update({ current_stock: Math.max(0, newStock) }).eq('id', inv.id));
     }
 
-    await sb.from('inventory_logs').delete().eq('id', logId);
+    await withTimeout(sb.from('inventory_logs').delete().eq('id', logId));
     toast('變動已取消，庫存已調整');
 
     // Reload inventory map and confirmed logs
-    const { data: invData } = await sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId);
+    const { data: invData } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId));
     dailyInvMap = {};
     (invData || []).forEach(i => { dailyInvMap[i.material_id] = i; });
     renderDailyContent();
@@ -1900,22 +1909,22 @@ async function submitOrdering() {
 
   try {
     const totalAmount = orderConfirmItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
-    const { data: order, error: e1 } = await sb.from('orders').insert({
+    const { data: order, error: e1 } = await withTimeout(sb.from('orders').insert({
       status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes: ''
-    }).select().single();
+    }).select().single());
     if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
 
     const orderItems = orderConfirmItems.map(it => ({
       order_id: order.id, material_id: it.material_id, clinic_id: cid,
       quantity: it.quantity, unit_price: it.unit_price || 0
     }));
-    const { error: e2 } = await sb.from('order_items').insert(orderItems);
+    const { error: e2 } = await withTimeout(sb.from('order_items').insert(orderItems));
     if (e2) { toast('明細建立失敗: ' + e2.message, 'error'); return; }
 
     // 自動建立 delivery_confirmation，讓收貨頁面立即顯示
-    const { data: existDc } = await sb.from('delivery_confirmations').select('id').eq('order_id', order.id).eq('clinic_id', cid);
+    const { data: existDc } = await withTimeout(sb.from('delivery_confirmations').select('id').eq('order_id', order.id).eq('clinic_id', cid));
     if (!existDc || existDc.length === 0) {
-      await sb.from('delivery_confirmations').insert({ order_id: order.id, clinic_id: cid, status: 'pending' });
+      await withTimeout(sb.from('delivery_confirmations').insert({ order_id: order.id, clinic_id: cid, status: 'pending' }));
     }
 
     toast('叫貨單已送出');
@@ -1944,24 +1953,24 @@ async function loadConfirmedOrders() {
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
   const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
-  const { data: orders } = await sb.from('orders').select('*')
+  const { data: orders } = await withTimeout(sb.from('orders').select('*')
     .gte('created_at', todayStart.toISOString())
     .lte('created_at', todayEnd.toISOString())
     .eq('created_by', currentUser.id)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false }));
 
   // Filter orders that have order_items belonging to the selected clinic
   const orderIds = (orders || []).map(o => o.id);
   let filteredOrders = [];
   let oiMap = {};
   if (orderIds.length > 0 && cid) {
-    const { data: allOI } = await sb.from('order_items').select('*').in('order_id', orderIds);
+    const { data: allOI } = await withTimeout(sb.from('order_items').select('*').in('order_id', orderIds));
     (allOI || []).forEach(oi => { if (!oiMap[oi.order_id]) oiMap[oi.order_id] = []; oiMap[oi.order_id].push(oi); });
     filteredOrders = (orders || []).filter(o => (oiMap[o.id] || []).some(oi => oi.clinic_id === cid));
   } else {
     filteredOrders = orders || [];
     if (orderIds.length > 0) {
-      const { data: allOI } = await sb.from('order_items').select('*').in('order_id', orderIds);
+      const { data: allOI } = await withTimeout(sb.from('order_items').select('*').in('order_id', orderIds));
       (allOI || []).forEach(oi => { if (!oiMap[oi.order_id]) oiMap[oi.order_id] = []; oiMap[oi.order_id].push(oi); });
     }
   }
@@ -1997,8 +2006,8 @@ async function loadConfirmedOrders() {
 window.cancelOrder = async function(orderId) {
   if (!await showConfirm('取消叫貨單', '確定要取消整張叫貨單？')) return;
   try {
-    await sb.from('order_items').delete().eq('order_id', orderId);
-    await sb.from('orders').delete().eq('id', orderId);
+    await withTimeout(sb.from('order_items').delete().eq('order_id', orderId));
+    await withTimeout(sb.from('orders').delete().eq('id', orderId));
     toast('叫貨單已取消');
     loadConfirmedOrders();
   } catch (e) {
@@ -2009,10 +2018,10 @@ window.cancelOrder = async function(orderId) {
 window.cancelOrderItem = async function(orderId, itemId) {
   if (!await showConfirm('取消品項', '確定要取消此品項？')) return;
   try {
-    await sb.from('order_items').delete().eq('id', itemId);
-    const { data: remaining } = await sb.from('order_items').select('id').eq('order_id', orderId);
+    await withTimeout(sb.from('order_items').delete().eq('id', itemId));
+    const { data: remaining } = await withTimeout(sb.from('order_items').select('id').eq('order_id', orderId));
     if (!remaining || remaining.length === 0) {
-      await sb.from('orders').delete().eq('id', orderId);
+      await withTimeout(sb.from('orders').delete().eq('id', orderId));
       toast('品項已取消，叫貨單已清空刪除');
     } else {
       toast('品項已取消');
@@ -2027,10 +2036,10 @@ window.cancelOrderItem = async function(orderId, itemId) {
 window.cancelOrderItemMgmt = async function(orderId, itemId) {
   if (!await showConfirm('取消品項', '確定要取消此品項？')) return;
   try {
-    await sb.from('order_items').delete().eq('id', itemId);
-    const { data: remaining } = await sb.from('order_items').select('id').eq('order_id', orderId);
+    await withTimeout(sb.from('order_items').delete().eq('id', itemId));
+    const { data: remaining } = await withTimeout(sb.from('order_items').select('id').eq('order_id', orderId));
     if (!remaining || remaining.length === 0) {
-      await sb.from('orders').delete().eq('id', orderId);
+      await withTimeout(sb.from('orders').delete().eq('id', orderId));
       toast('品項已取消，叫貨單已清空刪除');
     } else {
       await recomputeOrderStatus(orderId);
@@ -2043,13 +2052,13 @@ window.cancelOrderItemMgmt = async function(orderId, itemId) {
 // 叫貨管理用：取消整單（刪所有 items + order）
 window.cancelWholeOrder = async function(orderId) {
   // 檢查是否有品項已收貨
-  const { data: dcs } = await sb.from('delivery_confirmations').select('*').eq('order_id', orderId);
+  const { data: dcs } = await withTimeout(sb.from('delivery_confirmations').select('*').eq('order_id', orderId));
   if (dcs && dcs.some(dc => dc.status === 'confirmed')) {
     toast('有品項已收貨，請先讓診所回待收貨', 'error');
     return;
   }
   // 檢查是否有品項已到貨
-  const { data: oiCheck } = await sb.from('order_items').select('item_status').eq('order_id', orderId);
+  const { data: oiCheck } = await withTimeout(sb.from('order_items').select('item_status').eq('order_id', orderId));
   if (oiCheck && oiCheck.some(it => it.item_status === 'delivered')) {
     toast('有品項已到貨，無法取消整單', 'error');
     return;
@@ -2057,9 +2066,9 @@ window.cancelWholeOrder = async function(orderId) {
   if (!await showConfirm('取消整單', '確定要取消整張叫貨單？所有品項都會被刪除。')) return;
   try {
     // 同時刪除 delivery_confirmations
-    await sb.from('delivery_confirmations').delete().eq('order_id', orderId);
-    await sb.from('order_items').delete().eq('order_id', orderId);
-    await sb.from('orders').delete().eq('id', orderId);
+    await withTimeout(sb.from('delivery_confirmations').delete().eq('order_id', orderId));
+    await withTimeout(sb.from('order_items').delete().eq('order_id', orderId));
+    await withTimeout(sb.from('orders').delete().eq('id', orderId));
     toast('叫貨單已取消');
     renderOrderMgmt();
   } catch (e) { toast('取消失敗: ' + e.message, 'error'); }
@@ -2105,7 +2114,7 @@ async function renderOrderMgmt() {
 
   // === 各單管理 ===
   const tabContent = document.getElementById('orderMgmtTabContent');
-  const { data: orders } = await sb.from('orders').select('*').order('created_at', { ascending: false });
+  const { data: orders } = await withTimeout(sb.from('orders').select('*').order('created_at', { ascending: false }));
 
   tabContent.innerHTML = `
     <div class="sub-tabs">
@@ -2119,7 +2128,7 @@ async function renderOrderMgmt() {
 
   // 先取得所有 items 以計算真實狀態來篩選
   const allOrderIds = (orders || []).map(o => o.id);
-  const { data: allOItems } = await sb.from('order_items').select('order_id, item_status').in('order_id', allOrderIds);
+  const { data: allOItems } = await withTimeout(sb.from('order_items').select('order_id, item_status').in('order_id', allOrderIds));
   const oiByOrder = {};
   (allOItems || []).forEach(it => { (oiByOrder[it.order_id] = oiByOrder[it.order_id] || []).push(it); });
   const withRealStatus = (orders || []).map(o => ({ ...o, _realStatus: oiByOrder[o.id] ? slowestItemStatus(oiByOrder[o.id]) : o.status }));
@@ -2142,7 +2151,7 @@ async function renderOrderMgmtList(orders) {
 
   // 取得所有訂單的 order_items 以取得診所名
   const orderIds = sorted.map(o => o.id);
-  const { data: allOI } = await sb.from('order_items').select('order_id, clinic_id, item_status').in('order_id', orderIds);
+  const { data: allOI } = await withTimeout(sb.from('order_items').select('order_id, clinic_id, item_status').in('order_id', orderIds));
   const orderClinicMap = {};
   const orderHasShipped = {};
   (allOI || []).forEach(oi => {
@@ -2191,7 +2200,7 @@ async function renderOrderSummary() {
   el.innerHTML = '<div style="text-align:center;padding:32px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent);width:28px;height:28px;border-width:3px"></div></div>';
 
   // 讀取所有 confirmed / shipped / delivered 的 order_items
-  const { data: items } = await sb.from('order_items').select('*').in('item_status', ['confirmed', 'shipped', 'delivered']);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').in('item_status', ['confirmed', 'shipped', 'delivered']));
   if (!items || !items.length) {
     el.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>目前沒有已確認或已出貨的品項</div></div>';
     return;
@@ -2279,7 +2288,7 @@ window.onSummaryActualChange = async function(val, ratio, itemIdsStr) {
     // 將總量平均分配：第一筆存全部，其餘歸 0（簡化處理）
     for (let i = 0; i < ids.length; i++) {
       const qty = i === 0 ? actualDaily : 0;
-      await sb.from('order_items').update({ actual_ordered_qty: qty }).eq('id', ids[i]);
+      await withTimeout(sb.from('order_items').update({ actual_ordered_qty: qty }).eq('id', ids[i]));
     }
     toast('已更新叫貨數量');
   } catch (e) { toast('更新失敗: ' + e.message, 'error'); }
@@ -2291,7 +2300,7 @@ async function renderRushMgmt() {
   el.innerHTML = '<div style="text-align:center;padding:32px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent);width:28px;height:28px;border-width:3px"></div></div>';
 
   // 取得所有 confirmed + shipped 品項
-  const { data: shippedItems } = await sb.from('order_items').select('*').in('item_status', ['confirmed', 'shipped']);
+  const { data: shippedItems } = await withTimeout(sb.from('order_items').select('*').in('item_status', ['confirmed', 'shipped']));
   if (!shippedItems || !shippedItems.length) {
     el.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>目前沒有已確認或已出貨待收貨的品項</div></div>';
     return;
@@ -2299,7 +2308,7 @@ async function renderRushMgmt() {
 
   // 取得對應的 delivery_confirmations (status=pending)
   const orderIds = [...new Set(shippedItems.map(i => i.order_id))];
-  const { data: dcs } = await sb.from('delivery_confirmations').select('*').in('order_id', orderIds).eq('status', 'pending');
+  const { data: dcs } = await withTimeout(sb.from('delivery_confirmations').select('*').in('order_id', orderIds).eq('status', 'pending'));
   const dcMap = {};
   (dcs || []).forEach(dc => { dcMap[dc.order_id + '_' + dc.clinic_id] = dc; });
 
@@ -2377,9 +2386,9 @@ async function renderRushMgmt() {
 window.rushFromMgmt = async function(dcId) {
   const now = new Date();
   const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  const { data: dc } = await sb.from('delivery_confirmations').select('notes').eq('id', dcId).single();
+  const { data: dc } = await withTimeout(sb.from('delivery_confirmations').select('notes').eq('id', dcId).single());
   const newNotes = ((dc?.notes || '') + `\n[管理催貨] ${ts}`).trim();
-  const { error } = await sb.from('delivery_confirmations').update({ notes: newNotes }).eq('id', dcId);
+  const { error } = await withTimeout(sb.from('delivery_confirmations').update({ notes: newNotes }).eq('id', dcId));
   if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
   toast('已記錄催貨');
   await renderRushMgmt();
@@ -2400,7 +2409,7 @@ async function toggleOrderCard(orderId) {
 
   body.innerHTML = '<div style="padding:16px;text-align:center"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent);width:24px;height:24px;border-width:3px"></div></div>';
 
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
   if (!items || !items.length) { body.innerHTML = '<div style="padding:16px;color:var(--text-light)">無明細</div>'; return; }
 
   let html = '<div style="padding:16px 0">';
@@ -2469,7 +2478,7 @@ async function toggleOrderCard(orderId) {
 }
 
 window.confirmAllItems = async function(orderId) {
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
   if (!items) return;
   const pendingItems = items.filter(i => (i.item_status || 'pending') === 'pending');
   if (!pendingItems.length) { toast('沒有待確認品項'); return; }
@@ -2483,7 +2492,7 @@ window.confirmAllItems = async function(orderId) {
       const qtyInOrderUnit = qtyEl ? (parseFloat(qtyEl.value) || 0) : Math.round((it.quantity / ratio) * 100) / 100;
       const finalRatio = ratioEl ? (parseFloat(ratioEl.value) || 1) : ratio;
       const dailyQty = Math.round(qtyInOrderUnit * finalRatio);
-      await sb.from('order_items').update({ quantity: dailyQty, item_status: 'confirmed' }).eq('id', it.id);
+      await withTimeout(sb.from('order_items').update({ quantity: dailyQty, item_status: 'confirmed' }).eq('id', it.id));
     }
     await recomputeOrderStatus(orderId);
     toast(`已確認 ${pendingItems.length} 個品項`);
@@ -2492,13 +2501,13 @@ window.confirmAllItems = async function(orderId) {
 };
 
 window.shipAllItems = async function(orderId) {
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
   if (!items) return;
   const confirmedItems = items.filter(i => (i.item_status || 'pending') === 'confirmed');
   if (!confirmedItems.length) { toast('沒有已確認品項'); return; }
   try {
     for (const it of confirmedItems) {
-      await sb.from('order_items').update({ item_status: 'shipped' }).eq('id', it.id);
+      await withTimeout(sb.from('order_items').update({ item_status: 'shipped' }).eq('id', it.id));
     }
     console.log(`[shipAllItems] All ${confirmedItems.length} items updated to shipped → calling checkAutoShipOrder(${orderId})`);
     await checkAutoShipOrder(orderId);
@@ -2514,7 +2523,7 @@ window.onOrderItemQtyChange = async function(itemId, orderId, val) {
   const ratioEl = document.getElementById('oir_' + itemId);
   const ratio = parseFloat(ratioEl?.value) || 1;
   const dailyQty = Math.round(qtyInOrderUnit * ratio);
-  const { error } = await sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId);
+  const { error } = await withTimeout(sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   // Update subtotal display
   updateOrderItemSubtotal(itemId, qtyInOrderUnit);
@@ -2525,7 +2534,7 @@ window.onOrderItemRatioChange = async function(itemId, orderId, val) {
   const qtyEl = document.getElementById('oiq_' + itemId);
   const qtyInOrderUnit = parseFloat(qtyEl?.value) || 0;
   const dailyQty = Math.round(qtyInOrderUnit * ratio);
-  const { error } = await sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId);
+  const { error } = await withTimeout(sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   updateOrderItemSubtotal(itemId, qtyInOrderUnit);
 };
@@ -2550,10 +2559,10 @@ window.confirmOrderItem = async function(itemId, orderId) {
   const ratio = parseFloat(ratioEl?.value) || 1;
   const dailyQty = Math.round(qtyInOrderUnit * ratio);
 
-  const { error } = await sb.from('order_items').update({
+  const { error } = await withTimeout(sb.from('order_items').update({
     quantity: dailyQty,
     item_status: 'confirmed'
-  }).eq('id', itemId);
+  }).eq('id', itemId));
   if (error) { toast('確認失敗: ' + error.message, 'error'); return; }
 
   toast('品項已確認（已換算為日常單位）');
@@ -2580,10 +2589,10 @@ function editItemPrice(itemId, unitPrice, customPrice, isCustom) {
 async function saveItemPrice(itemId) {
   const isCustom = document.getElementById('epIsCustom').checked;
   const customPrice = parseFloat(document.getElementById('epCustomPrice').value) || 0;
-  const { error } = await sb.from('order_items').update({
+  const { error } = await withTimeout(sb.from('order_items').update({
     is_custom_price: isCustom,
     custom_price: isCustom ? customPrice : null
-  }).eq('id', itemId);
+  }).eq('id', itemId));
   if (error) { toast('儲存失敗: ' + error.message, 'error'); return; }
   toast('價格已更新');
   closeModal();
@@ -2614,29 +2623,29 @@ function slowestItemStatus(items) {
 }
 
 async function recomputeOrderStatus(orderId) {
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
   if (!items) return;
   const newStatus = slowestItemStatus(items);
   const update = { status: newStatus };
   if (newStatus === 'shipped' && !items._shipped_at) update.shipped_at = new Date().toISOString();
   if (newStatus === 'delivered' && !items._delivered_at) update.delivered_at = new Date().toISOString();
-  await sb.from('orders').update(update).eq('id', orderId);
+  await withTimeout(sb.from('orders').update(update).eq('id', orderId));
 }
 
 async function setItemStatus(itemId, orderId, newStatus) {
   console.log(`[setItemStatus] called with itemId=${itemId}, orderId=${orderId}, newStatus=${newStatus}`);
   // Try to update item_status column; fallback to notes
-  let { error } = await sb.from('order_items').update({ item_status: newStatus }).eq('id', itemId);
+  let { error } = await withTimeout(sb.from('order_items').update({ item_status: newStatus }).eq('id', itemId));
   if (error) {
     console.log(`[setItemStatus] item_status update failed, trying notes fallback. Error:`, error);
     // Fallback: use notes field to store status
     const notesVal = `__status:${newStatus}`;
-    ({ error } = await sb.from('order_items').update({ notes: notesVal }).eq('id', itemId));
+    ({ error } = await withTimeout(sb.from('order_items').update({ notes: notesVal }).eq('id', itemId)));
     if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   }
 
   // Verify the update was persisted
-  const { data: verifyItem } = await sb.from('order_items').select('id,item_status,order_id,clinic_id').eq('id', itemId).single();
+  const { data: verifyItem } = await withTimeout(sb.from('order_items').select('id,item_status,order_id,clinic_id').eq('id', itemId).single());
   console.log(`[setItemStatus] after update, verified item:`, verifyItem);
 
   toast(`品項狀態已改為 ${statusLabelText(newStatus)}`);
@@ -2646,11 +2655,11 @@ async function setItemStatus(itemId, orderId, newStatus) {
     console.log(`[setItemStatus] Item ${itemId} shipped → directly inserting delivery_confirmation`);
     const clinicId = verifyItem ? verifyItem.clinic_id : null;
     if (clinicId) {
-      const { data: existDc } = await sb.from('delivery_confirmations')
-        .select('id').eq('order_id', orderId).eq('clinic_id', clinicId);
+      const { data: existDc } = await withTimeout(sb.from('delivery_confirmations')
+        .select('id').eq('order_id', orderId).eq('clinic_id', clinicId));
       if (!existDc || existDc.length === 0) {
-        const { error: dcErr } = await sb.from('delivery_confirmations')
-          .insert({ order_id: Number(orderId), clinic_id: Number(clinicId), status: 'pending' });
+        const { error: dcErr } = await withTimeout(sb.from('delivery_confirmations')
+          .insert({ order_id: Number(orderId), clinic_id: Number(clinicId), status: 'pending' }));
         if (dcErr) { console.error('DC insert error:', dcErr); toast('建立收貨確認失敗: ' + dcErr.message, 'error'); }
         else { console.log('DC created for order', orderId, 'clinic', clinicId); toast('已建立收貨確認'); }
       } else {
@@ -2675,7 +2684,7 @@ function statusLabelText(s) {
 
 async function checkAutoShipOrder(orderId) {
   console.log(`[checkAutoShipOrder] START orderId=${orderId}`);
-  const { data: items, error: itemsErr } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  const { data: items, error: itemsErr } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
   if (itemsErr) { console.error('[checkAutoShipOrder] fetch items error:', itemsErr); return; }
   if (!items || !items.length) { console.log('[checkAutoShipOrder] no items found, return'); return; }
   console.log(`[checkAutoShipOrder] total items: ${items.length}`, items.map(i => ({ id: i.id, status: i.item_status, clinic_id: i.clinic_id })));
@@ -2693,7 +2702,7 @@ async function checkAutoShipOrder(orderId) {
     const clinicIds = [...new Set(validShipped.map(i => Number(i.clinic_id)))];
     console.log(`[checkAutoShipOrder] clinicIds from shipped items:`, clinicIds);
     // Check existing delivery_confirmations
-    const { data: existingDcs } = await sb.from('delivery_confirmations').select('clinic_id').eq('order_id', orderId);
+    const { data: existingDcs } = await withTimeout(sb.from('delivery_confirmations').select('clinic_id').eq('order_id', orderId));
     const existingClinicIds = (existingDcs || []).map(d => Number(d.clinic_id));
     console.log(`[checkAutoShipOrder] existing DC clinic_ids:`, existingClinicIds);
     const newClinicIds = clinicIds.filter(c => !existingClinicIds.includes(c));
@@ -2701,7 +2710,7 @@ async function checkAutoShipOrder(orderId) {
     if (newClinicIds.length > 0) {
       const insertRows = newClinicIds.map(cid => ({ order_id: Number(orderId), clinic_id: Number(cid), status: 'pending' }));
       console.log(`[checkAutoShipOrder] inserting delivery_confirmations:`, insertRows);
-      const { data: insertedData, error: insertErr } = await sb.from('delivery_confirmations').insert(insertRows).select();
+      const { data: insertedData, error: insertErr } = await withTimeout(sb.from('delivery_confirmations').insert(insertRows).select());
       if (insertErr) {
         console.error(`[checkAutoShipOrder] delivery_confirmations insert failed for order ${orderId}:`, insertErr);
         toast('建立待收貨記錄失敗: ' + insertErr.message, 'error');
@@ -2709,7 +2718,7 @@ async function checkAutoShipOrder(orderId) {
       }
       console.log(`[checkAutoShipOrder] insert returned data:`, insertedData);
       // Verify by re-reading
-      const { data: verifyDcs, error: verifyErr } = await sb.from('delivery_confirmations').select('*').eq('order_id', orderId);
+      const { data: verifyDcs, error: verifyErr } = await withTimeout(sb.from('delivery_confirmations').select('*').eq('order_id', orderId));
       if (verifyErr) {
         console.error(`[checkAutoShipOrder] verify select failed:`, verifyErr);
         toast('驗證待收貨記錄失敗: ' + verifyErr.message, 'error');
@@ -2718,20 +2727,20 @@ async function checkAutoShipOrder(orderId) {
       }
     }
     // Update order status to shipped if not already
-    await sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId);
+    await withTimeout(sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId));
     console.log(`[checkAutoShipOrder] order ${orderId} status updated to shipped`);
   }
   console.log(`[checkAutoShipOrder] END orderId=${orderId}`);
 }
 
 async function checkAutoDeliverOrder(orderId) {
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
   if (!items) return;
   const activeItems = items.filter(i => (i.item_status || 'pending') !== 'cancelled');
   if (activeItems.length === 0) return;
   const allShippedOrDelivered = activeItems.every(i => ['shipped', 'delivered'].includes(i.item_status || 'pending'));
   if (allShippedOrDelivered) {
-    await sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId);
+    await withTimeout(sb.from('orders').update({ status: 'shipped', shipped_at: new Date().toISOString() }).eq('id', orderId));
   }
 }
 
@@ -2747,7 +2756,7 @@ async function renderReceiving(container) {
   receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
   const clinicIds = receiveClinicId ? [receiveClinicId] : myClinics.map(c => c.id);
 
-  const { data: dcs, error: dcsErr } = await sb.from('delivery_confirmations').select('*').in('clinic_id', clinicIds).order('id', { ascending: false });
+  const { data: dcs, error: dcsErr } = await withTimeout(sb.from('delivery_confirmations').select('*').in('clinic_id', clinicIds).order('id', { ascending: false }));
   const pending = (dcs || []).filter(d => d.status === 'pending');
   const confirmed = (dcs || []).filter(d => d.status === 'confirmed');
 
@@ -2789,7 +2798,7 @@ async function renderReceiveContent(tab) {
     const dcKeys = items.map(d => ({ order_id: d.order_id, clinic_id: d.clinic_id }));
     const orderIds = [...new Set(dcKeys.map(k => k.order_id))];
     if (orderIds.length) {
-      const { data: oiRows } = await sb.from('order_items').select('order_id, clinic_id, item_status').in('order_id', orderIds);
+      const { data: oiRows } = await withTimeout(sb.from('order_items').select('order_id, clinic_id, item_status').in('order_id', orderIds));
       const grouped = {};
       (oiRows || []).forEach(oi => {
         const key = oi.order_id + '_' + oi.clinic_id;
@@ -2859,7 +2868,7 @@ async function renderReceiveContent(tab) {
 async function viewReceiveDetail(dcId, orderId, clinicId) {
   const el = document.getElementById('rcDetail_' + dcId);
   if (el.innerHTML) { el.innerHTML = ''; return; }
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId));
   if (!items || !items.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-light)">無明細</div>'; return; }
   el.innerHTML = `<div class="table-wrap" style="margin-bottom:12px"><table>
     <thead><tr><th>品項</th><th>數量</th><th>狀態</th></tr></thead>
@@ -2874,7 +2883,7 @@ async function loadConfirmedReceiveItems(dcId, orderId, clinicId) {
   const el = document.getElementById('rcDetail_' + dcId);
   if (el.innerHTML) { el.innerHTML = ''; window._expandedConfirmedReceive.delete(dcId); return; }
   window._expandedConfirmedReceive.add(dcId);
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId));
   if (!items || !items.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-light)">無明細</div>'; return; }
   el.innerHTML = `<div class="table-wrap" style="margin-bottom:12px"><table>
     <thead><tr><th>品項</th><th>數量</th><th>狀態</th><th>操作</th></tr></thead>
@@ -2895,35 +2904,35 @@ window.loadConfirmedReceiveItems = loadConfirmedReceiveItems;
 async function undoReceiveSingle(itemId, dcId, orderId, clinicId) {
   if (!await showConfirm('回待收貨', '確定要將此品項回到待收貨狀態？庫存將回扣。')) return;
   try {
-    const { data: it } = await sb.from('order_items').select('*').eq('id', itemId).single();
+    const { data: it } = await withTimeout(sb.from('order_items').select('*').eq('id', itemId).single());
     if (!it) { toast('找不到品項', 'error'); return; }
 
     // 1. item_status 改回 shipped
-    await sb.from('order_items').update({ item_status: 'shipped' }).eq('id', itemId);
+    await withTimeout(sb.from('order_items').update({ item_status: 'shipped' }).eq('id', itemId));
 
     // 2. clinic_inventory 扣回庫存
-    const { data: inv } = await sb.from('clinic_inventory')
-      .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single();
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory')
+      .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single());
     if (inv) {
-      await sb.from('clinic_inventory').update({ current_stock: Math.max(0, inv.current_stock - it.quantity) }).eq('id', inv.id);
+      await withTimeout(sb.from('clinic_inventory').update({ current_stock: Math.max(0, inv.current_stock - it.quantity) }).eq('id', inv.id));
     }
 
     // 3. 刪除最近一筆該品項的 receive log
-    const { data: logs } = await sb.from('inventory_logs')
+    const { data: logs } = await withTimeout(sb.from('inventory_logs')
       .select('id').eq('clinic_id', clinicId).eq('material_id', it.material_id).eq('type', 'receive')
-      .order('created_at', { ascending: false }).limit(1);
+      .order('created_at', { ascending: false }).limit(1));
     if (logs && logs.length > 0) {
-      await sb.from('inventory_logs').delete().eq('id', logs[0].id);
+      await withTimeout(sb.from('inventory_logs').delete().eq('id', logs[0].id));
     }
 
     // 4. 重新計算 dc 狀態：檢查是否還有 delivered 品項
-    const { data: allItems } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+    const { data: allItems } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId));
     const anyDelivered = (allItems || []).some(i => i.id !== itemId && (i.item_status || 'pending') === 'delivered');
     if (!anyDelivered) {
       // 沒有任何 delivered 品項了，dc 回 pending
-      await sb.from('delivery_confirmations').update({
+      await withTimeout(sb.from('delivery_confirmations').update({
         status: 'pending', confirmed_by: null, confirmed_at: null
-      }).eq('id', dcId);
+      }).eq('id', dcId));
     }
 
     // 5. 重新計算 order 狀態
@@ -2941,7 +2950,7 @@ async function loadReceiveItems(dcId, orderId, clinicId) {
   const el = document.getElementById('rcDetail_' + dcId);
   if (el.innerHTML) { el.innerHTML = ''; window._expandedReceive.delete(dcId); return; }
   window._expandedReceive.add(dcId);
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId));
   if (!items || !items.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-light)">無明細</div>'; return; }
   el.innerHTML = `<div class="table-wrap" style="margin-bottom:12px"><table>
     <thead><tr><th>品項</th><th>數量</th><th>狀態</th><th>操作</th></tr></thead>
@@ -2959,7 +2968,7 @@ async function loadReceiveItems(dcId, orderId, clinicId) {
 }
 
 async function confirmReceiveSingle(itemId, dcId, orderId, clinicId) {
-  const { data: it } = await sb.from('order_items').select('*').eq('id', itemId).single();
+  const { data: it } = await withTimeout(sb.from('order_items').select('*').eq('id', itemId).single());
   if (!it) { toast('找不到品項', 'error'); return; }
   const body = `<p>確認收貨此品項？</p>
     <table style="width:100%"><thead><tr><th>品項</th><th>數量</th></tr></thead>
@@ -2972,34 +2981,34 @@ async function confirmReceiveSingle(itemId, dcId, orderId, clinicId) {
 
 async function doReceiveSingle(itemId, dcId, orderId, clinicId) {
   try {
-    const { data: it } = await sb.from('order_items').select('*').eq('id', itemId).single();
+    const { data: it } = await withTimeout(sb.from('order_items').select('*').eq('id', itemId).single());
     if (!it) { toast('找不到品項', 'error'); return; }
 
     // 更新庫存
-    const { data: inv } = await sb.from('clinic_inventory')
-      .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single();
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory')
+      .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single());
     if (inv) {
-      await sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id);
+      await withTimeout(sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id));
     } else {
-      await sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 });
+      await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 }));
     }
 
     // 新增 inventory_log
-    await sb.from('inventory_logs').insert({
+    await withTimeout(sb.from('inventory_logs').insert({
       clinic_id: clinicId, material_id: it.material_id, type: 'receive', quantity: it.quantity,
       operator_id: currentUser.id, operator_name: userProfile.display_name, notes: '叫貨單#' + orderId + ' (個別收貨)'
-    });
+    }));
 
     // 更新 item_status
-    await sb.from('order_items').update({ item_status: 'delivered' }).eq('id', itemId);
+    await withTimeout(sb.from('order_items').update({ item_status: 'delivered' }).eq('id', itemId));
 
     // 檢查是否所有品項都已 delivered，若是則自動確認 dc
-    const { data: allItems } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+    const { data: allItems } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId));
     const allDelivered = (allItems || []).every(i => i.id === itemId || (i.item_status || 'pending') === 'delivered');
     if (allDelivered) {
-      await sb.from('delivery_confirmations').update({
+      await withTimeout(sb.from('delivery_confirmations').update({
         status: 'confirmed', confirmed_by: currentUser.id, confirmed_at: new Date().toISOString()
-      }).eq('id', dcId);
+      }).eq('id', dcId));
     }
 
     await recomputeOrderStatus(orderId);
@@ -3014,26 +3023,26 @@ async function doReceiveSingle(itemId, dcId, orderId, clinicId) {
 
 async function rushDelivery(dcId) {
   const now = new Date().toISOString();
-  const { data: dc } = await sb.from('delivery_confirmations').select('notes').eq('id', dcId).single();
+  const { data: dc } = await withTimeout(sb.from('delivery_confirmations').select('notes').eq('id', dcId).single());
   const newNotes = (dc?.notes || '') + `\n[診所催貨] ${fmtDate(now)} by ${userProfile.display_name}`;
-  const { error } = await sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId);
+  const { error } = await withTimeout(sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId));
   if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
   toast('已記錄催貨');
 }
 
 async function rushSingleItem(dcId, itemId) {
   const now = new Date().toISOString();
-  const { data: item } = await sb.from('order_items').select('material_id').eq('id', itemId).single();
+  const { data: item } = await withTimeout(sb.from('order_items').select('material_id').eq('id', itemId).single());
   const mat = item ? materialName(item.material_id) : `品項#${itemId}`;
-  const { data: dc } = await sb.from('delivery_confirmations').select('notes').eq('id', dcId).single();
+  const { data: dc } = await withTimeout(sb.from('delivery_confirmations').select('notes').eq('id', dcId).single());
   const newNotes = (dc?.notes || '') + `\n[診所催貨-個別] ${mat} ${fmtDate(now)} by ${userProfile.display_name}`;
-  const { error } = await sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId);
+  const { error } = await withTimeout(sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId));
   if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
   toast(`已催貨：${mat}`);
 }
 
 async function startReceive(dcId, orderId, clinicId) {
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId));
   if (!items || !items.length) { toast('無明細', 'error'); return; }
 
   // 只顯示已出貨的品項
@@ -3061,24 +3070,24 @@ async function doReceive(dcId, orderId, clinicId) {
   const items = window._receiveItems;
   try {
     for (const it of items) {
-      const { data: inv } = await sb.from('clinic_inventory')
-        .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single();
+      const { data: inv } = await withTimeout(sb.from('clinic_inventory')
+        .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single());
       if (inv) {
-        await sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id);
+        await withTimeout(sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id));
       } else {
-        await sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 });
+        await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 }));
       }
-      await sb.from('inventory_logs').insert({
+      await withTimeout(sb.from('inventory_logs').insert({
         clinic_id: clinicId, material_id: it.material_id, type: 'receive', quantity: it.quantity,
         operator_id: currentUser.id, operator_name: userProfile.display_name, notes: '叫貨單#' + orderId
-      });
+      }));
       // Update item status to delivered
-      await sb.from('order_items').update({ item_status: 'delivered' }).eq('id', it.id);
+      await withTimeout(sb.from('order_items').update({ item_status: 'delivered' }).eq('id', it.id));
     }
 
-    await sb.from('delivery_confirmations').update({
+    await withTimeout(sb.from('delivery_confirmations').update({
       status: 'confirmed', confirmed_by: currentUser.id, confirmed_at: new Date().toISOString()
-    }).eq('id', dcId);
+    }).eq('id', dcId));
 
     // 重新計算整單狀態
     await recomputeOrderStatus(orderId);
@@ -3094,26 +3103,26 @@ async function doReceive(dcId, orderId, clinicId) {
 async function undoReceive(dcId, orderId, clinicId) {
   if (!await showConfirm('反悔收貨', '確定要反悔收貨？庫存將回扣。')) return;
 
-  const { data: items } = await sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId);
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId).eq('clinic_id', clinicId));
   try {
     for (const it of (items || [])) {
       if ((it.item_status || 'pending') === 'delivered') {
-        const { data: inv } = await sb.from('clinic_inventory')
-          .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single();
+        const { data: inv } = await withTimeout(sb.from('clinic_inventory')
+          .select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).single());
         if (inv) {
-          await sb.from('clinic_inventory').update({ current_stock: Math.max(0, inv.current_stock - it.quantity) }).eq('id', inv.id);
+          await withTimeout(sb.from('clinic_inventory').update({ current_stock: Math.max(0, inv.current_stock - it.quantity) }).eq('id', inv.id));
         }
-        await sb.from('inventory_logs').insert({
+        await withTimeout(sb.from('inventory_logs').insert({
           clinic_id: clinicId, material_id: it.material_id, type: 'out', quantity: it.quantity,
           operator_id: currentUser.id, operator_name: userProfile.display_name, notes: '反悔收貨#' + orderId
-        });
-        await sb.from('order_items').update({ item_status: 'shipped' }).eq('id', it.id);
+        }));
+        await withTimeout(sb.from('order_items').update({ item_status: 'shipped' }).eq('id', it.id));
       }
     }
 
-    await sb.from('delivery_confirmations').update({
+    await withTimeout(sb.from('delivery_confirmations').update({
       status: 'pending', confirmed_by: null, confirmed_at: null
-    }).eq('id', dcId);
+    }).eq('id', dcId));
 
     // 重新計算整單狀態
     await recomputeOrderStatus(orderId);
@@ -3191,15 +3200,15 @@ async function saveClinic(id) {
   const obj = { name: document.getElementById('fClinicName').value.trim(), address: document.getElementById('fClinicAddr').value.trim(), phone: document.getElementById('fClinicPhone').value.trim(), notes: document.getElementById('fClinicNotes').value.trim() };
   if (!obj.name) { toast('請輸入診所名稱', 'error'); return; }
   let err;
-  if (id) { ({ error: err } = await sb.from('clinics').update(obj).eq('id', id)); }
-  else { ({ error: err } = await sb.from('clinics').insert(obj)); }
+  if (id) { ({ error: err } = await withTimeout(sb.from('clinics').update(obj).eq('id', id))); }
+  else { ({ error: err } = await withTimeout(sb.from('clinics').insert(obj))); }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
   toast(id ? '已更新' : '已新增'); closeModal(); await loadClinics(); renderAdminContent();
 }
 
 async function deleteClinic(id) {
   if (!await showConfirm('刪除診所', '確定要刪除此診所？相關庫存資料也會一併刪除。')) return;
-  const { error } = await sb.from('clinics').delete().eq('id', id);
+  const { error } = await withTimeout(sb.from('clinics').delete().eq('id', id));
   if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
   toast('已刪除'); await loadClinics(); renderAdminContent();
 }
@@ -3238,15 +3247,15 @@ async function saveSupplier(id) {
   const obj = { name: document.getElementById('fSupName').value.trim(), contact: document.getElementById('fSupContact').value.trim(), phone: document.getElementById('fSupPhone').value.trim(), notes: document.getElementById('fSupNotes').value.trim() };
   if (!obj.name) { toast('請輸入名稱', 'error'); return; }
   let err;
-  if (id) { ({ error: err } = await sb.from('suppliers').update(obj).eq('id', id)); }
-  else { ({ error: err } = await sb.from('suppliers').insert(obj)); }
+  if (id) { ({ error: err } = await withTimeout(sb.from('suppliers').update(obj).eq('id', id))); }
+  else { ({ error: err } = await withTimeout(sb.from('suppliers').insert(obj))); }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
   toast('已儲存'); closeModal(); await loadSuppliers(); renderAdminContent();
 }
 
 async function deleteSupplier(id) {
   if (!await showConfirm('刪除廠商', '確定刪除此廠商？')) return;
-  const { error } = await sb.from('suppliers').delete().eq('id', id);
+  const { error } = await withTimeout(sb.from('suppliers').delete().eq('id', id));
   if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
   toast('已刪除'); await loadSuppliers(); renderAdminContent();
 }
@@ -3370,7 +3379,7 @@ async function saveMaterial(id) {
     if (fileInput.files && fileInput.files[0]) {
       const compressed = await compressImage(fileInput.files[0]);
       const path = `${Date.now()}.jpg`;
-      const { error: upErr } = await sb.storage.from('materials').upload(path, compressed);
+      const { error: upErr } = await withTimeout(sb.storage.from('materials').upload(path, compressed));
       if (upErr) { toast('圖片上傳失敗: ' + upErr.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
       const { data: urlData } = sb.storage.from('materials').getPublicUrl(path);
       imageUrl = urlData.publicUrl;
@@ -3389,8 +3398,8 @@ async function saveMaterial(id) {
     };
     if (!obj.name) { toast('請輸入名稱', 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
     let err;
-    if (id) { ({ error: err } = await sb.from('materials').update(obj).eq('id', id)); }
-    else { ({ error: err } = await sb.from('materials').insert(obj)); }
+    if (id) { ({ error: err } = await withTimeout(sb.from('materials').update(obj).eq('id', id))); }
+    else { ({ error: err } = await withTimeout(sb.from('materials').insert(obj))); }
     if (err) { toast('儲存失敗: ' + err.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
     toast('已儲存'); closeModal(); await loadMaterials(); renderAdminContent();
   } catch (e) { toast('錯誤: ' + e.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; }
@@ -3398,7 +3407,7 @@ async function saveMaterial(id) {
 
 async function deleteMaterial(id) {
   if (!await showConfirm('刪除品項', '確定刪除此品項？')) return;
-  const { error } = await sb.from('materials').delete().eq('id', id);
+  const { error } = await withTimeout(sb.from('materials').delete().eq('id', id));
   if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
   toast('已刪除'); await loadMaterials(); renderAdminContent();
 }
@@ -3479,7 +3488,7 @@ function catDrop(e, targetId) {
 
 async function saveCatSort() {
   for (let i = 0; i < allCategories.length; i++) {
-    const { error } = await sb.from('categories').update({ sort_order: i }).eq('id', allCategories[i].id);
+    const { error } = await withTimeout(sb.from('categories').update({ sort_order: i }).eq('id', allCategories[i].id));
     if (error) { toast('排序儲存失敗: ' + error.message, 'error'); return; }
     allCategories[i].sort_order = i;
   }
@@ -3512,11 +3521,11 @@ async function saveCategory(id) {
   const obj = { name: document.getElementById('fCatName').value.trim() };
   if (!obj.name) { toast('請輸入名稱', 'error'); return; }
   let err;
-  if (id) { ({ error: err } = await sb.from('categories').update(obj).eq('id', id)); }
+  if (id) { ({ error: err } = await withTimeout(sb.from('categories').update(obj).eq('id', id))); }
   else {
     const maxSort = allCategories.length > 0 ? Math.max(...allCategories.map(c => c.sort_order || 0)) : -1;
     obj.sort_order = maxSort + 1;
-    ({ error: err } = await sb.from('categories').insert(obj));
+    ({ error: err } = await withTimeout(sb.from('categories').insert(obj)));
   }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
   toast('已儲存'); closeModal(); await loadCategories(); renderAdminContent();
@@ -3524,7 +3533,7 @@ async function saveCategory(id) {
 
 async function deleteCategory(id) {
   if (!await showConfirm('刪除類別', '確定刪除此類別？')) return;
-  const { error } = await sb.from('categories').delete().eq('id', id);
+  const { error } = await withTimeout(sb.from('categories').delete().eq('id', id));
   if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
   toast('已刪除'); await loadCategories(); renderAdminContent();
 }
@@ -3690,11 +3699,11 @@ async function saveRole(id) {
   const obj = { display_name: displayName, permissions: perms };
   let err;
   if (id) {
-    ({ error: err } = await sb.from('roles').update(obj).eq('id', id));
+    ({ error: err } = await withTimeout(sb.from('roles').update(obj).eq('id', id)));
   } else {
     obj.is_system = false;
     obj.name = displayName.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '_').replace(/_+/g, '_') + '_' + Date.now();
-    ({ error: err } = await sb.from('roles').insert(obj));
+    ({ error: err } = await withTimeout(sb.from('roles').insert(obj)));
   }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
   toast('已儲存'); closeModal(); await loadRoles(); renderUserMgmt();
@@ -3704,7 +3713,7 @@ async function deleteRole(id) {
   const role = allRoles.find(r => r.id === id);
   if (role && role.is_system) { toast('系統角色不可刪除', 'error'); return; }
   if (!await showConfirm('刪除角色', '確定要刪除此角色？使用此角色的人員將失去角色設定。')) return;
-  const { error } = await sb.from('roles').delete().eq('id', id);
+  const { error } = await withTimeout(sb.from('roles').delete().eq('id', id));
   if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
   toast('已刪除'); await loadRoles(); renderUserMgmt();
 }
@@ -3791,7 +3800,7 @@ async function saveUser(id) {
   } else if (roleVal) {
     obj.role = roleVal;
   }
-  const { error } = await sb.from('user_profiles').update(obj).eq('id', id);
+  const { error } = await withTimeout(sb.from('user_profiles').update(obj).eq('id', id));
   if (error) { toast('儲存失敗: ' + error.message, 'error'); return; }
   toast('已更新'); closeModal(); await loadUsers(); renderUserMgmt();
 }
@@ -3799,7 +3808,7 @@ async function saveUser(id) {
 async function toggleUserActive(id, active) {
   const action = active ? '啟用' : '停用';
   if (!await showConfirm(`${action}帳號`, `確定要${action}此帳號？`)) return;
-  const { error } = await sb.from('user_profiles').update({ is_active: active }).eq('id', id);
+  const { error } = await withTimeout(sb.from('user_profiles').update({ is_active: active }).eq('id', id));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   toast(`已${action}`); await loadUsers(); renderUserMgmt();
 }
@@ -3851,7 +3860,7 @@ async function renderAccountSettings() {
 async function updateAccountEmail() {
   const email = document.getElementById('accEmail').value.trim();
   if (!email) { toast('請輸入信箱', 'error'); return; }
-  const { error } = await sb.auth.updateUser({ email });
+  const { error } = await withTimeout(sb.auth.updateUser({ email }));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   toast('請到信箱點擊驗證連結');
 }
@@ -3859,7 +3868,7 @@ async function updateAccountEmail() {
 async function updateAccountPassword() {
   const password = document.getElementById('accPassword').value;
   if (!password || password.length < 6) { toast('密碼至少 6 個字元', 'error'); return; }
-  const { error } = await sb.auth.updateUser({ password });
+  const { error } = await withTimeout(sb.auth.updateUser({ password }));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   toast('密碼已更新');
   document.getElementById('accPassword').value = '';
@@ -3868,7 +3877,7 @@ async function updateAccountPassword() {
 async function updateDisplayName() {
   const name = document.getElementById('accDisplayName').value.trim();
   if (!name) { toast('請輸入名稱', 'error'); return; }
-  const { error } = await sb.from('user_profiles').update({ display_name: name }).eq('id', currentUser.id);
+  const { error } = await withTimeout(sb.from('user_profiles').update({ display_name: name }).eq('id', currentUser.id));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   userProfile.display_name = name;
   document.getElementById('headerUser').textContent = `${name} (${roleLabel(userProfile.role, userProfile.role_id)})`;

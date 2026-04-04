@@ -70,7 +70,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .more-menu .mm-item{color:var(--text)}
 .more-menu .mm-item:hover{background:rgba(255,255,255,.08)}
 
-@media(max-width:900px){
+@media(max-width:1024px){
   .sidebar{display:none}
   .bottom-nav{display:block}
   .content{padding:12px;padding-bottom:80px}
@@ -427,9 +427,19 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
     <div class="login-logo">⏳</div>
     <h1>等待角色指派</h1>
     <div class="waiting-msg">
-      您已成功登入，但尚未被管理者指派角色與診所。<br>請聯繫管理者完成設定後重新整理頁面。
+      您已成功登入！<br>管理者尚未指派您的角色與診所。<br>請聯繫管理者完成設定。
     </div>
-    <button class="btn btn-ghost" style="margin-top:16px" onclick="doLogout()">登出</button>
+    <div style="margin-top:16px;padding:12px;background:rgba(99,179,237,.15);border-radius:8px;font-size:.85rem">
+      💡 建議先設定電子信箱，方便日後登入：
+      <div style="margin-top:8px">
+        <input id="waitEmail" type="email" placeholder="輸入信箱" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:rgba(255,255,255,.08);color:var(--text)">
+        <button class="btn btn-primary btn-sm" onclick="setWaitEmail()" style="width:100%">設定信箱</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost" onclick="doLogout()">登出</button>
+      <button class="btn btn-primary" onclick="location.reload()">重新整理</button>
+    </div>
   </div>
 </div>
 
@@ -615,6 +625,14 @@ async function doLogin() {
 }
 
 async function doLogout() { await sb.auth.signOut(); showLogin(); }
+
+async function setWaitEmail() {
+  const email = document.getElementById('waitEmail').value.trim();
+  if (!email) { toast('請輸入信箱', 'error'); return; }
+  const { error } = await sb.auth.updateUser({ email });
+  if (error) { toast('設定失敗: ' + error.message, 'error'); return; }
+  toast('驗證信已寄出，請到信箱點擊連結');
+}
 
 async function loadProfile() {
   const { data, error } = await sb.from('user_profiles').select('*, roles(*)').eq('id', currentUser.id).single();

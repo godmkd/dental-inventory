@@ -805,14 +805,14 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '5%', left: '2%', delay: '0s', duration: '6s', anim: 'float' },
-    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '3%', left: '48%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
-    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '28%', left: '55%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
-    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '30%', left: '2%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '38%', left: '32%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] },
-    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '20%', left: '22%', delay: '2.8s', duration: '5s', anim: 'float3' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '55%', left: '18%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
-    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '53%', left: '52%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' }
+    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '2%', left: '2%', delay: '0s', duration: '6s', anim: 'float' },
+    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '2%', left: '52%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
+    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '36%', left: '2%', delay: '2.8s', duration: '5s', anim: 'float3' },
+    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '36%', left: '35%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '38%', left: '73%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '66%', left: '2%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '66%', left: '40%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] },
+    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '68%', left: '72%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' }
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
@@ -1399,8 +1399,7 @@ async function renderMaterialMgmt() {
   const tabs = [
     { id: 'daily', icon: '🔄', label: '日常變動', perm: 'daily_changes' },
     { id: 'ordering', icon: '📦', label: '叫貨', perm: 'create_orders' },
-    { id: 'receiving', icon: '✅', label: '收貨', perm: 'receive_orders' },
-    { id: 'tutorials', icon: '📖', label: '教學' }
+    { id: 'receiving', icon: '✅', label: '收貨', perm: 'receive_orders' }
   ];
   const visibleTabs = tabs.filter(t => !t.perm || hasPermission(t.perm));
   if (!visibleTabs.find(t => t.id === window.matMgmtTab)) {
@@ -1413,7 +1412,7 @@ async function renderMaterialMgmt() {
     </div>
     <div id="matMgmtContent"></div>`;
   const container = document.getElementById('matMgmtContent');
-  const renderMap = { daily: renderDailyChange, ordering: renderOrdering, receiving: renderReceiving, tutorials: renderTutorials };
+  const renderMap = { daily: renderDailyChange, ordering: renderOrdering, receiving: renderReceiving };
   const fn = renderMap[window.matMgmtTab];
   if (fn) await fn(container);
 }

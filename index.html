@@ -805,14 +805,14 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '2%', left: '0%', delay: '2.8s', duration: '5s', anim: 'float3' },
-    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '1%', left: '24%', delay: '0s', duration: '6s', anim: 'float' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '3%', left: '58%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
-    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '25%', left: '3%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '20%', left: '38%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
-    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '22%', left: '70%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' },
-    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '48%', left: '18%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '50%', left: '52%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] }
+    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '2%', left: '0%', pt: '3%', pl: '1%', delay: '2.8s', duration: '5s', anim: 'float3' },
+    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '1%', left: '24%', pt: '2%', pl: '26%', delay: '0s', duration: '6s', anim: 'float' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '3%', left: '58%', pt: '4%', pl: '60%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
+    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '25%', left: '3%', pt: '23%', pl: '2%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '20%', left: '38%', pt: '27%', pl: '28%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
+    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '22%', left: '70%', pt: '21%', pl: '62%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' },
+    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '48%', left: '18%', pt: '47%', pl: '14%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
+    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '50%', left: '52%', pt: '49%', pl: '50%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] }
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
@@ -820,14 +820,27 @@ function buildBubbles() {
     // Permission check
     if (b.perm && !hasPermission(b.perm)) return;
     if (b.perms && !b.perms.some(p => hasPermission(p))) return;
-    let posStyle = `top:${b.top};left:${b.left};`;
-    posStyle += `animation-name:${b.anim || 'float'};animation-delay:${b.delay};animation-duration:${b.duration || '6s'};`;
-    html += `<div class="bubble bubble-${b.size}" data-page="${b.id}" style="${posStyle}" onclick="navigateToBubble('${b.id}')">
+    const animStyle = `animation-name:${b.anim || 'float'};animation-delay:${b.delay};animation-duration:${b.duration || '6s'};`;
+    html += `<div class="bubble bubble-${b.size}" data-page="${b.id}" data-top="${b.top}" data-left="${b.left}" data-pt="${b.pt}" data-pl="${b.pl}" style="top:${b.top};left:${b.left};${animStyle}" onclick="navigateToBubble('${b.id}')">
       <span class="bubble-icon">${b.icon}</span>
       <span class="bubble-label">${b.label}</span>
     </div>`;
   });
   container.innerHTML = html;
+  layoutBubbles();
+}
+
+function layoutBubbles() {
+  const isPortrait = window.innerWidth <= 768 && window.innerWidth < window.innerHeight;
+  document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
+    if (isPortrait) {
+      el.style.top = el.dataset.pt;
+      el.style.left = el.dataset.pl;
+    } else {
+      el.style.top = el.dataset.top;
+      el.style.left = el.dataset.left;
+    }
+  });
 }
 
 

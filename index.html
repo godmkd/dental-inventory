@@ -415,6 +415,22 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
   .content-section{padding:12px;padding-bottom:20px}
   .home-section{padding:60px 10px 20px;min-height:calc(100vh - 56px)}
 }
+@media(min-width:769px){
+  .bubble-xlarge{width:min(32vw,22vh,170px);height:min(32vw,22vh,170px)}
+  .bubble-large{width:min(27vw,18vh,140px);height:min(27vw,18vh,140px)}
+  .bubble-medium{width:min(23vw,15vh,120px);height:min(23vw,15vh,120px)}
+  .bubble-small{width:min(19vw,12vh,100px);height:min(19vw,12vh,100px)}
+}
+@media(max-width:1100px) and (orientation:landscape){
+  .bubble-xlarge{width:min(20vw,30vh);height:min(20vw,30vh)}
+  .bubble-xlarge .bubble-icon{font-size:1.8rem}.bubble-xlarge .bubble-label{font-size:.72rem}
+  .bubble-large{width:min(17vw,25vh);height:min(17vw,25vh)}
+  .bubble-large .bubble-icon{font-size:1.5rem}.bubble-large .bubble-label{font-size:.68rem}
+  .bubble-medium{width:min(14vw,21vh);height:min(14vw,21vh)}
+  .bubble-medium .bubble-icon{font-size:1.3rem}.bubble-medium .bubble-label{font-size:.64rem}
+  .bubble-small{width:min(12vw,17vh);height:min(12vw,17vh)}
+  .bubble-small .bubble-icon{font-size:1.1rem}.bubble-small .bubble-label{font-size:.6rem}
+}
 </style>
 </head>
 <body>
@@ -805,14 +821,15 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    { id: 'tutorials', icon: '📖', label: '教學', size: 'medium', top: '2%', left: '0%', pt: '3%', pl: '1%', delay: '2.8s', duration: '5s', anim: 'float3' },
-    { id: 'stock-overview', icon: '📊', label: '庫存總覽', size: 'xlarge', top: '1%', left: '24%', pt: '2%', pl: '26%', delay: '0s', duration: '6s', anim: 'float' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small', top: '3%', left: '58%', pt: '4%', pl: '60%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
-    { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', size: 'large', top: '25%', left: '3%', pt: '23%', pl: '2%', delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'material-mgmt', icon: '🦷', label: '牙材管理', size: 'xlarge', top: '20%', left: '38%', pt: '27%', pl: '28%', delay: '0.8s', duration: '7s', anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
-    { id: 'customize', icon: '🎨', label: '客製化', size: 'small', top: '22%', left: '70%', pt: '21%', pl: '62%', delay: '3.6s', duration: '5.8s', anim: 'float', perm: 'change_background' },
-    { id: 'order-mgmt', icon: '📋', label: '叫貨管理', size: 'large', top: '48%', left: '18%', pt: '47%', pl: '14%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
-    { id: 'user-mgmt', icon: '👥', label: '人員管理', size: 'medium', top: '50%', left: '52%', pt: '49%', pl: '50%', delay: '1.2s', duration: '7.5s', anim: 'float', perms: ['manage_users', 'manage_roles'] }
+    // top/left=電腦, pt/pl=直幅手機, lt/ll=橫幅手機
+    { id: 'tutorials',        icon: '📖', label: '教學',    size: 'medium', top: '2%',  left: '0%',  pt: '3%',  pl: '1%',  lt: '1%',  ll: '1%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
+    { id: 'stock-overview',   icon: '📊', label: '庫存總覽', size: 'xlarge', top: '1%',  left: '24%', pt: '2%',  pl: '26%', lt: '0%',  ll: '13%', delay: '0s',   duration: '6s',   anim: 'float' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small',  top: '3%',  left: '58%', pt: '4%',  pl: '60%', lt: '2%',  ll: '31%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
+    { id: 'admin-mgmt',       icon: '⚙️', label: '行政管理', size: 'large',  top: '25%', left: '3%',  pt: '23%', pl: '2%',  lt: '47%', ll: '1%',  delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
+    { id: 'material-mgmt',    icon: '🦷', label: '牙材管理', size: 'xlarge', top: '20%', left: '44%', pt: '27%', pl: '31%', lt: '47%', ll: '16%', delay: '0.8s', duration: '7s',   anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
+    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'small',  top: '22%', left: '70%', pt: '21%', pl: '65%', lt: '2%',  ll: '43%', delay: '3.6s', duration: '5.8s', anim: 'float',  perm: 'change_background' },
+    { id: 'order-mgmt',       icon: '📋', label: '叫貨管理', size: 'large',  top: '48%', left: '18%', pt: '52%', pl: '14%', lt: '47%', ll: '33%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
+    { id: 'user-mgmt',        icon: '👥', label: '人員管理', size: 'medium', top: '50%', left: '52%', pt: '54%', pl: '50%', lt: '48%', ll: '49%', delay: '1.2s', duration: '7.5s', anim: 'float',  perms: ['manage_users', 'manage_roles'] }
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
@@ -821,7 +838,7 @@ function buildBubbles() {
     if (b.perm && !hasPermission(b.perm)) return;
     if (b.perms && !b.perms.some(p => hasPermission(p))) return;
     const animStyle = `animation-name:${b.anim || 'float'};animation-delay:${b.delay};animation-duration:${b.duration || '6s'};`;
-    html += `<div class="bubble bubble-${b.size}" data-page="${b.id}" data-top="${b.top}" data-left="${b.left}" data-pt="${b.pt}" data-pl="${b.pl}" style="top:${b.top};left:${b.left};${animStyle}" onclick="navigateToBubble('${b.id}')">
+    html += `<div class="bubble bubble-${b.size}" data-page="${b.id}" data-top="${b.top}" data-left="${b.left}" data-pt="${b.pt}" data-pl="${b.pl}" data-lt="${b.lt}" data-ll="${b.ll}" style="top:${b.top};left:${b.left};${animStyle}" onclick="navigateToBubble('${b.id}')">
       <span class="bubble-icon">${b.icon}</span>
       <span class="bubble-label">${b.label}</span>
     </div>`;
@@ -831,11 +848,16 @@ function buildBubbles() {
 }
 
 function layoutBubbles() {
-  const isPortrait = window.innerWidth <= 768 && window.innerWidth < window.innerHeight;
+  const w = window.innerWidth, h = window.innerHeight;
+  const isPortrait = w < h && w <= 900;
+  const isLandscape = w > h && h <= 500;
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     if (isPortrait) {
       el.style.top = el.dataset.pt;
       el.style.left = el.dataset.pl;
+    } else if (isLandscape) {
+      el.style.top = el.dataset.lt;
+      el.style.left = el.dataset.ll;
     } else {
       el.style.top = el.dataset.top;
       el.style.left = el.dataset.left;

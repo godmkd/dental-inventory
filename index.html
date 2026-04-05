@@ -742,6 +742,7 @@ function enterEditMode() {
   document.getElementById('editCancelBtn').style.display = 'block';
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
+    el.style.touchAction = 'none'; // let JS handle all touches for drag
     el.addEventListener('pointerdown', _bubbleDragStart);
     // Suppress navigation clicks on all bubbles except system-logo (logo click = save)
     if (el.dataset.page !== 'system-logo') el.addEventListener('click', _suppressClick, true);
@@ -759,6 +760,7 @@ function exitEditMode() {
   document.getElementById('editCancelBtn').style.display = 'none';
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.remove('edit-mode-bubble');
+    el.style.touchAction = '';
     el.removeEventListener('pointerdown', _bubbleDragStart);
     if (el.dataset.page !== 'system-logo') el.removeEventListener('click', _suppressClick, true);
   });
@@ -788,8 +790,9 @@ let _dragEl = null, _dragOX = 0, _dragOY = 0;
 function _bubbleDragStart(e) {
   if (!editMode) return;
   e.preventDefault(); e.stopPropagation();
-  _dragEl = this;
+  _dragEl = e.currentTarget;
   try { _dragEl.setPointerCapture(e.pointerId); } catch(_) {}
+  _dragEl.style.transition = 'none';
   const er = _dragEl.getBoundingClientRect();
   _dragOX = e.clientX - er.left; _dragOY = e.clientY - er.top;
   _dragEl.addEventListener('pointermove', _bubbleDragMove);
@@ -806,6 +809,7 @@ function _bubbleDragMove(e) {
 }
 function _bubbleDragEnd() {
   if (!_dragEl) return;
+  _dragEl.style.transition = '';
   _dragEl.removeEventListener('pointermove', _bubbleDragMove);
   _dragEl.removeEventListener('pointerup', _bubbleDragEnd);
   _dragEl.removeEventListener('pointercancel', _bubbleDragEnd);

@@ -414,6 +414,12 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .user-menu{display:none;position:fixed;top:100px;right:12px;z-index:300;background:rgba(15,12,41,.97);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:14px 16px;min-width:170px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
 .user-menu.open{display:block}
 .user-menu-name{color:rgba(255,255,255,.7);font-size:.82rem;margin-bottom:10px;line-height:1.4}
+/* Edit mode */
+.edit-mode-bubble{cursor:move!important;animation:none!important;border-color:rgba(99,179,237,.7)!important;box-shadow:0 0 0 2px rgba(99,179,237,.4),0 0 20px rgba(99,179,237,.2)!important}
+.edit-mode-bubble::after{content:'✥';position:absolute;bottom:5px;font-size:.55rem;color:rgba(99,179,237,.8)}
+.bubble-fixed-logo.edit-mode{background:rgba(99,179,237,.2)!important;border-color:rgba(99,179,237,.6)!important}
+#editCancelBtn{display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:rgba(30,27,60,.95);border:1px solid rgba(255,255,255,.2);color:var(--text-light);border-radius:20px;padding:8px 20px;cursor:pointer;font-size:.85rem;white-space:nowrap}
+#editCancelBtn:hover{color:#fff;border-color:rgba(255,255,255,.4)}
 .content-section{min-height:100vh;padding:20px;background:#000;display:none;scroll-margin-top:92px}
 .content-section.active{display:block}
 .back-home-btn{position:sticky;top:12px;z-index:50;background:#000;color:var(--text);border:1px solid rgba(255,255,255,.15);padding:8px 18px;border-radius:20px;cursor:pointer;font-size:.88rem;transition:all .2s;margin-bottom:12px}
@@ -502,19 +508,22 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
   </div>
 </div>
 
-<!-- Fixed corner bubbles (always on top) -->
-<div class="bubble bubble-medium bubble-fixed bubble-fixed-logo" onclick="scrollToHome()" title="回首頁">
-  <span class="bubble-icon">🦷</span>
-  <span class="bubble-label">牙材採購</span>
+<!-- Fixed corner bubbles (shown after login) -->
+<div id="fixedBubbles" style="display:none">
+  <div class="bubble bubble-medium bubble-fixed bubble-fixed-logo" id="logoBubble" onclick="handleLogoBubbleClick()">
+    <span class="bubble-icon" id="logoBubbleIcon">🦷</span>
+    <span class="bubble-label" id="logoBubbleLabel">牙材採購</span>
+  </div>
+  <div class="bubble bubble-medium bubble-fixed bubble-fixed-user" id="userBubble" onclick="toggleUserMenu()">
+    <span class="bubble-icon">👤</span>
+    <span class="bubble-label" id="userBubbleLabel">載入中</span>
+  </div>
+  <div class="user-menu" id="userMenu">
+    <div class="user-menu-name" id="userMenuName"></div>
+    <button class="btn btn-danger" style="width:100%;font-size:.85rem" onclick="doLogout()">登出</button>
+  </div>
 </div>
-<div class="bubble bubble-medium bubble-fixed bubble-fixed-user" id="userBubble" onclick="toggleUserMenu()">
-  <span class="bubble-icon">👤</span>
-  <span class="bubble-label" id="userBubbleLabel">載入中</span>
-</div>
-<div class="user-menu" id="userMenu">
-  <div class="user-menu-name" id="userMenuName"></div>
-  <button class="btn btn-danger" style="width:100%;font-size:.85rem" onclick="doLogout()">登出</button>
-</div>
+<div id="editCancelBtn" onclick="exitEditMode()">✗ 取消調整</div>
 
 <!-- App -->
 <div id="app" class="app">
@@ -707,6 +716,116 @@ document.addEventListener('click', e => {
   }
 });
 
+// ── Bubble layout edit mode ──
+let editMode = false;
+window._customBubblePositions = null;
+
+async function loadBubblePositions() {
+  try {
+    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key','bubble_positions').maybeSingle());
+    window._customBubblePositions = data?.value || null;
+  } catch(e) { window._customBubblePositions = null; }
+}
+
+function handleLogoBubbleClick() {
+  if (editMode) saveLayoutAndExit();
+  else scrollToHome();
+}
+
+let _logoLongTimer = null;
+function setupLogoBubbleLongPress() {
+  const el = document.getElementById('logoBubble');
+  if (!el) return;
+  el.addEventListener('pointerdown', () => {
+    _logoLongTimer = setTimeout(() => {
+      if (hasPermission('arrange_layout')) enterEditMode();
+      else toast('需要「版面調整」權限', 'error');
+    }, 700);
+  });
+  ['pointerup','pointercancel','pointermove'].forEach(ev =>
+    el.addEventListener(ev, () => clearTimeout(_logoLongTimer))
+  );
+}
+
+function enterEditMode() {
+  editMode = true;
+  document.getElementById('logoBubbleIcon').textContent = '✅';
+  document.getElementById('logoBubbleLabel').textContent = '確定儲存';
+  document.getElementById('logoBubble').classList.add('edit-mode');
+  document.getElementById('editCancelBtn').style.display = 'block';
+  document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
+    el.classList.add('edit-mode-bubble');
+    el.addEventListener('pointerdown', _bubbleDragStart);
+  });
+  const w = window.innerWidth, h = window.innerHeight;
+  const vp = (w < h && w <= 900) ? '直幅' : (w > h && h <= 500) ? '橫幅' : '電腦';
+  toast(`已進入${vp}版面調整模式，拖動泡泡後點左上角確定儲存`, 'info');
+}
+
+function exitEditMode() {
+  editMode = false;
+  document.getElementById('logoBubbleIcon').textContent = '🦷';
+  document.getElementById('logoBubbleLabel').textContent = '牙材採購';
+  document.getElementById('logoBubble').classList.remove('edit-mode');
+  document.getElementById('editCancelBtn').style.display = 'none';
+  document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
+    el.classList.remove('edit-mode-bubble');
+    el.removeEventListener('pointerdown', _bubbleDragStart);
+  });
+}
+
+async function saveLayoutAndExit() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const isPortrait = w < h && w <= 900;
+  const isLandscape = w > h && h <= 500;
+  const viewport = isPortrait ? 'portrait' : isLandscape ? 'landscape' : 'desktop';
+  const positions = {};
+  document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
+    if (el.dataset.page) positions[el.dataset.page] = { top: el.style.top, left: el.style.left };
+  });
+  const merged = { ...(window._customBubblePositions || {}) };
+  merged[viewport] = positions;
+  try {
+    await withTimeout(sb.from('app_settings').upsert({ key: 'bubble_positions', value: merged, updated_at: new Date().toISOString() }));
+    window._customBubblePositions = merged;
+    toast('版面已儲存，所有人重整後生效', 'success');
+  } catch(e) { toast('儲存失敗：' + e.message, 'error'); }
+  exitEditMode();
+}
+
+// Drag handlers
+let _dragEl = null, _dragOX = 0, _dragOY = 0;
+function _bubbleDragStart(e) {
+  if (!editMode) return;
+  e.preventDefault(); e.stopPropagation();
+  _dragEl = this;
+  try { _dragEl.setPointerCapture(e.pointerId); } catch(_) {}
+  const er = _dragEl.getBoundingClientRect();
+  _dragOX = e.clientX - er.left;
+  _dragOY = e.clientY - er.top;
+  _dragEl.addEventListener('pointermove', _bubbleDragMove);
+  _dragEl.addEventListener('pointerup', _bubbleDragEnd);
+  _dragEl.addEventListener('pointercancel', _bubbleDragEnd);
+}
+function _bubbleDragMove(e) {
+  if (!_dragEl) return;
+  e.preventDefault();
+  const cr = _dragEl.parentElement.getBoundingClientRect();
+  const cw = _dragEl.parentElement.offsetWidth;
+  const ch = _dragEl.parentElement.offsetHeight;
+  const x = e.clientX - cr.left - _dragOX;
+  const y = e.clientY - cr.top - _dragOY;
+  _dragEl.style.left = Math.max(0, Math.min(x / cw * 100, 96)).toFixed(1) + '%';
+  _dragEl.style.top  = Math.max(0, Math.min(y / ch * 100, 96)).toFixed(1) + '%';
+}
+function _bubbleDragEnd() {
+  if (!_dragEl) return;
+  _dragEl.removeEventListener('pointermove', _bubbleDragMove);
+  _dragEl.removeEventListener('pointerup', _bubbleDragEnd);
+  _dragEl.removeEventListener('pointercancel', _bubbleDragEnd);
+  _dragEl = null;
+}
+
 async function setWaitEmail() {
   const email = document.getElementById('waitEmail').value.trim();
   if (!email) { toast('請輸入信箱', 'error'); return; }
@@ -748,10 +867,12 @@ async function enterApp() {
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  document.getElementById('fixedBubbles').style.display = 'block';
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   document.getElementById('userMenuName').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
-  await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles()]);
+  await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
   buildBubbles();
+  setupLogoBubbleLongPress();
   applyCustomFont();
   // Check email prompt
   if ((!currentUser.email || currentUser.email === '') && !localStorage.getItem('email_prompted')) {
@@ -775,7 +896,8 @@ const ALL_PERMISSIONS = [
   { key: 'manage_clinics', label: '管理診所' },
   { key: 'manage_users', label: '管理人員' },
   { key: 'manage_roles', label: '管理角色' },
-  { key: 'change_background', label: '更換頁面背景' }
+  { key: 'change_background', label: '更換頁面背景' },
+  { key: 'arrange_layout', label: '版面調整' }
 ];
 
 function roleLabel(roleStr, roleId) {
@@ -897,8 +1019,14 @@ function layoutBubbles() {
   const w = window.innerWidth, h = window.innerHeight;
   const isPortrait = w < h && w <= 900;
   const isLandscape = w > h && h <= 500;
+  const viewport = isPortrait ? 'portrait' : isLandscape ? 'landscape' : 'desktop';
+  const custom = window._customBubblePositions?.[viewport];
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
-    if (isPortrait) {
+    const id = el.dataset.page;
+    if (custom && custom[id]) {
+      el.style.top = custom[id].top;
+      el.style.left = custom[id].left;
+    } else if (isPortrait) {
       el.style.top = el.dataset.pt;
       el.style.left = el.dataset.pl;
     } else if (isLandscape) {

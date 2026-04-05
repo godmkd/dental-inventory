@@ -399,8 +399,8 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 @keyframes float2{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-7px) rotate(-3deg)}}
 @keyframes float3{0%,100%{transform:translateY(0) rotate(1deg)}50%{transform:translateY(-12px) rotate(-1deg)}}
 .bubble.active{animation:none}
-.bubble .bubble-icon{font-size:2rem;margin-bottom:4px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.2))}
-.bubble .bubble-label{font-size:.78rem;font-weight:600;color:#fff;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.3)}
+.bubble .bubble-icon{font-size:2rem;margin-bottom:4px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.2));pointer-events:none}
+.bubble .bubble-label{font-size:.78rem;font-weight:600;color:#fff;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.3);pointer-events:none}
 .bubble-xlarge{width:min(32vw,22vh,170px);height:min(32vw,22vh,170px)}.bubble-xlarge .bubble-icon{font-size:2.8rem}.bubble-xlarge .bubble-label{font-size:.95rem}
 .bubble-large{width:min(27vw,18vh,140px);height:min(27vw,18vh,140px)}.bubble-large .bubble-icon{font-size:2.3rem}.bubble-large .bubble-label{font-size:.85rem}
 .bubble-medium{width:min(23vw,15vh,120px);height:min(23vw,15vh,120px)}.bubble-medium .bubble-icon{font-size:1.9rem}.bubble-medium .bubble-label{font-size:.78rem}
@@ -964,7 +964,7 @@ function buildBubbles() {
   // top/left=電腦(100vw), pt/pl=直幅(120vw—約一個畫面), lt/ll=橫幅(100vw)
   const bubbleConfig = [
     // ── 角落系統泡泡（special） ──
-    { id: 'system-logo', icon: '🦷', label: '牙材採購系統', size: 'medium', top: '1%',  left: '1%',   pt: '1%',  pl: '1%',  lt: '3%',  ll: '1%',   delay: '3.5s', duration: '8s',  anim: 'float3', special: 'logo' },
+    { id: 'system-logo', icon: '🦷', label: '牙材採購系統', size: 'large',  top: '1%',  left: '1%',   pt: '1%',  pl: '1%',  lt: '3%',  ll: '1%',   delay: '3.5s', duration: '8s',  anim: 'float3', special: 'logo' },
     { id: 'user-info',   icon: '👤', label: '',              size: 'medium', top: '1%',  left: '91%',  pt: '1%',  pl: '65%', lt: '3%',  ll: '87%',  delay: '4s',   duration: '7.5s',anim: 'float',  special: 'user' },
     // ── Cluster 1：日常作業（左區）──
     { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '22%', left: '8%',  pt: '10%', pl: '9%',  lt: '20%', ll: '5%',   delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },

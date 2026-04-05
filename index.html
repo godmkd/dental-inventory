@@ -412,7 +412,7 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 /* Edit mode */
 .edit-mode-bubble{cursor:move!important;animation:none!important;border-color:rgba(99,179,237,.7)!important;box-shadow:0 0 0 2px rgba(99,179,237,.4),0 0 20px rgba(99,179,237,.2)!important}
 .edit-mode-bubble::after{content:'✥';position:absolute;bottom:5px;font-size:.55rem;color:rgba(99,179,237,.8)}
-#userBubble.edit-mode{background:rgba(99,179,237,.2)!important;border-color:rgba(99,179,237,.6)!important}
+#logoBubble.edit-mode{background:rgba(99,179,237,.2)!important;border-color:rgba(99,179,237,.6)!important}
 #editCancelBtn{display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:rgba(30,27,60,.95);border:1px solid rgba(255,255,255,.2);color:var(--text-light);border-radius:20px;padding:8px 20px;cursor:pointer;font-size:.85rem;white-space:nowrap}
 #editCancelBtn:hover{color:#fff;border-color:rgba(255,255,255,.4)}
 .content-section{min-height:100vh;padding:20px;background:#000;display:none;scroll-margin-top:92px}
@@ -705,18 +705,18 @@ async function loadBubblePositions() {
 }
 
 function handleLogoBubbleClick() {
-  scrollToHome();
+  if (editMode) saveLayoutAndExit();
+  else scrollToHome();
 }
 
 function handleUserBubbleClick() {
-  if (editMode) saveLayoutAndExit();
-  else toggleUserMenu();
+  toggleUserMenu();
 }
 
-function setupUserBubbleDoubleTap() {
-  const el = document.getElementById('userBubble');
+function setupLogoBubbleDoubleTap() {
+  const el = document.getElementById('logoBubble');
   if (!el) return;
-  el.style.touchAction = 'manipulation'; // fast double-tap, no zoom delay
+  el.style.touchAction = 'manipulation';
   el.addEventListener('contextmenu', e => e.preventDefault());
   el.addEventListener('dblclick', e => {
     e.preventDefault();
@@ -733,31 +733,31 @@ function _suppressClick(e) { e.stopPropagation(); e.preventDefault(); }
 function enterEditMode() {
   editMode = true;
   document.getElementById('userMenu')?.classList.remove('open');
-  document.getElementById('userBubbleIcon').textContent = '✅';
-  document.getElementById('userBubbleLabel').textContent = '確定儲存';
-  document.getElementById('userBubble').classList.add('edit-mode');
+  document.getElementById('logoBubbleIcon').textContent = '✅';
+  document.getElementById('logoBubbleLabel').textContent = '確定儲存';
+  document.getElementById('logoBubble').classList.add('edit-mode');
   document.getElementById('editCancelBtn').style.display = 'block';
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
     el.addEventListener('pointerdown', _bubbleDragStart);
-    // Suppress navigation clicks on all bubbles except user-info (user bubble click = save)
-    if (el.dataset.page !== 'user-info') el.addEventListener('click', _suppressClick, true);
+    // Suppress navigation clicks on all bubbles except system-logo (logo click = save)
+    if (el.dataset.page !== 'system-logo') el.addEventListener('click', _suppressClick, true);
   });
   const w = window.innerWidth, h = window.innerHeight;
   const vp = (w < h && w <= 900) ? '直幅' : (w > h && h <= 500) ? '橫幅' : '電腦';
-  toast(`已進入${vp}版面調整模式，拖動泡泡後點右上 ✅ 儲存`, 'info');
+  toast(`已進入${vp}版面調整模式，拖動泡泡後點左上 ✅ 儲存`, 'info');
 }
 
 function exitEditMode() {
   editMode = false;
-  document.getElementById('userBubbleIcon').textContent = '👤';
-  document.getElementById('userBubbleLabel').textContent = userProfile?.display_name || '我';
-  document.getElementById('userBubble').classList.remove('edit-mode');
+  document.getElementById('logoBubbleIcon').textContent = '🦷';
+  document.getElementById('logoBubbleLabel').textContent = '牙材採購系統';
+  document.getElementById('logoBubble').classList.remove('edit-mode');
   document.getElementById('editCancelBtn').style.display = 'none';
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.remove('edit-mode-bubble');
     el.removeEventListener('pointerdown', _bubbleDragStart);
-    if (el.dataset.page !== 'user-info') el.removeEventListener('click', _suppressClick, true);
+    if (el.dataset.page !== 'system-logo') el.removeEventListener('click', _suppressClick, true);
   });
 }
 
@@ -855,7 +855,7 @@ async function enterApp() {
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
   buildBubbles(); // logo+user bubbles now rendered inside container
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
-  setupUserBubbleDoubleTap();
+  setupLogoBubbleDoubleTap();
   applyCustomFont();
   // Check email prompt
   if ((!currentUser.email || currentUser.email === '') && !localStorage.getItem('email_prompted')) {

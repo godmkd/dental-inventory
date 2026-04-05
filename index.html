@@ -432,6 +432,7 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
   .user-menu{top:75px}
 }
 @media(max-width:1100px) and (orientation:landscape){
+  .home-section{overflow:hidden}
   .bubble-container{width:100vw;min-width:100vw;height:100vh}
   .bubble-xlarge{width:min(14vw,20vh);height:min(14vw,20vh)}
   .bubble-xlarge .bubble-icon{font-size:1.5rem}.bubble-xlarge .bubble-label{font-size:.66rem}
@@ -712,27 +713,26 @@ function handleUserBubbleClick() {
   else toggleUserMenu();
 }
 
-let _userLongTimer = null;
-function setupUserBubbleLongPress() {
+function setupUserBubbleDoubleTap() {
   const el = document.getElementById('userBubble');
   if (!el) return;
+  el.style.touchAction = 'manipulation'; // fast double-tap, no zoom delay
   el.addEventListener('contextmenu', e => e.preventDefault());
-  el.addEventListener('pointerdown', e => {
+  el.addEventListener('dblclick', e => {
     e.preventDefault();
-    _userLongTimer = setTimeout(() => {
+    e.stopPropagation();
+    if (!editMode) {
       if (hasPermission('arrange_layout')) enterEditMode();
       else toast('需要「版面調整」權限', 'error');
-    }, 700);
+    }
   });
-  ['pointerup','pointercancel','pointermove'].forEach(ev =>
-    el.addEventListener(ev, () => clearTimeout(_userLongTimer))
-  );
 }
 
 function _suppressClick(e) { e.stopPropagation(); e.preventDefault(); }
 
 function enterEditMode() {
   editMode = true;
+  document.getElementById('userMenu')?.classList.remove('open');
   document.getElementById('userBubbleIcon').textContent = '✅';
   document.getElementById('userBubbleLabel').textContent = '確定儲存';
   document.getElementById('userBubble').classList.add('edit-mode');
@@ -855,7 +855,7 @@ async function enterApp() {
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
   buildBubbles(); // logo+user bubbles now rendered inside container
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
-  setupUserBubbleLongPress();
+  setupUserBubbleDoubleTap();
   applyCustomFont();
   // Check email prompt
   if ((!currentUser.email || currentUser.email === '') && !localStorage.getItem('email_prompted')) {
@@ -961,28 +961,28 @@ function buildBubbles() {
   // top/left=電腦(100vw), pt/pl=直幅(120vw—約一個畫面), lt/ll=橫幅(100vw)
   const bubbleConfig = [
     // ── 角落系統泡泡（special） ──
-    { id: 'system-logo', icon: '🦷', label: '牙材採購系統', size: 'medium', top: '1%',  left: '1%',   pt: '1%',  pl: '1%',  lt: '2%',  ll: '1%',   delay: '3.5s', duration: '8s',  anim: 'float3', special: 'logo' },
-    { id: 'user-info',   icon: '👤', label: '',              size: 'medium', top: '1%',  left: '91%',  pt: '1%',  pl: '65%', lt: '2%',  ll: '88%',   delay: '4s',   duration: '7.5s',anim: 'float',  special: 'user' },
+    { id: 'system-logo', icon: '🦷', label: '牙材採購系統', size: 'medium', top: '1%',  left: '1%',   pt: '1%',  pl: '1%',  lt: '3%',  ll: '1%',   delay: '3.5s', duration: '8s',  anim: 'float3', special: 'logo' },
+    { id: 'user-info',   icon: '👤', label: '',              size: 'medium', top: '1%',  left: '91%',  pt: '1%',  pl: '65%', lt: '3%',  ll: '87%',  delay: '4s',   duration: '7.5s',anim: 'float',  special: 'user' },
     // ── Cluster 1：日常作業（左區）──
-    { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '22%', left: '8%',  pt: '10%', pl: '9%',  lt: '19%', ll: '6%',   delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },
-    { id: 'daily-change',     icon: '🔄', label: '日常變動', size: 'xlarge', top: '39%', left: '21%', pt: '11%', pl: '42%', lt: '37%', ll: '20%',  delay: '0s',   duration: '7s',   anim: 'float',  perm: 'daily_changes' },
-    { id: 'receiving',        icon: '✅', label: '收貨',     size: 'xlarge', top: '22%', left: '34%', pt: '10%', pl: '75%', lt: '18%', ll: '32%',  delay: '1.6s', duration: '5.5s', anim: 'float3', perm: 'receive_orders' },
-    { id: 'stock-overview',   icon: '🗂️', label: '庫存總覽', size: 'large',  top: '48%', left: '37%', pt: '22%', pl: '83%', lt: '57%', ll: '35%',  delay: '2.7s', duration: '6.5s', anim: 'float2', perm: 'view_all_inventory' },
+    { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '22%', left: '8%',  pt: '10%', pl: '9%',  lt: '20%', ll: '5%',   delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },
+    { id: 'daily-change',     icon: '🔄', label: '日常變動', size: 'xlarge', top: '39%', left: '21%', pt: '11%', pl: '42%', lt: '40%', ll: '12%',  delay: '0s',   duration: '7s',   anim: 'float',  perm: 'daily_changes' },
+    { id: 'receiving',        icon: '✅', label: '收貨',     size: 'xlarge', top: '22%', left: '34%', pt: '10%', pl: '75%', lt: '18%', ll: '23%',  delay: '1.6s', duration: '5.5s', anim: 'float3', perm: 'receive_orders' },
+    { id: 'stock-overview',   icon: '🗂️', label: '庫存總覽', size: 'large',  top: '48%', left: '37%', pt: '22%', pl: '83%', lt: '57%', ll: '22%',  delay: '2.7s', duration: '6.5s', anim: 'float2', perm: 'view_all_inventory' },
     // ── Cluster 2：叫貨管理（中區）──
-    { id: 'order-summary',    icon: '📊', label: '叫貨總覽', size: 'large',  top: '23%', left: '54%', pt: '22%', pl: '10%', lt: '18%', ll: '45%',  delay: '1.1s', duration: '7s',   anim: 'float3', perm: 'manage_orders' },
-    { id: 'order-list',       icon: '📋', label: '各單管理', size: 'large',  top: '41%', left: '65%', pt: '22%', pl: '35%', lt: '40%', ll: '54%',  delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
-    { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '23%', left: '75%', pt: '21%', pl: '60%', lt: '18%', ll: '64%',  delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
+    { id: 'order-summary',    icon: '📊', label: '叫貨總覽', size: 'large',  top: '23%', left: '54%', pt: '22%', pl: '10%', lt: '18%', ll: '38%',  delay: '1.1s', duration: '7s',   anim: 'float3', perm: 'manage_orders' },
+    { id: 'order-list',       icon: '📋', label: '各單管理', size: 'large',  top: '41%', left: '65%', pt: '22%', pl: '35%', lt: '40%', ll: '47%',  delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
+    { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '23%', left: '75%', pt: '21%', pl: '60%', lt: '18%', ll: '55%',  delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
     // ── Cluster 3：系統管理（右區）──
-    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '10%', left: '81%', pt: '32%', pl: '10%', lt: '47%', ll: '72%',  delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
-    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '48%', left: '72%', pt: '33%', pl: '35%', lt: '69%', ll: '72%',  delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
-    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '15%', left: '88%', pt: '32%', pl: '60%', lt: '20%', ll: '79%',  delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
-    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '48%', left: '85%', pt: '33%', pl: '83%', lt: '70%', ll: '79%',  delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
-    { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '8%',  left: '72%', pt: '44%', pl: '8%',  lt: '24%', ll: '73%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '36%', left: '81%', pt: '45%', pl: '36%', lt: '47%', ll: '79%',  delay: '3.5s', duration: '6.5s', anim: 'float' },
-    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '34%', left: '88%', pt: '44%', pl: '61%', lt: '47%', ll: '86%',  delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
-    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '76%', pt: '56%', pl: '12%', lt: '73%', ll: '57%',  delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
-    { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '84%', pt: '57%', pl: '37%', lt: '74%', ll: '64%',  delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
-    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '73%', ll: '86%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
+    { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '8%',  left: '72%', pt: '44%', pl: '8%',  lt: '8%',  ll: '65%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
+    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '10%', left: '81%', pt: '32%', pl: '10%', lt: '20%', ll: '63%',  delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
+    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '15%', left: '88%', pt: '32%', pl: '60%', lt: '10%', ll: '74%',  delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '36%', left: '81%', pt: '45%', pl: '36%', lt: '40%', ll: '64%',  delay: '3.5s', duration: '6.5s', anim: 'float' },
+    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '48%', left: '72%', pt: '33%', pl: '35%', lt: '55%', ll: '63%',  delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
+    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '48%', left: '85%', pt: '33%', pl: '83%', lt: '55%', ll: '74%',  delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
+    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '34%', left: '88%', pt: '44%', pl: '61%', lt: '40%', ll: '75%',  delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
+    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '76%', pt: '56%', pl: '12%', lt: '68%', ll: '65%',  delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
+    { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '84%', pt: '57%', pl: '37%', lt: '70%', ll: '73%',  delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
+    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '68%', ll: '82%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';

@@ -405,19 +405,14 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .bubble-large{width:min(27vw,18vh,140px);height:min(27vw,18vh,140px)}.bubble-large .bubble-icon{font-size:2.3rem}.bubble-large .bubble-label{font-size:.85rem}
 .bubble-medium{width:min(23vw,15vh,120px);height:min(23vw,15vh,120px)}.bubble-medium .bubble-icon{font-size:1.9rem}.bubble-medium .bubble-label{font-size:.78rem}
 .bubble-small{width:min(19vw,12vh,100px);height:min(19vw,12vh,100px)}.bubble-small .bubble-icon{font-size:1.5rem}.bubble-small .bubble-label{font-size:.7rem}
-/* Fixed corner bubbles */
-.bubble-fixed{position:fixed;z-index:200;top:12px;animation:none!important;transition:all .3s}
-.bubble-fixed:hover{transform:scale(1.12)!important;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3)}
-.bubble-fixed-logo{left:12px}
-.bubble-fixed-user{right:12px}
 /* User menu */
-.user-menu{display:none;position:fixed;top:100px;right:12px;z-index:300;background:rgba(15,12,41,.97);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:14px 16px;min-width:170px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.user-menu{display:none;position:fixed;top:90px;right:12px;z-index:300;background:rgba(15,12,41,.97);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:14px 16px;min-width:170px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
 .user-menu.open{display:block}
 .user-menu-name{color:rgba(255,255,255,.7);font-size:.82rem;margin-bottom:10px;line-height:1.4}
 /* Edit mode */
 .edit-mode-bubble{cursor:move!important;animation:none!important;border-color:rgba(99,179,237,.7)!important;box-shadow:0 0 0 2px rgba(99,179,237,.4),0 0 20px rgba(99,179,237,.2)!important}
 .edit-mode-bubble::after{content:'✥';position:absolute;bottom:5px;font-size:.55rem;color:rgba(99,179,237,.8)}
-.bubble-fixed-logo.edit-mode{background:rgba(99,179,237,.2)!important;border-color:rgba(99,179,237,.6)!important}
+#logoBubble.edit-mode{background:rgba(99,179,237,.2)!important;border-color:rgba(99,179,237,.6)!important}
 #editCancelBtn{display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:rgba(30,27,60,.95);border:1px solid rgba(255,255,255,.2);color:var(--text-light);border-radius:20px;padding:8px 20px;cursor:pointer;font-size:.85rem;white-space:nowrap}
 #editCancelBtn:hover{color:#fff;border-color:rgba(255,255,255,.4)}
 .content-section{min-height:100vh;padding:20px;background:#000;display:none;scroll-margin-top:92px}
@@ -429,14 +424,11 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
   .content-section{padding:12px;padding-bottom:20px}
 }
 @media(max-width:768px) and (orientation:portrait){
-  .bubble-container{width:300vw;min-width:300vw;height:100vh}
+  .bubble-container{width:120vw;min-width:120vw;height:100vh}
   .bubble-xlarge{width:min(20vw,13vh);height:min(20vw,13vh)}.bubble-xlarge .bubble-icon{font-size:1.7rem}.bubble-xlarge .bubble-label{font-size:.75rem}
   .bubble-large{width:min(17vw,11vh);height:min(17vw,11vh)}.bubble-large .bubble-icon{font-size:1.45rem}.bubble-large .bubble-label{font-size:.65rem}
   .bubble-medium{width:min(14vw,9vh);height:min(14vw,9vh)}.bubble-medium .bubble-icon{font-size:1.2rem}.bubble-medium .bubble-label{font-size:.6rem}
   .bubble-small{width:min(11vw,7vh);height:min(11vw,7vh)}.bubble-small .bubble-icon{font-size:1rem}.bubble-small .bubble-label{font-size:.55rem}
-  .bubble-fixed{width:min(16vw,10vh)!important;height:min(16vw,10vh)!important}
-  .bubble-fixed .bubble-icon{font-size:1.2rem!important}
-  .bubble-fixed .bubble-label{font-size:.58rem!important}
   .user-menu{top:75px}
 }
 @media(max-width:1100px) and (orientation:landscape){
@@ -449,9 +441,6 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
   .bubble-medium .bubble-icon{font-size:1.3rem}.bubble-medium .bubble-label{font-size:.64rem}
   .bubble-small{width:min(12vw,17vh);height:min(12vw,17vh)}
   .bubble-small .bubble-icon{font-size:1.1rem}.bubble-small .bubble-label{font-size:.6rem}
-  .bubble-fixed{width:min(14vw,21vh)!important;height:min(14vw,21vh)!important}
-  .bubble-fixed .bubble-icon{font-size:1.3rem!important}
-  .bubble-fixed .bubble-label{font-size:.64rem!important}
   .user-menu{top:80px}
 }
 </style>
@@ -505,20 +494,10 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
   </div>
 </div>
 
-<!-- Fixed corner bubbles (shown after login) -->
-<div id="fixedBubbles" style="display:none">
-  <div class="bubble bubble-medium bubble-fixed bubble-fixed-logo" id="logoBubble" onclick="handleLogoBubbleClick()">
-    <span class="bubble-icon" id="logoBubbleIcon">🦷</span>
-    <span class="bubble-label" id="logoBubbleLabel">牙材採購系統</span>
-  </div>
-  <div class="bubble bubble-medium bubble-fixed bubble-fixed-user" id="userBubble" onclick="toggleUserMenu()">
-    <span class="bubble-icon">👤</span>
-    <span class="bubble-label" id="userBubbleLabel">載入中</span>
-  </div>
-  <div class="user-menu" id="userMenu">
-    <div class="user-menu-name" id="userMenuName"></div>
-    <button class="btn btn-danger" style="width:100%;font-size:.85rem" onclick="doLogout()">登出</button>
-  </div>
+<!-- User menu (position:fixed, shown when user bubble tapped) -->
+<div class="user-menu" id="userMenu">
+  <div class="user-menu-name" id="userMenuName"></div>
+  <button class="btn btn-danger" style="width:100%;font-size:.85rem" onclick="doLogout()">登出</button>
 </div>
 <div id="editCancelBtn" onclick="exitEditMode()">✗ 取消調整</div>
 
@@ -755,14 +734,9 @@ function enterEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
     el.addEventListener('pointerdown', _bubbleDragStart);
-    el.addEventListener('click', _suppressClick, true);
+    // Suppress navigation clicks on functional bubbles (but NOT logo—logo click = save)
+    if (el.dataset.page !== 'system-logo') el.addEventListener('click', _suppressClick, true);
   });
-  // Fixed bubbles: also draggable (logo tap = save)
-  ['logoBubble','userBubble'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.classList.add('edit-mode-bubble'); el.addEventListener('pointerdown', _fixedDragStart); }
-  });
-  document.getElementById('userBubble').addEventListener('click', _suppressClick, true);
   const w = window.innerWidth, h = window.innerHeight;
   const vp = (w < h && w <= 900) ? '直幅' : (w > h && h <= 500) ? '橫幅' : '電腦';
   toast(`已進入${vp}版面調整模式，拖動泡泡後點左上 ✅ 儲存`, 'info');
@@ -777,13 +751,8 @@ function exitEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.remove('edit-mode-bubble');
     el.removeEventListener('pointerdown', _bubbleDragStart);
-    el.removeEventListener('click', _suppressClick, true);
+    if (el.dataset.page !== 'system-logo') el.removeEventListener('click', _suppressClick, true);
   });
-  ['logoBubble','userBubble'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.classList.remove('edit-mode-bubble'); el.removeEventListener('pointerdown', _fixedDragStart); }
-  });
-  document.getElementById('userBubble').removeEventListener('click', _suppressClick, true);
 }
 
 async function saveLayoutAndExit() {
@@ -795,29 +764,14 @@ async function saveLayoutAndExit() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     if (el.dataset.page) positions[el.dataset.page] = { top: el.style.top, left: el.style.left };
   });
-  const fixedPos = {};
-  ['logoBubble','userBubble'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { const r = el.getBoundingClientRect(); fixedPos[id] = { top: r.top + 'px', left: r.left + 'px' }; }
-  });
   const merged = { ...(window._customBubblePositions || {}) };
   merged[viewport] = positions;
-  merged.fixed_bubbles = fixedPos;
   try {
     await withTimeout(sb.from('app_settings').upsert({ key: 'bubble_positions', value: merged, updated_at: new Date().toISOString() }));
     window._customBubblePositions = merged;
     toast('版面已儲存，所有人重整後生效', 'success');
   } catch(e) { toast('儲存失敗：' + e.message, 'error'); }
   exitEditMode();
-}
-
-function applyFixedBubblePositions() {
-  const pos = window._customBubblePositions?.fixed_bubbles;
-  if (!pos) return;
-  ['logoBubble','userBubble'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el && pos[id]) { el.style.top = pos[id].top; el.style.left = pos[id].left; el.style.right = 'auto'; }
-  });
 }
 
 // Container bubble drag (% of container)
@@ -849,37 +803,6 @@ function _bubbleDragEnd() {
   _dragEl = null;
 }
 
-// Fixed bubble drag (px viewport-relative); tap logo (no move) = save
-let _fixedDragEl = null, _fixedDragOX = 0, _fixedDragOY = 0, _fixedMoved = false;
-function _fixedDragStart(e) {
-  if (!editMode) return;
-  e.preventDefault(); e.stopPropagation();
-  _fixedDragEl = this; _fixedMoved = false;
-  try { _fixedDragEl.setPointerCapture(e.pointerId); } catch(_) {}
-  const er = _fixedDragEl.getBoundingClientRect();
-  _fixedDragOX = e.clientX - er.left; _fixedDragOY = e.clientY - er.top;
-  _fixedDragEl.addEventListener('pointermove', _fixedDragMove);
-  _fixedDragEl.addEventListener('pointerup', _fixedDragEnd);
-  _fixedDragEl.addEventListener('pointercancel', _fixedDragEnd);
-}
-function _fixedDragMove(e) {
-  if (!_fixedDragEl) return;
-  e.preventDefault(); _fixedMoved = true;
-  const maxX = window.innerWidth - _fixedDragEl.offsetWidth;
-  const maxY = window.innerHeight - _fixedDragEl.offsetHeight;
-  _fixedDragEl.style.left  = Math.max(0, Math.min(e.clientX - _fixedDragOX, maxX)) + 'px';
-  _fixedDragEl.style.top   = Math.max(0, Math.min(e.clientY - _fixedDragOY, maxY)) + 'px';
-  _fixedDragEl.style.right = 'auto';
-}
-function _fixedDragEnd() {
-  if (!_fixedDragEl) return;
-  const wasMoved = _fixedMoved, el = _fixedDragEl;
-  _fixedDragEl.removeEventListener('pointermove', _fixedDragMove);
-  _fixedDragEl.removeEventListener('pointerup', _fixedDragEnd);
-  _fixedDragEl.removeEventListener('pointercancel', _fixedDragEnd);
-  _fixedDragEl = null;
-  if (!wasMoved && el.id === 'logoBubble') saveLayoutAndExit();
-}
 
 async function setWaitEmail() {
   const email = document.getElementById('waitEmail').value.trim();
@@ -922,12 +845,10 @@ async function enterApp() {
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  document.getElementById('fixedBubbles').style.display = 'block';
-  document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   document.getElementById('userMenuName').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
-  buildBubbles();
-  applyFixedBubblePositions();
+  buildBubbles(); // logo+user bubbles now rendered inside container
+  document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   setupLogoBubbleLongPress();
   applyCustomFont();
   // Check email prompt
@@ -1031,40 +952,50 @@ function getNavItems() {
 }
 
 function buildBubbles() {
-  // 三群放射狀佈局：Cluster1=日常作業(左), Cluster2=叫貨管理(中), Cluster3=系統管理(右)
-  // top/left=電腦(180vw容器), pt/pl=直幅(320vw容器), lt/ll=橫幅(240vw容器)
+  // top/left=電腦(180vw), pt/pl=直幅(120vw—約一個畫面), lt/ll=橫幅(240vw)
   const bubbleConfig = [
-    // ── Cluster 1：日常作業 ── center: desktop(21%,39%), portrait(21%,40%), landscape(21%,22%)
-    { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '22%', left: '13%', pt: '25%', pl: '8%',  lt: '19%', ll: '15%', delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },
-    { id: 'daily-change',     icon: '🔄', label: '日常變動', size: 'xlarge', top: '39%', left: '21%', pt: '40%', pl: '21%', lt: '35%', ll: '21%', delay: '0s',   duration: '7s',   anim: 'float',  perm: 'daily_changes' },
-    { id: 'receiving',        icon: '✅', label: '收貨',     size: 'xlarge', top: '21%', left: '30%', pt: '24%', pl: '33%', lt: '18%', ll: '28%', delay: '1.6s', duration: '5.5s', anim: 'float3', perm: 'receive_orders' },
-    { id: 'stock-overview',   icon: '🗂️', label: '庫存總覽', size: 'large',  top: '46%', left: '31%', pt: '45%', pl: '34%', lt: '57%', ll: '29%', delay: '2.7s', duration: '6.5s', anim: 'float2', perm: 'view_all_inventory' },
-    // ── Cluster 2：叫貨管理 ── center: desktop(41%,47%), portrait(41%,47%), landscape(38%,44%)
-    { id: 'order-summary',    icon: '📊', label: '叫貨總覽', size: 'large',  top: '23%', left: '39%', pt: '21%', pl: '42%', lt: '21%', ll: '38%', delay: '1.1s', duration: '7s',   anim: 'float3', perm: 'manage_orders' },
-    { id: 'order-list',       icon: '📋', label: '各單管理', size: 'large',  top: '41%', left: '47%', pt: '41%', pl: '47%', lt: '38%', ll: '44%', delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
-    { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '24%', left: '55%', pt: '24%', pl: '54%', lt: '21%', ll: '49%', delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
-    // ── Cluster 3：系統管理 ── center: desktop(44%,70%), portrait(42%,72%), landscape(50%,63%)
-    { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '25%', left: '63%', pt: '22%', pl: '63%', lt: '23%', ll: '57%', delay: '2.8s', duration: '5s',   anim: 'float3' },
-    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '23%', left: '69%', pt: '20%', pl: '71%', lt: '21%', ll: '64%', delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
-    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '21%', left: '77%', pt: '19%', pl: '81%', lt: '16%', ll: '70%', delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '47%', left: '63%', pt: '40%', pl: '63%', lt: '56%', ll: '57%', delay: '3.5s', duration: '6.5s', anim: 'float' },
-    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '44%', left: '70%', pt: '42%', pl: '72%', lt: '50%', ll: '63%', delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
-    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '47%', left: '78%', pt: '41%', pl: '82%', lt: '50%', ll: '70%', delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
-    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '47%', left: '85%', pt: '41%', pl: '91%', lt: '54%', ll: '76%', delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
-    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '65%', pt: '60%', pl: '67%', lt: '77%', ll: '61%', delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
-    { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '72%', pt: '62%', pl: '75%', lt: '79%', ll: '67%', delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
-    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '79%', pt: '60%', pl: '83%', lt: '76%', ll: '72%', delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
+    // ── 角落系統泡泡（special） ──
+    { id: 'system-logo', icon: '🦷', label: '牙材採購系統', size: 'medium', top: '2%',  left: '0.5%', pt: '1%',  pl: '1%',  lt: '3%',  ll: '0.5%', delay: '3.5s', duration: '8s',  anim: 'float3', special: 'logo' },
+    { id: 'user-info',   icon: '👤', label: '',              size: 'medium', top: '2%',  left: '48%',  pt: '1%',  pl: '65%', lt: '3%',  ll: '35%',  delay: '4s',   duration: '7.5s',anim: 'float',  special: 'user' },
+    // ── Cluster 1：日常作業（左區）──
+    { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '22%', left: '13%', pt: '10%', pl: '9%',  lt: '19%', ll: '15%', delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },
+    { id: 'daily-change',     icon: '🔄', label: '日常變動', size: 'xlarge', top: '39%', left: '21%', pt: '11%', pl: '42%', lt: '35%', ll: '21%', delay: '0s',   duration: '7s',   anim: 'float',  perm: 'daily_changes' },
+    { id: 'receiving',        icon: '✅', label: '收貨',     size: 'xlarge', top: '21%', left: '30%', pt: '10%', pl: '75%', lt: '18%', ll: '28%', delay: '1.6s', duration: '5.5s', anim: 'float3', perm: 'receive_orders' },
+    { id: 'stock-overview',   icon: '🗂️', label: '庫存總覽', size: 'large',  top: '46%', left: '31%', pt: '22%', pl: '83%', lt: '57%', ll: '29%', delay: '2.7s', duration: '6.5s', anim: 'float2', perm: 'view_all_inventory' },
+    // ── Cluster 2：叫貨管理（中區）──
+    { id: 'order-summary',    icon: '📊', label: '叫貨總覽', size: 'large',  top: '23%', left: '39%', pt: '22%', pl: '10%', lt: '21%', ll: '38%', delay: '1.1s', duration: '7s',   anim: 'float3', perm: 'manage_orders' },
+    { id: 'order-list',       icon: '📋', label: '各單管理', size: 'large',  top: '41%', left: '47%', pt: '22%', pl: '35%', lt: '38%', ll: '44%', delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
+    { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '24%', left: '55%', pt: '21%', pl: '60%', lt: '21%', ll: '49%', delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
+    // ── Cluster 3：系統管理（右區）──
+    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '23%', left: '69%', pt: '32%', pl: '10%', lt: '21%', ll: '64%', delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
+    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '44%', left: '70%', pt: '33%', pl: '35%', lt: '50%', ll: '63%', delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
+    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '21%', left: '77%', pt: '32%', pl: '60%', lt: '16%', ll: '70%', delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
+    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '47%', left: '78%', pt: '33%', pl: '83%', lt: '50%', ll: '70%', delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
+    { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '25%', left: '63%', pt: '44%', pl: '8%',  lt: '23%', ll: '57%', delay: '2.8s', duration: '5s',   anim: 'float3' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '47%', left: '63%', pt: '45%', pl: '36%', lt: '56%', ll: '57%', delay: '3.5s', duration: '6.5s', anim: 'float' },
+    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '47%', left: '85%', pt: '44%', pl: '61%', lt: '54%', ll: '76%', delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
+    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '65%', pt: '56%', pl: '12%', lt: '77%', ll: '61%', delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
+    { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '72%', pt: '57%', pl: '37%', lt: '79%', ll: '67%', delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
+    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '79%', pt: '56%', pl: '62%', lt: '76%', ll: '72%', delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
   bubbleConfig.forEach(b => {
-    // Permission check
     if (b.perm && !hasPermission(b.perm)) return;
     if (b.perms && !b.perms.some(p => hasPermission(p))) return;
     const animStyle = `animation-name:${b.anim || 'float'};animation-delay:${b.delay};animation-duration:${b.duration || '6s'};`;
-    html += `<div class="bubble bubble-${b.size}" data-page="${b.id}" data-top="${b.top}" data-left="${b.left}" data-pt="${b.pt}" data-pl="${b.pl}" data-lt="${b.lt}" data-ll="${b.ll}" style="top:${b.top};left:${b.left};${animStyle}" onclick="navigateToBubble('${b.id}')">
+    let idAttr = '', onclick, labelHtml = `<span class="bubble-label">${b.label}</span>`;
+    if (b.special === 'logo') {
+      idAttr = 'id="logoBubble"'; onclick = 'handleLogoBubbleClick()';
+    } else if (b.special === 'user') {
+      idAttr = 'id="userBubble"'; onclick = 'toggleUserMenu()';
+      labelHtml = `<span class="bubble-label" id="userBubbleLabel">帳號</span>`;
+    } else {
+      onclick = `navigateToBubble('${b.id}')`;
+    }
+    html += `<div class="bubble bubble-${b.size}" ${idAttr} data-page="${b.id}" data-top="${b.top}" data-left="${b.left}" data-pt="${b.pt}" data-pl="${b.pl}" data-lt="${b.lt}" data-ll="${b.ll}" style="top:${b.top};left:${b.left};${animStyle}" onclick="${onclick}">
       <span class="bubble-icon">${b.icon}</span>
-      <span class="bubble-label">${b.label}</span>
+      ${labelHtml}
     </div>`;
   });
   container.innerHTML = html;

@@ -704,9 +704,20 @@ async function loadBubblePositions() {
   } catch(e) { window._customBubblePositions = null; }
 }
 
+let _logoTapTimer = null;
 function handleLogoBubbleClick() {
-  if (editMode) saveLayoutAndExit();
-  else scrollToHome();
+  if (editMode) { saveLayoutAndExit(); return; }
+  if (_logoTapTimer) {
+    clearTimeout(_logoTapTimer);
+    _logoTapTimer = null;
+    if (hasPermission('arrange_layout')) enterEditMode();
+    else toast('需要「版面調整」權限', 'error');
+  } else {
+    _logoTapTimer = setTimeout(() => {
+      _logoTapTimer = null;
+      scrollToHome();
+    }, 350);
+  }
 }
 
 function handleUserBubbleClick() {
@@ -718,14 +729,6 @@ function setupLogoBubbleDoubleTap() {
   if (!el) return;
   el.style.touchAction = 'manipulation';
   el.addEventListener('contextmenu', e => e.preventDefault());
-  el.addEventListener('dblclick', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!editMode) {
-      if (hasPermission('arrange_layout')) enterEditMode();
-      else toast('需要「版面調整」權限', 'error');
-    }
-  });
 }
 
 function _suppressClick(e) { e.stopPropagation(); e.preventDefault(); }

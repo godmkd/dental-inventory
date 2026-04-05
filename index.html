@@ -743,9 +743,14 @@ function enterEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
     el.style.touchAction = 'none';
-    el.addEventListener('pointerdown', _bubbleDragStart);
+    el.addEventListener('touchstart', _bubbleDragStart, { passive: false });
+    el.addEventListener('mousedown', _bubbleDragStart);
     if (el.dataset.page !== 'system-logo') el.addEventListener('click', _suppressClick, true);
   });
+  document.addEventListener('touchmove', _globalDragMove, { passive: false });
+  document.addEventListener('touchend', _globalDragEnd);
+  document.addEventListener('mousemove', _globalDragMove);
+  document.addEventListener('mouseup', _globalDragEnd);
   const w = window.innerWidth, h = window.innerHeight;
   const vp = (w < h && w <= 900) ? '直幅' : (w > h && h <= 500) ? '橫幅' : '電腦';
   toast(`已進入${vp}版面調整模式，拖動泡泡後點左上 ✅ 儲存`, 'info');
@@ -761,9 +766,14 @@ function exitEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.remove('edit-mode-bubble');
     el.style.touchAction = '';
-    el.removeEventListener('pointerdown', _bubbleDragStart);
+    el.removeEventListener('touchstart', _bubbleDragStart);
+    el.removeEventListener('mousedown', _bubbleDragStart);
     if (el.dataset.page !== 'system-logo') el.removeEventListener('click', _suppressClick, true);
   });
+  document.removeEventListener('touchmove', _globalDragMove);
+  document.removeEventListener('touchend', _globalDragEnd);
+  document.removeEventListener('mousemove', _globalDragMove);
+  document.removeEventListener('mouseup', _globalDragEnd);
 }
 
 async function saveLayoutAndExit() {
@@ -785,44 +795,41 @@ async function saveLayoutAndExit() {
   exitEditMode();
 }
 
-// Container bubble drag — 300ms hold to activate
+// Container bubble drag — 300ms hold to activate (touch + mouse)
 let _dragEl = null, _dragOX = 0, _dragOY = 0, _dragReady = false, _dragTimer = null;
 let _lastPX = 0, _lastPY = 0;
+function _evCoords(e) { return e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }; }
 function _bubbleDragStart(e) {
   if (!editMode) return;
   e.preventDefault(); e.stopPropagation();
   const el = e.currentTarget;
-  try { el.setPointerCapture(e.pointerId); } catch(_) {}
+  const { x, y } = _evCoords(e);
   _dragEl = el; _dragReady = false;
-  _lastPX = e.clientX; _lastPY = e.clientY;
+  _lastPX = x; _lastPY = y;
+  clearTimeout(_dragTimer);
   _dragTimer = setTimeout(() => {
     if (_dragEl !== el) return;
     _dragReady = true;
     el.style.transition = 'none';
-    // Sync offset to where finger actually is after the hold
     const er = el.getBoundingClientRect();
     _dragOX = _lastPX - er.left; _dragOY = _lastPY - er.top;
   }, 300);
-  el.addEventListener('pointermove', _bubbleDragMove);
-  el.addEventListener('pointerup', _bubbleDragEnd);
-  el.addEventListener('pointercancel', _bubbleDragEnd);
 }
-function _bubbleDragMove(e) {
-  _lastPX = e.clientX; _lastPY = e.clientY;
-  if (!_dragEl || !_dragReady) return;
+function _globalDragMove(e) {
+  if (!_dragEl) return;
+  const { x, y } = _evCoords(e);
+  _lastPX = x; _lastPY = y;
+  if (!_dragReady) return;
   e.preventDefault();
   const cr = _dragEl.parentElement.getBoundingClientRect();
   const cw = _dragEl.parentElement.offsetWidth, ch = _dragEl.parentElement.offsetHeight;
-  _dragEl.style.left = Math.max(0, Math.min((e.clientX - cr.left - _dragOX) / cw * 100, 97)).toFixed(1) + '%';
-  _dragEl.style.top  = Math.max(0, Math.min((e.clientY - cr.top  - _dragOY) / ch * 100, 97)).toFixed(1) + '%';
+  _dragEl.style.left = Math.max(0, Math.min((x - cr.left - _dragOX) / cw * 100, 97)).toFixed(1) + '%';
+  _dragEl.style.top  = Math.max(0, Math.min((y - cr.top  - _dragOY) / ch * 100, 97)).toFixed(1) + '%';
 }
-function _bubbleDragEnd() {
+function _globalDragEnd() {
   clearTimeout(_dragTimer); _dragTimer = null;
   if (!_dragEl) return;
   _dragEl.style.transition = '';
-  _dragEl.removeEventListener('pointermove', _bubbleDragMove);
-  _dragEl.removeEventListener('pointerup', _bubbleDragEnd);
-  _dragEl.removeEventListener('pointercancel', _bubbleDragEnd);
   _dragEl = null; _dragReady = false;
 }
 
@@ -1294,30 +1301,37 @@ async function bgPickFile(input, type, key) {
   const file = input.files[0];
   if (!file) return;
   try {
-    toast('上傳中...', 'info');
-    const compressed = await compressBgImage(file);
-    const storagePath = `backgrounds/${key}.jpg`;
-    try { await withTimeout(sb.storage.from('materials').remove([storagePath])); } catch(e) {}
-    const { error } = await withTimeout(sb.storage.from('materials').upload(storagePath, compressed, { contentType: 'image/jpeg' }));
-    if (error) throw error;
-    const { data: urlData } = sb.storage.from('materials').getPublicUrl(storagePath);
-    const url = urlData.publicUrl + '?t=' + Date.now();
-    if (type === 'page') {
-      localStorage.setItem('bg_' + key, url);
+    toast('處理中...', 'info');
+    const dataUrl = await compressBgImageToDataUrl(file);
+    if (type === 'global') {
+      localStorage.setItem('bg_global', dataUrl);
+      applyGlobalBg();
+    } else if (type === 'page') {
+      localStorage.setItem('bg_' + key, dataUrl);
       applyPageBg(key);
     } else if (type === 'sidebar') {
-      localStorage.setItem('bg_sidebar', url);
+      localStorage.setItem('bg_sidebar', dataUrl);
       applySidebarBg();
-    } else if (type === 'global') {
-      localStorage.setItem('bg_global', url);
-      applyGlobalBg();
     }
     toast('背景已更新');
-    openBgSettingModal(); // refresh modal
+    openBgSettingModal();
   } catch (e) {
     console.error('bgPickFile error:', e);
-    toast('背景上傳失敗：' + (e.message || e), 'error');
+    toast('背景設定失敗：' + (e.message || e), 'error');
   }
+}
+
+async function compressBgImageToDataUrl(file) {
+  const canvas = document.createElement('canvas');
+  const img = new Image();
+  const src = await new Promise(r => { const fr = new FileReader(); fr.onload = ev => r(ev.target.result); fr.readAsDataURL(file); });
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = src; });
+  const MAX = 1280;
+  let w = img.width, h = img.height;
+  if (w > MAX || h > MAX) { const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', 0.65);
 }
 
 async function compressBgImage(file) {
@@ -1334,28 +1348,22 @@ async function compressBgImage(file) {
   return await (await fetch(compressed)).blob();
 }
 
-async function removeBg(type, key) {
-  try {
-    const storagePath = `backgrounds/${key}.jpg`;
-    try { await withTimeout(sb.storage.from('materials').remove([storagePath])); } catch(e) {}
-    if (type === 'page') {
-      localStorage.removeItem('bg_' + key);
-      localStorage.removeItem('bg_opacity_' + key);
-      applyPageBg(key);
-    } else if (type === 'sidebar') {
-      localStorage.removeItem('bg_sidebar');
-      localStorage.removeItem('bg_opacity_sidebar');
-      applySidebarBg();
-    } else if (type === 'global') {
-      localStorage.removeItem('bg_global');
-      localStorage.removeItem('bg_opacity_global');
-      applyGlobalBg();
-    }
-    toast('背景已移除');
-    openBgSettingModal(); // refresh modal
-  } catch (e) {
-    toast('刪除失敗：' + (e.message || e), 'error');
+function removeBg(type, key) {
+  if (type === 'page') {
+    localStorage.removeItem('bg_' + key);
+    localStorage.removeItem('bg_opacity_' + key);
+    applyPageBg(key);
+  } else if (type === 'sidebar') {
+    localStorage.removeItem('bg_sidebar');
+    localStorage.removeItem('bg_opacity_sidebar');
+    applySidebarBg();
+  } else if (type === 'global') {
+    localStorage.removeItem('bg_global');
+    localStorage.removeItem('bg_opacity_global');
+    applyGlobalBg();
   }
+  toast('背景已移除');
+  openBgSettingModal();
 }
 
 function applyPageBg(pageId) {

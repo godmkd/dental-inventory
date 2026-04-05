@@ -736,15 +736,15 @@ function _suppressClick(e) { e.stopPropagation(); e.preventDefault(); }
 function enterEditMode() {
   editMode = true;
   document.getElementById('userMenu')?.classList.remove('open');
+  document.getElementById('home').style.overflow = 'hidden';
   document.getElementById('logoBubbleIcon').textContent = '✅';
   document.getElementById('logoBubbleLabel').textContent = '確定儲存';
   document.getElementById('logoBubble').classList.add('edit-mode');
   document.getElementById('editCancelBtn').style.display = 'block';
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
-    el.style.touchAction = 'none'; // let JS handle all touches for drag
+    el.style.touchAction = 'none';
     el.addEventListener('pointerdown', _bubbleDragStart);
-    // Suppress navigation clicks on all bubbles except system-logo (logo click = save)
     if (el.dataset.page !== 'system-logo') el.addEventListener('click', _suppressClick, true);
   });
   const w = window.innerWidth, h = window.innerHeight;
@@ -754,6 +754,7 @@ function enterEditMode() {
 
 function exitEditMode() {
   editMode = false;
+  document.getElementById('home').style.overflow = '';
   document.getElementById('logoBubbleIcon').textContent = '🦷';
   document.getElementById('logoBubbleLabel').textContent = '牙材採購系統';
   document.getElementById('logoBubble').classList.remove('edit-mode');
@@ -785,22 +786,26 @@ async function saveLayoutAndExit() {
   exitEditMode();
 }
 
-// Container bubble drag (% of container)
-let _dragEl = null, _dragOX = 0, _dragOY = 0;
+// Container bubble drag — 300ms hold to activate
+let _dragEl = null, _dragOX = 0, _dragOY = 0, _dragReady = false, _dragTimer = null;
 function _bubbleDragStart(e) {
   if (!editMode) return;
   e.preventDefault(); e.stopPropagation();
-  _dragEl = e.currentTarget;
-  try { _dragEl.setPointerCapture(e.pointerId); } catch(_) {}
-  _dragEl.style.transition = 'none';
-  const er = _dragEl.getBoundingClientRect();
+  const el = e.currentTarget;
+  try { el.setPointerCapture(e.pointerId); } catch(_) {}
+  _dragEl = el;
+  _dragReady = false;
+  const er = el.getBoundingClientRect();
   _dragOX = e.clientX - er.left; _dragOY = e.clientY - er.top;
-  _dragEl.addEventListener('pointermove', _bubbleDragMove);
-  _dragEl.addEventListener('pointerup', _bubbleDragEnd);
-  _dragEl.addEventListener('pointercancel', _bubbleDragEnd);
+  _dragTimer = setTimeout(() => {
+    if (_dragEl === el) { _dragReady = true; el.style.transition = 'none'; }
+  }, 300);
+  el.addEventListener('pointermove', _bubbleDragMove);
+  el.addEventListener('pointerup', _bubbleDragEnd);
+  el.addEventListener('pointercancel', _bubbleDragEnd);
 }
 function _bubbleDragMove(e) {
-  if (!_dragEl) return;
+  if (!_dragEl || !_dragReady) return;
   e.preventDefault();
   const cr = _dragEl.parentElement.getBoundingClientRect();
   const cw = _dragEl.parentElement.offsetWidth, ch = _dragEl.parentElement.offsetHeight;
@@ -808,12 +813,13 @@ function _bubbleDragMove(e) {
   _dragEl.style.top  = Math.max(0, Math.min((e.clientY - cr.top  - _dragOY) / ch * 100, 97)).toFixed(1) + '%';
 }
 function _bubbleDragEnd() {
+  clearTimeout(_dragTimer); _dragTimer = null;
   if (!_dragEl) return;
   _dragEl.style.transition = '';
   _dragEl.removeEventListener('pointermove', _bubbleDragMove);
   _dragEl.removeEventListener('pointerup', _bubbleDragEnd);
   _dragEl.removeEventListener('pointercancel', _bubbleDragEnd);
-  _dragEl = null;
+  _dragEl = null; _dragReady = false;
 }
 
 
@@ -1189,39 +1195,7 @@ function openBgSettingModal() {
 
   openModal('🎨 客製化管理', `
     <div class="bg-section">
-      <h4>📄 目前頁面（${pageName}）</h4>
-      <div class="bg-preview-row">
-        ${previewImg(pageBg)}
-        <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖
-          <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'page','${pageId}')">
-        </label>
-        ${pageBg ? `<button class="btn btn-danger btn-sm" onclick="removeBg('page','${pageId}')">刪除</button>` : ''}
-      </div>
-      <div class="bg-opacity-row">
-        <span style="font-size:.82rem">透明度</span>
-        <input type="range" min="0" max="100" value="${pageOpacity}" oninput="bgOpacityChange(this,'page','${pageId}')">
-        <span id="bgOpVal_page">${pageOpacity}%</span>
-      </div>
-    </div>
-
-    <div class="bg-section">
-      <h4>📋 側邊欄</h4>
-      <div class="bg-preview-row">
-        ${previewImg(sidebarBg)}
-        <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖
-          <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'sidebar','sidebar')">
-        </label>
-        ${sidebarBg ? '<button class="btn btn-danger btn-sm" onclick="removeBg(\'sidebar\',\'sidebar\')">刪除</button>' : ''}
-      </div>
-      <div class="bg-opacity-row">
-        <span style="font-size:.82rem">透明度</span>
-        <input type="range" min="0" max="100" value="${sidebarOpacity}" oninput="bgOpacityChange(this,'sidebar','sidebar')">
-        <span id="bgOpVal_sidebar">${sidebarOpacity}%</span>
-      </div>
-    </div>
-
-    <div class="bg-section">
-      <h4>🌐 整個網頁（最下層）</h4>
+      <h4>🌐 網頁背景圖</h4>
       <div class="bg-preview-row">
         ${previewImg(globalBg)}
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖

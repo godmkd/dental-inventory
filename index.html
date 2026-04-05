@@ -824,29 +824,25 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    // top/left=電腦(95vh容器), pt/pl=直幅手機(125vh容器), lt/ll=橫幅手機(110vh容器)
-    // XLarge：全員可用（中心）
-    { id: 'daily-change',     icon: '🔄', label: '日常變動', size: 'xlarge', top: '2%',  left: '36%', pt: '2%',  pl: '25%', lt: '1%',  ll: '12%', delay: '0s',   duration: '7s',   anim: 'float',  perm: 'daily_changes' },
-    { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '30%', left: '21%', pt: '20%', pl: '2%',  lt: '1%',  ll: '28%', delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },
-    { id: 'receiving',        icon: '✅', label: '收貨',     size: 'xlarge', top: '57%', left: '17%', pt: '20%', pl: '35%', lt: '1%',  ll: '44%', delay: '1.6s', duration: '5.5s', anim: 'float3', perm: 'receive_orders' },
-    // Large：叫貨管理相關（管理者以上）
-    { id: 'order-list',       icon: '📋', label: '各單管理', size: 'large',  top: '2%',  left: '16%', pt: '38%', pl: '1%',  lt: '34%', ll: '1%',  delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
-    { id: 'order-summary',    icon: '📊', label: '叫貨總覽', size: 'large',  top: '30%', left: '43%', pt: '38%', pl: '29%', lt: '34%', ll: '14%', delay: '1.1s', duration: '7s',   anim: 'float3', perm: 'manage_orders' },
-    { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '30%', left: '3%',  pt: '38%', pl: '57%', lt: '34%', ll: '27%', delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
-    // Large：庫存/行政相關（管理者以上）
-    { id: 'stock-overview',   icon: '🗂️', label: '庫存總覽', size: 'large',  top: '2%',  left: '57%', pt: '2%',  pl: '60%', lt: '1%',  ll: '60%', delay: '2.7s', duration: '6.5s', anim: 'float2', perm: 'view_all_inventory' },
-    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '30%', left: '62%', pt: '56%', pl: '1%',  lt: '34%', ll: '40%', delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
-    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '57%', left: '40%', pt: '56%', pl: '29%', lt: '34%', ll: '53%', delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
-    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '57%', left: '59%', pt: '56%', pl: '57%', lt: '67%', ll: '1%',  delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
-    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '57%', left: '77%', pt: '74%', pl: '1%',  lt: '67%', ll: '14%', delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
-    // Small：老闆限定（外圍）
-    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '84%', left: '3%',  pt: '74%', pl: '55%', lt: '67%', ll: '27%', delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
-    { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '84%', left: '18%', pt: '74%', pl: '76%', lt: '67%', ll: '37%', delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
-    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '57%', left: '3%',  pt: '87%', pl: '1%',  lt: '67%', ll: '47%', delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
-    // Medium：通用工具（外圍）
-    { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '2%',  left: '1%',  pt: '2%',  pl: '1%',  lt: '1%',  ll: '1%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '2%',  left: '75%', pt: '20%', pl: '70%', lt: '1%',  ll: '73%', delay: '3.5s', duration: '6.5s', anim: 'float' },
-    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '30%', left: '79%', pt: '74%', pl: '29%', lt: '34%', ll: '66%', delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
+    // top/left=電腦(95vh), pt/pl=直幅手機(125vh), lt/ll=橫幅手機(110vh)
+    // 有機堆疊：xlarge居中，large圍繞，small/medium外圍
+    { id: 'daily-change',     icon: '🔄', label: '日常變動', size: 'xlarge', top: '28%', left: '38%', pt: '28%', pl: '32%', lt: '5%',  ll: '28%', delay: '0s',   duration: '7s',   anim: 'float',  perm: 'daily_changes' },
+    { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '44%', left: '22%', pt: '44%', pl: '8%',  lt: '5%',  ll: '44%', delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },
+    { id: 'receiving',        icon: '✅', label: '收貨',     size: 'xlarge', top: '44%', left: '55%', pt: '44%', pl: '54%', lt: '5%',  ll: '60%', delay: '1.6s', duration: '5.5s', anim: 'float3', perm: 'receive_orders' },
+    { id: 'order-list',       icon: '📋', label: '各單管理', size: 'large',  top: '16%', left: '20%', pt: '13%', pl: '6%',  lt: '5%',  ll: '14%', delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
+    { id: 'order-summary',    icon: '📊', label: '叫貨總覽', size: 'large',  top: '45%', left: '41%', pt: '13%', pl: '65%', lt: '5%',  ll: '76%', delay: '1.1s', duration: '7s',   anim: 'float3', perm: 'manage_orders' },
+    { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '33%', left: '5%',  pt: '33%', pl: '1%',  lt: '35%', ll: '2%',  delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
+    { id: 'stock-overview',   icon: '🗂️', label: '庫存總覽', size: 'large',  top: '16%', left: '58%', pt: '13%', pl: '36%', lt: '35%', ll: '41%', delay: '2.7s', duration: '6.5s', anim: 'float2', perm: 'view_all_inventory' },
+    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '28%', left: '60%', pt: '60%', pl: '6%',  lt: '35%', ll: '15%', delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
+    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '60%', left: '37%', pt: '62%', pl: '34%', lt: '35%', ll: '28%', delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
+    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '60%', left: '56%', pt: '60%', pl: '62%', lt: '35%', ll: '54%', delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
+    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '60%', left: '75%', pt: '28%', pl: '64%', lt: '35%', ll: '67%', delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
+    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '73%', left: '20%', pt: '73%', pl: '5%',  lt: '66%', ll: '14%', delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
+    { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '73%', left: '35%', pt: '74%', pl: '78%', lt: '66%', ll: '24%', delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
+    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '33%', left: '77%', pt: '84%', pl: '32%', lt: '66%', ll: '34%', delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
+    { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '5%',  left: '2%',  pt: '3%',  pl: '58%', lt: '5%',  ll: '2%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '5%',  left: '72%', pt: '3%',  pl: '2%',  lt: '66%', ll: '2%',  delay: '3.5s', duration: '6.5s', anim: 'float' },
+    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '46%', left: '76%', pt: '73%', pl: '52%', lt: '35%', ll: '80%', delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';

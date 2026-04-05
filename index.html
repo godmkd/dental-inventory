@@ -393,7 +393,7 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 /* Bubble Home */
 .home-section{min-height:100vh;position:relative;overflow-x:auto;overflow-y:hidden;padding:0;background:#000;-webkit-overflow-scrolling:touch}
 .bubble-container{position:relative;width:100vw;min-width:100vw;height:100vh}
-.bubble{position:absolute;border-radius:50%;background:rgba(255,255,255,.06);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,.12);box-shadow:0 0 30px rgba(255,255,255,.04),inset 0 0 30px rgba(255,255,255,.02),0 4px 15px rgba(0,0,0,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);animation:float 6s ease-in-out infinite;text-decoration:none;user-select:none}
+.bubble{position:absolute;border-radius:50%;background:rgba(255,255,255,.06);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,.12);box-shadow:0 0 30px rgba(255,255,255,.04),inset 0 0 30px rgba(255,255,255,.02),0 4px 15px rgba(0,0,0,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);animation:float 6s ease-in-out infinite;text-decoration:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .bubble:hover,.bubble.active{transform:scale(1.2);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);box-shadow:0 0 50px rgba(255,255,255,.1),0 0 100px rgba(100,150,255,.08)}
 @keyframes float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-10px) rotate(2deg)}}
 @keyframes float2{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-7px) rotate(-3deg)}}
@@ -716,7 +716,9 @@ let _userLongTimer = null;
 function setupUserBubbleLongPress() {
   const el = document.getElementById('userBubble');
   if (!el) return;
-  el.addEventListener('pointerdown', () => {
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
     _userLongTimer = setTimeout(() => {
       if (hasPermission('arrange_layout')) enterEditMode();
       else toast('需要「版面調整」權限', 'error');
@@ -960,7 +962,7 @@ function buildBubbles() {
   const bubbleConfig = [
     // ── 角落系統泡泡（special） ──
     { id: 'system-logo', icon: '🦷', label: '牙材採購系統', size: 'medium', top: '1%',  left: '1%',   pt: '1%',  pl: '1%',  lt: '2%',  ll: '1%',   delay: '3.5s', duration: '8s',  anim: 'float3', special: 'logo' },
-    { id: 'user-info',   icon: '👤', label: '',              size: 'medium', top: '1%',  left: '91%',  pt: '1%',  pl: '65%', lt: '2%',  ll: '93%',   delay: '4s',   duration: '7.5s',anim: 'float',  special: 'user' },
+    { id: 'user-info',   icon: '👤', label: '',              size: 'medium', top: '1%',  left: '91%',  pt: '1%',  pl: '65%', lt: '2%',  ll: '88%',   delay: '4s',   duration: '7.5s',anim: 'float',  special: 'user' },
     // ── Cluster 1：日常作業（左區）──
     { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '22%', left: '8%',  pt: '10%', pl: '9%',  lt: '19%', ll: '6%',   delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },
     { id: 'daily-change',     icon: '🔄', label: '日常變動', size: 'xlarge', top: '39%', left: '21%', pt: '11%', pl: '42%', lt: '37%', ll: '20%',  delay: '0s',   duration: '7s',   anim: 'float',  perm: 'daily_changes' },
@@ -973,14 +975,14 @@ function buildBubbles() {
     // ── Cluster 3：系統管理（右區）──
     { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '10%', left: '81%', pt: '32%', pl: '10%', lt: '47%', ll: '72%',  delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
     { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '48%', left: '72%', pt: '33%', pl: '35%', lt: '69%', ll: '72%',  delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
-    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '15%', left: '88%', pt: '32%', pl: '60%', lt: '20%', ll: '83%',  delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
-    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '48%', left: '85%', pt: '33%', pl: '83%', lt: '70%', ll: '83%',  delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
+    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '15%', left: '88%', pt: '32%', pl: '60%', lt: '20%', ll: '79%',  delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
+    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '48%', left: '85%', pt: '33%', pl: '83%', lt: '70%', ll: '79%',  delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
     { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '8%',  left: '72%', pt: '44%', pl: '8%',  lt: '24%', ll: '73%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '36%', left: '81%', pt: '45%', pl: '36%', lt: '47%', ll: '83%',  delay: '3.5s', duration: '6.5s', anim: 'float' },
-    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '34%', left: '88%', pt: '44%', pl: '61%', lt: '47%', ll: '92%',  delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '36%', left: '81%', pt: '45%', pl: '36%', lt: '47%', ll: '79%',  delay: '3.5s', duration: '6.5s', anim: 'float' },
+    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '34%', left: '88%', pt: '44%', pl: '61%', lt: '47%', ll: '86%',  delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
     { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '76%', pt: '56%', pl: '12%', lt: '73%', ll: '57%',  delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
     { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '84%', pt: '57%', pl: '37%', lt: '74%', ll: '64%',  delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
-    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '73%', ll: '92%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
+    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '73%', ll: '86%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';

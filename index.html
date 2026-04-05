@@ -391,8 +391,8 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .usage-hint.open .usage-hint-body{display:block}
 
 /* Bubble Home */
-.home-section{min-height:100vh;position:relative;overflow-x:auto;overflow-y:hidden;padding-top:88px;background:#000;-webkit-overflow-scrolling:touch}
-.bubble-container{position:relative;width:180vw;min-width:180vw;height:calc(100vh - 88px)}
+.home-section{min-height:100vh;position:relative;overflow-x:auto;overflow-y:hidden;padding:0;background:#000;-webkit-overflow-scrolling:touch}
+.bubble-container{position:relative;width:180vw;min-width:180vw;height:100vh}
 .bubble{position:absolute;border-radius:50%;background:rgba(255,255,255,.06);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,.12);box-shadow:0 0 30px rgba(255,255,255,.04),inset 0 0 30px rgba(255,255,255,.02),0 4px 15px rgba(0,0,0,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);animation:float 6s ease-in-out infinite;text-decoration:none;user-select:none}
 .bubble:hover,.bubble.active{transform:scale(1.2);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);box-shadow:0 0 50px rgba(255,255,255,.1),0 0 100px rgba(100,150,255,.08)}
 @keyframes float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-10px) rotate(2deg)}}
@@ -429,21 +429,18 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
   .content-section{padding:12px;padding-bottom:20px}
 }
 @media(max-width:768px) and (orientation:portrait){
-  .bubble-container{width:320vw;min-width:320vw}
-  .home-section{padding-top:72px}
-  .bubble-container{height:calc(100vh - 72px)}
-  .bubble-xlarge{width:min(26vw,16vh);height:min(26vw,16vh)}.bubble-xlarge .bubble-icon{font-size:2rem}.bubble-xlarge .bubble-label{font-size:.82rem}
-  .bubble-large{width:min(22vw,13vh);height:min(22vw,13vh)}.bubble-large .bubble-icon{font-size:1.7rem}.bubble-large .bubble-label{font-size:.72rem}
-  .bubble-medium{width:min(18vw,11vh);height:min(18vw,11vh)}.bubble-medium .bubble-icon{font-size:1.4rem}.bubble-medium .bubble-label{font-size:.66rem}
-  .bubble-small{width:min(15vw,9vh);height:min(15vw,9vh)}.bubble-small .bubble-icon{font-size:1.1rem}.bubble-small .bubble-label{font-size:.6rem}
-  .bubble-fixed{width:min(18vw,11vh)!important;height:min(18vw,11vh)!important}
-  .bubble-fixed .bubble-icon{font-size:1.4rem!important}
-  .bubble-fixed .bubble-label{font-size:.62rem!important}
-  .user-menu{top:80px}
+  .bubble-container{width:300vw;min-width:300vw;height:100vh}
+  .bubble-xlarge{width:min(20vw,13vh);height:min(20vw,13vh)}.bubble-xlarge .bubble-icon{font-size:1.7rem}.bubble-xlarge .bubble-label{font-size:.75rem}
+  .bubble-large{width:min(17vw,11vh);height:min(17vw,11vh)}.bubble-large .bubble-icon{font-size:1.45rem}.bubble-large .bubble-label{font-size:.65rem}
+  .bubble-medium{width:min(14vw,9vh);height:min(14vw,9vh)}.bubble-medium .bubble-icon{font-size:1.2rem}.bubble-medium .bubble-label{font-size:.6rem}
+  .bubble-small{width:min(11vw,7vh);height:min(11vw,7vh)}.bubble-small .bubble-icon{font-size:1rem}.bubble-small .bubble-label{font-size:.55rem}
+  .bubble-fixed{width:min(16vw,10vh)!important;height:min(16vw,10vh)!important}
+  .bubble-fixed .bubble-icon{font-size:1.2rem!important}
+  .bubble-fixed .bubble-label{font-size:.58rem!important}
+  .user-menu{top:75px}
 }
 @media(max-width:1100px) and (orientation:landscape){
-  .bubble-container{width:240vw;min-width:240vw;height:calc(100vh - 72px)}
-  .home-section{padding-top:72px}
+  .bubble-container{width:240vw;min-width:240vw;height:100vh}
   .bubble-xlarge{width:min(20vw,30vh);height:min(20vw,30vh)}
   .bubble-xlarge .bubble-icon{font-size:1.8rem}.bubble-xlarge .bubble-label{font-size:.72rem}
   .bubble-large{width:min(17vw,25vh);height:min(17vw,25vh)}
@@ -512,7 +509,7 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 <div id="fixedBubbles" style="display:none">
   <div class="bubble bubble-medium bubble-fixed bubble-fixed-logo" id="logoBubble" onclick="handleLogoBubbleClick()">
     <span class="bubble-icon" id="logoBubbleIcon">🦷</span>
-    <span class="bubble-label" id="logoBubbleLabel">牙材採購</span>
+    <span class="bubble-label" id="logoBubbleLabel">牙材採購系統</span>
   </div>
   <div class="bubble bubble-medium bubble-fixed bubble-fixed-user" id="userBubble" onclick="toggleUserMenu()">
     <span class="bubble-icon">👤</span>
@@ -747,6 +744,8 @@ function setupLogoBubbleLongPress() {
   );
 }
 
+function _suppressClick(e) { e.stopPropagation(); e.preventDefault(); }
+
 function enterEditMode() {
   editMode = true;
   document.getElementById('logoBubbleIcon').textContent = '✅';
@@ -756,22 +755,35 @@ function enterEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
     el.addEventListener('pointerdown', _bubbleDragStart);
+    el.addEventListener('click', _suppressClick, true);
   });
+  // Fixed bubbles: also draggable (logo tap = save)
+  ['logoBubble','userBubble'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.add('edit-mode-bubble'); el.addEventListener('pointerdown', _fixedDragStart); }
+  });
+  document.getElementById('userBubble').addEventListener('click', _suppressClick, true);
   const w = window.innerWidth, h = window.innerHeight;
   const vp = (w < h && w <= 900) ? '直幅' : (w > h && h <= 500) ? '橫幅' : '電腦';
-  toast(`已進入${vp}版面調整模式，拖動泡泡後點左上角確定儲存`, 'info');
+  toast(`已進入${vp}版面調整模式，拖動泡泡後點左上 ✅ 儲存`, 'info');
 }
 
 function exitEditMode() {
   editMode = false;
   document.getElementById('logoBubbleIcon').textContent = '🦷';
-  document.getElementById('logoBubbleLabel').textContent = '牙材採購';
+  document.getElementById('logoBubbleLabel').textContent = '牙材採購系統';
   document.getElementById('logoBubble').classList.remove('edit-mode');
   document.getElementById('editCancelBtn').style.display = 'none';
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.remove('edit-mode-bubble');
     el.removeEventListener('pointerdown', _bubbleDragStart);
+    el.removeEventListener('click', _suppressClick, true);
   });
+  ['logoBubble','userBubble'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('edit-mode-bubble'); el.removeEventListener('pointerdown', _fixedDragStart); }
+  });
+  document.getElementById('userBubble').removeEventListener('click', _suppressClick, true);
 }
 
 async function saveLayoutAndExit() {
@@ -783,8 +795,14 @@ async function saveLayoutAndExit() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     if (el.dataset.page) positions[el.dataset.page] = { top: el.style.top, left: el.style.left };
   });
+  const fixedPos = {};
+  ['logoBubble','userBubble'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { const r = el.getBoundingClientRect(); fixedPos[id] = { top: r.top + 'px', left: r.left + 'px' }; }
+  });
   const merged = { ...(window._customBubblePositions || {}) };
   merged[viewport] = positions;
+  merged.fixed_bubbles = fixedPos;
   try {
     await withTimeout(sb.from('app_settings').upsert({ key: 'bubble_positions', value: merged, updated_at: new Date().toISOString() }));
     window._customBubblePositions = merged;
@@ -793,7 +811,16 @@ async function saveLayoutAndExit() {
   exitEditMode();
 }
 
-// Drag handlers
+function applyFixedBubblePositions() {
+  const pos = window._customBubblePositions?.fixed_bubbles;
+  if (!pos) return;
+  ['logoBubble','userBubble'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && pos[id]) { el.style.top = pos[id].top; el.style.left = pos[id].left; el.style.right = 'auto'; }
+  });
+}
+
+// Container bubble drag (% of container)
 let _dragEl = null, _dragOX = 0, _dragOY = 0;
 function _bubbleDragStart(e) {
   if (!editMode) return;
@@ -801,8 +828,7 @@ function _bubbleDragStart(e) {
   _dragEl = this;
   try { _dragEl.setPointerCapture(e.pointerId); } catch(_) {}
   const er = _dragEl.getBoundingClientRect();
-  _dragOX = e.clientX - er.left;
-  _dragOY = e.clientY - er.top;
+  _dragOX = e.clientX - er.left; _dragOY = e.clientY - er.top;
   _dragEl.addEventListener('pointermove', _bubbleDragMove);
   _dragEl.addEventListener('pointerup', _bubbleDragEnd);
   _dragEl.addEventListener('pointercancel', _bubbleDragEnd);
@@ -811,12 +837,9 @@ function _bubbleDragMove(e) {
   if (!_dragEl) return;
   e.preventDefault();
   const cr = _dragEl.parentElement.getBoundingClientRect();
-  const cw = _dragEl.parentElement.offsetWidth;
-  const ch = _dragEl.parentElement.offsetHeight;
-  const x = e.clientX - cr.left - _dragOX;
-  const y = e.clientY - cr.top - _dragOY;
-  _dragEl.style.left = Math.max(0, Math.min(x / cw * 100, 96)).toFixed(1) + '%';
-  _dragEl.style.top  = Math.max(0, Math.min(y / ch * 100, 96)).toFixed(1) + '%';
+  const cw = _dragEl.parentElement.offsetWidth, ch = _dragEl.parentElement.offsetHeight;
+  _dragEl.style.left = Math.max(0, Math.min((e.clientX - cr.left - _dragOX) / cw * 100, 97)).toFixed(1) + '%';
+  _dragEl.style.top  = Math.max(0, Math.min((e.clientY - cr.top  - _dragOY) / ch * 100, 97)).toFixed(1) + '%';
 }
 function _bubbleDragEnd() {
   if (!_dragEl) return;
@@ -824,6 +847,38 @@ function _bubbleDragEnd() {
   _dragEl.removeEventListener('pointerup', _bubbleDragEnd);
   _dragEl.removeEventListener('pointercancel', _bubbleDragEnd);
   _dragEl = null;
+}
+
+// Fixed bubble drag (px viewport-relative); tap logo (no move) = save
+let _fixedDragEl = null, _fixedDragOX = 0, _fixedDragOY = 0, _fixedMoved = false;
+function _fixedDragStart(e) {
+  if (!editMode) return;
+  e.preventDefault(); e.stopPropagation();
+  _fixedDragEl = this; _fixedMoved = false;
+  try { _fixedDragEl.setPointerCapture(e.pointerId); } catch(_) {}
+  const er = _fixedDragEl.getBoundingClientRect();
+  _fixedDragOX = e.clientX - er.left; _fixedDragOY = e.clientY - er.top;
+  _fixedDragEl.addEventListener('pointermove', _fixedDragMove);
+  _fixedDragEl.addEventListener('pointerup', _fixedDragEnd);
+  _fixedDragEl.addEventListener('pointercancel', _fixedDragEnd);
+}
+function _fixedDragMove(e) {
+  if (!_fixedDragEl) return;
+  e.preventDefault(); _fixedMoved = true;
+  const maxX = window.innerWidth - _fixedDragEl.offsetWidth;
+  const maxY = window.innerHeight - _fixedDragEl.offsetHeight;
+  _fixedDragEl.style.left  = Math.max(0, Math.min(e.clientX - _fixedDragOX, maxX)) + 'px';
+  _fixedDragEl.style.top   = Math.max(0, Math.min(e.clientY - _fixedDragOY, maxY)) + 'px';
+  _fixedDragEl.style.right = 'auto';
+}
+function _fixedDragEnd() {
+  if (!_fixedDragEl) return;
+  const wasMoved = _fixedMoved, el = _fixedDragEl;
+  _fixedDragEl.removeEventListener('pointermove', _fixedDragMove);
+  _fixedDragEl.removeEventListener('pointerup', _fixedDragEnd);
+  _fixedDragEl.removeEventListener('pointercancel', _fixedDragEnd);
+  _fixedDragEl = null;
+  if (!wasMoved && el.id === 'logoBubble') saveLayoutAndExit();
 }
 
 async function setWaitEmail() {
@@ -872,6 +927,7 @@ async function enterApp() {
   document.getElementById('userMenuName').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
   buildBubbles();
+  applyFixedBubblePositions();
   setupLogoBubbleLongPress();
   applyCustomFont();
   // Check email prompt
@@ -4218,7 +4274,8 @@ async function updateDisplayName() {
   const { error } = await withTimeout(sb.from('user_profiles').update({ display_name: name }).eq('id', currentUser.id));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   userProfile.display_name = name;
-  document.getElementById('headerUser').textContent = `${name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
+  document.getElementById('userBubbleLabel').textContent = name;
+  document.getElementById('userMenuName').textContent = `${name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
   toast('名稱已更新');
 }
 

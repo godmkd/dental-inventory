@@ -804,6 +804,7 @@ function _bubbleDragStart(e) {
   e.preventDefault(); e.stopPropagation();
   const el = e.currentTarget;
   const { x, y } = _evCoords(e);
+  if (_dragEl) _globalDragEnd(); // cancel any existing drag
   _dragEl = el; _dragReady = false;
   _lastPX = x; _lastPY = y;
   clearTimeout(_dragTimer);
@@ -881,6 +882,7 @@ async function enterApp() {
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   setupLogoBubbleDoubleTap();
   applyCustomFont();
+  applyAllBg();
   // Check email prompt
   if ((!currentUser.email || currentUser.email === '') && !localStorage.getItem('email_prompted')) {
     localStorage.setItem('email_prompted', '1');

@@ -340,8 +340,7 @@ th,td{padding:6px 4px!important}
 .order-confirm-item:last-child{border-bottom:none}
 .order-confirm-actions{margin-top:12px;display:flex;gap:10px;justify-content:flex-end}
 
-/* Background image - global (lowest layer) */
-body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background-image:var(--body-bg-url);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:var(--body-bg-opacity,.1);z-index:-1;pointer-events:none}
+/* Background image - global: layered directly on body background */
 /* Background image - page */
 #mainContent{position:relative}
 #mainContent{position:relative}
@@ -788,23 +787,28 @@ async function saveLayoutAndExit() {
 
 // Container bubble drag — 300ms hold to activate
 let _dragEl = null, _dragOX = 0, _dragOY = 0, _dragReady = false, _dragTimer = null;
+let _lastPX = 0, _lastPY = 0;
 function _bubbleDragStart(e) {
   if (!editMode) return;
   e.preventDefault(); e.stopPropagation();
   const el = e.currentTarget;
   try { el.setPointerCapture(e.pointerId); } catch(_) {}
-  _dragEl = el;
-  _dragReady = false;
-  const er = el.getBoundingClientRect();
-  _dragOX = e.clientX - er.left; _dragOY = e.clientY - er.top;
+  _dragEl = el; _dragReady = false;
+  _lastPX = e.clientX; _lastPY = e.clientY;
   _dragTimer = setTimeout(() => {
-    if (_dragEl === el) { _dragReady = true; el.style.transition = 'none'; }
+    if (_dragEl !== el) return;
+    _dragReady = true;
+    el.style.transition = 'none';
+    // Sync offset to where finger actually is after the hold
+    const er = el.getBoundingClientRect();
+    _dragOX = _lastPX - er.left; _dragOY = _lastPY - er.top;
   }, 300);
   el.addEventListener('pointermove', _bubbleDragMove);
   el.addEventListener('pointerup', _bubbleDragEnd);
   el.addEventListener('pointercancel', _bubbleDragEnd);
 }
 function _bubbleDragMove(e) {
+  _lastPX = e.clientX; _lastPY = e.clientY;
   if (!_dragEl || !_dragReady) return;
   e.preventDefault();
   const cr = _dragEl.parentElement.getBoundingClientRect();
@@ -1187,7 +1191,7 @@ function openBgSettingModal() {
   const globalBg = localStorage.getItem('bg_global');
   const pageOpacity = parseInt(localStorage.getItem('bg_opacity_' + pageId) || '15', 10);
   const sidebarOpacity = parseInt(localStorage.getItem('bg_opacity_sidebar') || '15', 10);
-  const globalOpacity = parseInt(localStorage.getItem('bg_opacity_global') || '10', 10);
+  const globalOpacity = parseInt(localStorage.getItem('bg_opacity_global') || '30', 10);
 
   function previewImg(url) {
     return url ? `<img src="${url}" class="bg-preview-thumb">` : '<span style="color:var(--text-lighter);font-size:.82rem">尚未設定</span>';
@@ -1282,7 +1286,7 @@ function bgOpacityChange(el, type, key) {
     document.getElementById('sidebar').style.setProperty('--sidebar-bg-opacity', val / 100);
   } else if (type === 'global') {
     localStorage.setItem('bg_opacity_global', val);
-    document.body.style.setProperty('--body-bg-opacity', val / 100);
+    applyGlobalBg();
   }
 }
 
@@ -1387,14 +1391,22 @@ function applySidebarBg() {
 
 function applyGlobalBg() {
   const url = localStorage.getItem('bg_global');
-  const opacity = parseInt(localStorage.getItem('bg_opacity_global') || '10', 10);
+  const opacity = parseInt(localStorage.getItem('bg_opacity_global') || '30', 10);
   if (url) {
-    document.body.style.setProperty('--body-bg-url', `url(${url})`);
-    document.body.style.setProperty('--body-bg-opacity', opacity / 100);
+    const o = ((100 - opacity) / 100).toFixed(2); // gradient overlay opacity
+    document.body.style.backgroundImage =
+      `linear-gradient(135deg,rgba(15,12,41,${o}) 0%,rgba(48,43,99,${o}) 50%,rgba(36,36,62,${o}) 100%),url(${url})`;
+    document.body.style.backgroundSize = 'auto,cover';
+    document.body.style.backgroundPosition = 'center,center';
+    document.body.style.backgroundAttachment = 'fixed,fixed';
+    document.body.style.backgroundRepeat = 'repeat,no-repeat';
     document.body.classList.add('has-bg');
   } else {
-    document.body.style.removeProperty('--body-bg-url');
-    document.body.style.removeProperty('--body-bg-opacity');
+    document.body.style.backgroundImage = '';
+    document.body.style.backgroundSize = '';
+    document.body.style.backgroundPosition = '';
+    document.body.style.backgroundAttachment = '';
+    document.body.style.backgroundRepeat = '';
     document.body.classList.remove('has-bg');
   }
 }

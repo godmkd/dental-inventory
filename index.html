@@ -391,8 +391,8 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .usage-hint.open .usage-hint-body{display:block}
 
 /* V3 Bubble Home */
-.home-section{min-height:100vh;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:60px 20px 20px;background:#000}
-.bubble-container{position:relative;width:100%;max-width:900px;height:75vh}
+.home-section{min-height:98vh;position:relative;display:flex;align-items:center;justify-content:center;overflow-x:hidden;padding:60px 20px 20px;background:#000}
+.bubble-container{position:relative;width:100%;max-width:900px;height:95vh}
 .bubble{position:absolute;border-radius:50%;background:rgba(255,255,255,.06);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,.12);box-shadow:0 0 30px rgba(255,255,255,.04),inset 0 0 30px rgba(255,255,255,.02),0 4px 15px rgba(0,0,0,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);animation:float 6s ease-in-out infinite;text-decoration:none;user-select:none}
 .bubble:hover,.bubble.active{transform:scale(1.2);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);box-shadow:0 0 50px rgba(255,255,255,.1),0 0 100px rgba(100,150,255,.08)}
 @keyframes float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-10px) rotate(2deg)}}
@@ -411,9 +411,13 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
 .back-home-btn:hover{background:rgba(99,179,237,.15);border-color:var(--accent);color:var(--accent)}
 .home-greeting{text-align:center;margin-bottom:8px;color:rgba(255,255,255,.5);font-size:.85rem;letter-spacing:1px}
 @media(max-width:768px){
-  .bubble-container{height:75vh}
+  .bubble-container{height:125vh}
+  .home-section{padding:60px 10px 20px;min-height:128vh}
   .content-section{padding:12px;padding-bottom:20px}
-  .home-section{padding:60px 10px 20px;min-height:calc(100vh - 56px)}
+}
+@media(max-width:1100px) and (orientation:landscape){
+  .bubble-container{height:110vh}
+  .home-section{min-height:113vh}
 }
 @media(min-width:769px){
   .bubble-xlarge{width:min(32vw,22vh,170px);height:min(32vw,22vh,170px)}
@@ -497,7 +501,6 @@ body.has-bg::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;back
     <div class="bubble-container" id="bubbleContainer"></div>
   </section>
   <section id="contentArea" class="content-section">
-    <button class="back-home-btn" onclick="scrollToHome()">← 首頁</button>
     <main class="content" id="mainContent"></main>
   </section>
 </div>
@@ -821,15 +824,29 @@ function getNavItems() {
 
 function buildBubbles() {
   const bubbleConfig = [
-    // top/left=電腦, pt/pl=直幅手機, lt/ll=橫幅手機
-    { id: 'tutorials',        icon: '📖', label: '教學',    size: 'medium', top: '2%',  left: '0%',  pt: '3%',  pl: '1%',  lt: '1%',  ll: '1%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
-    { id: 'stock-overview',   icon: '📊', label: '庫存總覽', size: 'xlarge', top: '1%',  left: '24%', pt: '2%',  pl: '26%', lt: '0%',  ll: '13%', delay: '0s',   duration: '6s',   anim: 'float' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'small',  top: '3%',  left: '58%', pt: '4%',  pl: '60%', lt: '2%',  ll: '31%', delay: '3.2s', duration: '6.8s', anim: 'float2' },
-    { id: 'admin-mgmt',       icon: '⚙️', label: '行政管理', size: 'large',  top: '25%', left: '3%',  pt: '23%', pl: '2%',  lt: '47%', ll: '1%',  delay: '2.2s', duration: '6.5s', anim: 'float2', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
-    { id: 'material-mgmt',    icon: '🦷', label: '牙材管理', size: 'xlarge', top: '20%', left: '44%', pt: '27%', pl: '31%', lt: '47%', ll: '16%', delay: '0.8s', duration: '7s',   anim: 'float2', perms: ['daily_changes', 'create_orders', 'receive_orders'] },
-    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'small',  top: '22%', left: '70%', pt: '21%', pl: '65%', lt: '2%',  ll: '43%', delay: '3.6s', duration: '5.8s', anim: 'float',  perm: 'change_background' },
-    { id: 'order-mgmt',       icon: '📋', label: '叫貨管理', size: 'large',  top: '48%', left: '18%', pt: '52%', pl: '14%', lt: '47%', ll: '33%', delay: '1.5s', duration: '5.5s', anim: 'float3', perm: 'manage_orders' },
-    { id: 'user-mgmt',        icon: '👥', label: '人員管理', size: 'medium', top: '50%', left: '52%', pt: '54%', pl: '50%', lt: '48%', ll: '49%', delay: '1.2s', duration: '7.5s', anim: 'float',  perms: ['manage_users', 'manage_roles'] }
+    // top/left=電腦(95vh容器), pt/pl=直幅手機(125vh容器), lt/ll=橫幅手機(110vh容器)
+    // XLarge：全員可用（中心）
+    { id: 'daily-change',     icon: '🔄', label: '日常變動', size: 'xlarge', top: '2%',  left: '36%', pt: '2%',  pl: '25%', lt: '1%',  ll: '12%', delay: '0s',   duration: '7s',   anim: 'float',  perm: 'daily_changes' },
+    { id: 'ordering',         icon: '📦', label: '叫貨',     size: 'xlarge', top: '30%', left: '21%', pt: '20%', pl: '2%',  lt: '1%',  ll: '28%', delay: '0.8s', duration: '6s',   anim: 'float2', perm: 'create_orders' },
+    { id: 'receiving',        icon: '✅', label: '收貨',     size: 'xlarge', top: '57%', left: '17%', pt: '20%', pl: '35%', lt: '1%',  ll: '44%', delay: '1.6s', duration: '5.5s', anim: 'float3', perm: 'receive_orders' },
+    // Large：叫貨管理相關（管理者以上）
+    { id: 'order-list',       icon: '📋', label: '各單管理', size: 'large',  top: '2%',  left: '16%', pt: '38%', pl: '1%',  lt: '34%', ll: '1%',  delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
+    { id: 'order-summary',    icon: '📊', label: '叫貨總覽', size: 'large',  top: '30%', left: '43%', pt: '38%', pl: '29%', lt: '34%', ll: '14%', delay: '1.1s', duration: '7s',   anim: 'float3', perm: 'manage_orders' },
+    { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '30%', left: '3%',  pt: '38%', pl: '57%', lt: '34%', ll: '27%', delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
+    // Large：庫存/行政相關（管理者以上）
+    { id: 'stock-overview',   icon: '🗂️', label: '庫存總覽', size: 'large',  top: '2%',  left: '57%', pt: '2%',  pl: '60%', lt: '1%',  ll: '60%', delay: '2.7s', duration: '6.5s', anim: 'float2', perm: 'view_all_inventory' },
+    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '30%', left: '62%', pt: '56%', pl: '1%',  lt: '34%', ll: '40%', delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
+    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '57%', left: '40%', pt: '56%', pl: '29%', lt: '34%', ll: '53%', delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
+    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '57%', left: '59%', pt: '56%', pl: '57%', lt: '67%', ll: '1%',  delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
+    { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '57%', left: '77%', pt: '74%', pl: '1%',  lt: '67%', ll: '14%', delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
+    // Small：老闆限定（外圍）
+    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '84%', left: '3%',  pt: '74%', pl: '55%', lt: '67%', ll: '27%', delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
+    { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '84%', left: '18%', pt: '74%', pl: '76%', lt: '67%', ll: '37%', delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
+    { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '57%', left: '3%',  pt: '87%', pl: '1%',  lt: '67%', ll: '47%', delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
+    // Medium：通用工具（外圍）
+    { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '2%',  left: '1%',  pt: '2%',  pl: '1%',  lt: '1%',  ll: '1%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
+    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '2%',  left: '75%', pt: '20%', pl: '70%', lt: '1%',  ll: '73%', delay: '3.5s', duration: '6.5s', anim: 'float' },
+    { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '30%', left: '79%', pt: '74%', pl: '29%', lt: '34%', ll: '66%', delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
@@ -916,13 +933,29 @@ async function navigateTo(pageId) {
   const mc = document.getElementById('mainContent');
   mc.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent)"></div></div>';
   const renderers = {
-    'stock-overview': renderStockOverview,
-    'material-mgmt': renderMaterialMgmt,
-    'order-mgmt': renderOrderMgmt,
-    'admin-mgmt': renderAdminMgmt,
-    'user-mgmt': renderUserMgmt,
+    // 直接頁面（新）
+    'daily-change':     renderDailyChange,
+    'ordering':         renderOrdering,
+    'receiving':        renderReceiving,
+    'order-list':       renderOrderMgmt,
+    'order-summary':    renderOrderMgmt,
+    'rush-mgmt':        renderOrderMgmt,
+    'admin-suppliers':  renderAdminMgmt,
+    'admin-materials':  renderAdminMgmt,
+    'admin-categories': renderAdminMgmt,
+    'admin-clinics':    renderAdminMgmt,
+    'order-stats':      renderAdminMgmt,
+    'user-list':        renderUserMgmt,
+    'role-mgmt':        renderUserMgmt,
+    // 原有頁面
+    'stock-overview':   renderStockOverview,
     'account-settings': renderAccountSettings,
-    'tutorials': () => renderTutorials(mc)
+    'tutorials':        () => renderTutorials(mc),
+    // 保留舊路由（內部呼叫用）
+    'material-mgmt': renderMaterialMgmt,
+    'order-mgmt':    renderOrderMgmt,
+    'admin-mgmt':    renderAdminMgmt,
+    'user-mgmt':     renderUserMgmt,
   };
   const fn = renderers[pageId];
   if (fn) {
@@ -1459,7 +1492,7 @@ async function renderMaterialMgmt() {
 }
 
 async function renderDailyChange(container) {
-  const mc = container || (currentPage === 'material-mgmt' ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
+  const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
 
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
@@ -1776,7 +1809,7 @@ window.cancelDailyLog = async function(logId) {
 let orderClinicId = null;
 
 async function renderOrdering(container) {
-  const mc = container || (currentPage === 'material-mgmt' ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
+  const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
   orderConfirmItems = [];
 
@@ -2193,16 +2226,20 @@ if (!window._expandedRushClinics) window._expandedRushClinics = new Set();
 
 async function renderOrderMgmt() {
   const mc = document.getElementById('mainContent');
+  // 直接頁面進入時設定對應 tab
+  if (currentPage === 'order-list') orderMgmtTab = 'list';
+  else if (currentPage === 'order-summary') orderMgmtTab = 'summary';
+  else if (currentPage === 'rush-mgmt') orderMgmtTab = 'rush';
+  const isDirect = ['order-list','order-summary','rush-mgmt'].includes(currentPage);
   await loadMaterials();
 
   mc.innerHTML = `
-    <div class="page-title">📋 叫貨管理</div>
-    ${usageHint('order-mgmt')}
-    <div class="sub-tabs" style="margin-bottom:4px">
+    ${!isDirect ? `<div class="page-title">📋 叫貨管理</div>${usageHint('order-mgmt')}` : ''}
+    ${!isDirect ? `<div class="sub-tabs" style="margin-bottom:4px">
       <div class="sub-tab ${orderMgmtTab === 'list' ? 'active' : ''}" onclick="orderMgmtTab='list';renderOrderMgmt()">各單管理</div>
       <div class="sub-tab ${orderMgmtTab === 'summary' ? 'active' : ''}" onclick="orderMgmtTab='summary';renderOrderMgmt()">叫貨總覽</div>
       <div class="sub-tab ${orderMgmtTab === 'rush' ? 'active' : ''}" onclick="orderMgmtTab='rush';renderOrderMgmt()">催貨管理</div>
-    </div>
+    </div>` : ''}
     <div id="orderMgmtTabContent"></div>`;
 
   if (orderMgmtTab === 'summary') {
@@ -2855,7 +2892,7 @@ async function checkAutoDeliverOrder(orderId) {
 let receiveClinicId = null;
 
 async function renderReceiving(container) {
-  const mc = container || (currentPage === 'material-mgmt' ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
+  const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
@@ -3246,17 +3283,20 @@ let adminSubTab = 'clinics';
 
 async function renderAdminMgmt() {
   const mc = document.getElementById('mainContent');
+  // 直接頁面進入時設定對應 tab
+  const directMap = { 'admin-clinics':'clinics', 'admin-suppliers':'suppliers', 'admin-materials':'materials', 'admin-categories':'categories', 'order-stats':'order-stats' };
+  if (directMap[currentPage]) adminSubTab = directMap[currentPage];
+  const isDirect = !!directMap[currentPage];
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials()]);
   mc.innerHTML = `
-    <div class="page-title">⚙️ 行政管理</div>
-    ${usageHint('admin-mgmt')}
+    ${!isDirect ? `<div class="page-title">⚙️ 行政管理</div>${usageHint('admin-mgmt')}
     <div class="sub-tabs" id="adminSubTabs">
       <div class="sub-tab ${adminSubTab === 'clinics' ? 'active' : ''}" data-tab="clinics" onclick="adminSubTab='clinics';renderAdminContent()">🏥 診所</div>
       <div class="sub-tab ${adminSubTab === 'suppliers' ? 'active' : ''}" data-tab="suppliers" onclick="adminSubTab='suppliers';renderAdminContent()">🏭 廠商</div>
       <div class="sub-tab ${adminSubTab === 'materials' ? 'active' : ''}" data-tab="materials" onclick="adminSubTab='materials';renderAdminContent()">📦 品項</div>
       <div class="sub-tab ${adminSubTab === 'categories' ? 'active' : ''}" data-tab="categories" onclick="adminSubTab='categories';renderAdminContent()">📁 類別</div>
       <div class="sub-tab ${adminSubTab === 'order-stats' ? 'active' : ''}" data-tab="order-stats" onclick="adminSubTab='order-stats';renderAdminContent()">📊 叫貨統計</div>
-    </div>
+    </div>` : ''}
     <div id="adminContent"></div>`;
   renderAdminContent();
 }
@@ -3861,14 +3901,16 @@ window.usersSubTab = 'users';
 
 async function renderUserMgmt() {
   const mc = document.getElementById('mainContent');
+  if (currentPage === 'user-list') window.usersSubTab = 'users';
+  else if (currentPage === 'role-mgmt') window.usersSubTab = 'roles';
+  const isDirect = ['user-list','role-mgmt'].includes(currentPage);
   await Promise.all([loadUsers(), loadRoles(), loadClinics()]);
   mc.innerHTML = `
-    <div class="page-title">👥 人員管理</div>
-    ${usageHint('user-mgmt')}
+    ${!isDirect ? `<div class="page-title">👥 人員管理</div>${usageHint('user-mgmt')}
     <div class="sub-tabs" id="usersSubTabs">
       <div class="sub-tab ${window.usersSubTab === 'users' ? 'active' : ''}" onclick="window.usersSubTab='users';renderUserMgmt()">👤 人員</div>
       ${hasPermission('manage_roles') ? `<div class="sub-tab ${window.usersSubTab === 'roles' ? 'active' : ''}" onclick="window.usersSubTab='roles';renderUserMgmt()">🔐 角色</div>` : ''}
-    </div>
+    </div>` : ''}
     <div id="usersContent"></div>`;
 
   const el = document.getElementById('usersContent');
@@ -4027,7 +4069,7 @@ function getTutorials() {
 function saveTutorials(arr) { localStorage.setItem('tutorials', JSON.stringify(arr)); }
 
 async function renderTutorials(container) {
-  const mc = container || (currentPage === 'material-mgmt' ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
+  const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   const tutorials = getTutorials();
   const canManage = hasPermission('manage_materials') || hasPermission('all');
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);

@@ -736,6 +736,7 @@ function enterEditMode() {
   editMode = true;
   document.getElementById('userMenu')?.classList.remove('open');
   document.getElementById('home').style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
   document.getElementById('logoBubbleIcon').textContent = '✅';
   document.getElementById('logoBubbleLabel').textContent = '確定儲存';
   document.getElementById('logoBubble').classList.add('edit-mode');
@@ -759,6 +760,7 @@ function enterEditMode() {
 function exitEditMode() {
   editMode = false;
   document.getElementById('home').style.overflow = '';
+  document.body.style.overflow = '';
   document.getElementById('logoBubbleIcon').textContent = '🦷';
   document.getElementById('logoBubbleLabel').textContent = '牙材採購系統';
   document.getElementById('logoBubble').classList.remove('edit-mode');
@@ -795,43 +797,33 @@ async function saveLayoutAndExit() {
   exitEditMode();
 }
 
-// Container bubble drag — 300ms hold to activate (touch + mouse)
-let _dragEl = null, _dragOX = 0, _dragOY = 0, _dragReady = false, _dragTimer = null;
-let _lastPX = 0, _lastPY = 0;
-function _evCoords(e) { return e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }; }
+// Container bubble drag
+let _dragEl = null, _dragOX = 0, _dragOY = 0;
+function _tc(e) { return e.touches ? e.touches[0] : e; }
 function _bubbleDragStart(e) {
   if (!editMode) return;
-  e.preventDefault(); e.stopPropagation();
-  const el = e.currentTarget;
-  const { x, y } = _evCoords(e);
-  if (_dragEl) _globalDragEnd(); // cancel any existing drag
-  _dragEl = el; _dragReady = false;
-  _lastPX = x; _lastPY = y;
-  clearTimeout(_dragTimer);
-  _dragTimer = setTimeout(() => {
-    if (_dragEl !== el) return;
-    _dragReady = true;
-    el.style.transition = 'none';
-    const er = el.getBoundingClientRect();
-    _dragOX = _lastPX - er.left; _dragOY = _lastPY - er.top;
-  }, 300);
+  e.preventDefault();
+  const t = _tc(e), el = e.currentTarget;
+  if (_dragEl) { _dragEl.style.transition = ''; _dragEl = null; }
+  _dragEl = el;
+  el.style.transition = 'none';
+  const r = el.getBoundingClientRect();
+  _dragOX = t.clientX - r.left;
+  _dragOY = t.clientY - r.top;
 }
 function _globalDragMove(e) {
   if (!_dragEl) return;
-  const { x, y } = _evCoords(e);
-  _lastPX = x; _lastPY = y;
-  if (!_dragReady) return;
   e.preventDefault();
-  const cr = _dragEl.parentElement.getBoundingClientRect();
-  const cw = _dragEl.parentElement.offsetWidth, ch = _dragEl.parentElement.offsetHeight;
-  _dragEl.style.left = Math.max(0, Math.min((x - cr.left - _dragOX) / cw * 100, 97)).toFixed(1) + '%';
-  _dragEl.style.top  = Math.max(0, Math.min((y - cr.top  - _dragOY) / ch * 100, 97)).toFixed(1) + '%';
+  const t = _tc(e);
+  const pr = _dragEl.parentElement.getBoundingClientRect();
+  const pw = _dragEl.parentElement.offsetWidth, ph = _dragEl.parentElement.offsetHeight;
+  _dragEl.style.left = Math.max(0, Math.min((t.clientX - pr.left - _dragOX) / pw * 100, 96)).toFixed(1) + '%';
+  _dragEl.style.top  = Math.max(0, Math.min((t.clientY - pr.top  - _dragOY) / ph * 100, 96)).toFixed(1) + '%';
 }
 function _globalDragEnd() {
-  clearTimeout(_dragTimer); _dragTimer = null;
   if (!_dragEl) return;
   _dragEl.style.transition = '';
-  _dragEl = null; _dragReady = false;
+  _dragEl = null;
 }
 
 

@@ -4525,7 +4525,10 @@ async function renderNotifyConfig(el) {
         <textarea id="rushExtraLineIds" rows="3" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:inherit;padding:6px 8px;font-size:.8rem;resize:vertical">${escHtml(extraIds)}</textarea>
       </div>
     </div>
-    <button class="btn btn-primary" onclick="saveNotifyConfig()">儲存設定</button>`;
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="saveNotifyConfig()">儲存設定</button>
+      <button class="btn btn-ghost" onclick="testLineNotify()">📨 測試發送（發給自己）</button>
+    </div>`;
 }
 
 function ncChipsHtml(clinicId) {
@@ -4602,6 +4605,28 @@ async function saveNotifyConfig() {
 }
 
 // ===================== LINE NOTIFY =====================
+async function testLineNotify() {
+  const lineId = userProfile?.line_user_id;
+  if (!lineId) {
+    toast('你的帳號沒有綁定 LINE（line_user_id 為空），請先用 LINE 登入一次', 'error');
+    return;
+  }
+  toast('發送測試訊息中...', 'info');
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/line-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ lineUserIds: [lineId], message: '✅ 牙材系統通知測試\n如果你收到這則訊息，代表 LINE 通知設定正確！' })
+    });
+    const text = await res.text();
+    if (!res.ok) { toast('發送失敗：' + text, 'error'); return; }
+    toast('測試訊息已發送，請確認 LINE 是否收到');
+  } catch(e) {
+    toast('發送錯誤：' + e.message, 'error');
+  }
+}
+
 async function sendLineNotify(message, lineUserIds) {
   if (!lineUserIds || lineUserIds.length === 0) return;
   try {

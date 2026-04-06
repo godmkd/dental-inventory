@@ -4475,20 +4475,24 @@ async function renderNotifyConfig(el) {
   await Promise.all([loadUsers(), loadClinics()]);
 
   const activeUsers = allUsers.filter(u => u.is_active !== false);
+  window._notifyActiveUsers = activeUsers; // cache for chip helpers
 
-  // 低庫存：per-clinic user checkboxes
+  // 低庫存：per-clinic collapsible rows
   const lowStockHtml = allClinics.map(c => {
-    const checkedIds = cfg.low_stock.clinic_users[c.id] || [];
-    const userChecks = activeUsers.map(u =>
-      `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:.83rem">
-        <input type="checkbox" data-clinic="${c.id}" data-uid="${u.id}" ${checkedIds.includes(u.id) ? 'checked' : ''}
-          onchange="notifyToggleLowStockUser(${c.id},'${u.id}',this.checked)">
-        ${escHtml(u.display_name || u.id.slice(0,8))}${u.line_user_id ? ' ✅' : ' <span style="color:var(--text-lighter);font-size:.75rem">（未綁 LINE）</span>'}
-      </label>`
-    ).join('');
-    return `<div style="margin-bottom:14px">
-      <div style="font-weight:600;margin-bottom:6px;color:var(--accent)">🏥 ${escHtml(c.name)}</div>
-      ${userChecks || '<span style="font-size:.8rem;color:var(--text-lighter)">尚無使用者</span>'}
+    const cid = c.id;
+    return `<div style="border:1px solid rgba(255,255,255,.1);border-radius:8px;margin-bottom:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;user-select:none;background:rgba(255,255,255,.04)" onclick="ncToggle(${cid})">
+        <span id="nc-arrow-${cid}" style="font-size:.7rem;transition:transform .2s">▶</span>
+        <span style="font-weight:600">🏥 ${escHtml(c.name)}</span>
+        <div id="nc-chips-${cid}" style="display:flex;flex-wrap:wrap;gap:4px;flex:1">${ncChipsHtml(cid)}</div>
+        <select style="font-size:.78rem;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:6px;color:inherit;padding:2px 6px;max-width:130px" onchange="ncAddUser(${cid},this)" onclick="event.stopPropagation()">
+          <option value="">＋ 選人</option>
+          ${ncSelectOptions(cid)}
+        </select>
+      </div>
+      <div id="nc-body-${cid}" style="display:none;padding:8px 12px 10px;font-size:.8rem;color:var(--text-lighter)">
+        已選人員顯示在上方，點 × 可移除。未綁 LINE 的人不會收到通知。
+      </div>
     </div>`;
   }).join('');
 
@@ -4508,7 +4512,7 @@ async function renderNotifyConfig(el) {
     <div class="page-title" style="font-size:1rem;margin-bottom:16px">🔔 通知設定</div>
     <div class="card" style="margin-bottom:16px;padding:16px 20px">
       <h4 style="margin:0 0 4px">⚠️ 低庫存通知</h4>
-      <p style="font-size:.8rem;color:var(--text-light);margin:0 0 14px">庫存低於安全量時，依各診所分別通知指定人員（需已綁定 LINE ✅）</p>
+      <p style="font-size:.8rem;color:var(--text-light);margin:0 0 12px">點選各診所旁的「＋ 選人」加入通知對象，點 × 移除（需已綁 LINE ✅）</p>
       ${lowStockHtml || '<span style="font-size:.83rem;color:var(--text-lighter)">尚無診所資料</span>'}
     </div>
     <div class="card" style="padding:16px 20px;margin-bottom:16px">
@@ -4524,13 +4528,57 @@ async function renderNotifyConfig(el) {
     <button class="btn btn-primary" onclick="saveNotifyConfig()">儲存設定</button>`;
 }
 
-window.notifyToggleLowStockUser = function(clinicId, userId, checked) {
-  if (!_notifyConfig) return;
+function ncChipsHtml(clinicId) {
+  const ids = _notifyConfig?.low_stock?.clinic_users?.[String(clinicId)] || [];
+  const users = window._notifyActiveUsers || [];
+  return ids.map(uid => {
+    const u = users.find(x => x.id === uid);
+    const name = u ? (u.display_name || uid.slice(0,8)) : uid.slice(0,8);
+    const hasLine = u?.line_user_id;
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(99,179,237,.2);border:1px solid rgba(99,179,237,.4);border-radius:10px;padding:1px 7px;font-size:.75rem;white-space:nowrap">${escHtml(name)}${hasLine ? ' ✅' : ''} <span style="cursor:pointer;opacity:.7;margin-left:2px" onclick="event.stopPropagation();ncRemoveUser(${clinicId},'${uid}')">×</span></span>`;
+  }).join('');
+}
+
+function ncSelectOptions(clinicId) {
+  const ids = _notifyConfig?.low_stock?.clinic_users?.[String(clinicId)] || [];
+  const users = window._notifyActiveUsers || [];
+  return users.filter(u => !ids.includes(u.id)).map(u =>
+    `<option value="${u.id}">${escHtml(u.display_name || u.id.slice(0,8))}${u.line_user_id ? ' ✅' : ''}</option>`
+  ).join('');
+}
+
+window.ncToggle = function(clinicId) {
+  const body = document.getElementById('nc-body-' + clinicId);
+  const arrow = document.getElementById('nc-arrow-' + clinicId);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
+};
+
+window.ncAddUser = function(clinicId, sel) {
+  const uid = sel.value;
+  if (!uid || !_notifyConfig) { sel.value = ''; return; }
   const key = String(clinicId);
   if (!_notifyConfig.low_stock.clinic_users[key]) _notifyConfig.low_stock.clinic_users[key] = [];
   const arr = _notifyConfig.low_stock.clinic_users[key];
-  if (checked) { if (!arr.includes(userId)) arr.push(userId); }
-  else { _notifyConfig.low_stock.clinic_users[key] = arr.filter(id => id !== userId); }
+  if (!arr.includes(uid)) arr.push(uid);
+  sel.value = '';
+  // Refresh chips and options
+  const chipsEl = document.getElementById('nc-chips-' + clinicId);
+  if (chipsEl) chipsEl.innerHTML = ncChipsHtml(clinicId);
+  sel.innerHTML = '<option value="">＋ 選人</option>' + ncSelectOptions(clinicId);
+};
+
+window.ncRemoveUser = function(clinicId, uid) {
+  if (!_notifyConfig) return;
+  const key = String(clinicId);
+  _notifyConfig.low_stock.clinic_users[key] = (_notifyConfig.low_stock.clinic_users[key] || []).filter(id => id !== uid);
+  const chipsEl = document.getElementById('nc-chips-' + clinicId);
+  if (chipsEl) chipsEl.innerHTML = ncChipsHtml(clinicId);
+  // Refresh select options
+  const sel = chipsEl?.closest('div')?.querySelector('select');
+  if (sel) sel.innerHTML = '<option value="">＋ 選人</option>' + ncSelectOptions(clinicId);
 };
 
 window.notifyToggleRushUser = function(userId, checked) {

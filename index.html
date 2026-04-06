@@ -4611,17 +4611,22 @@ async function testLineNotify() {
     toast('你的帳號沒有綁定 LINE（line_user_id 為空），請先用 LINE 登入一次', 'error');
     return;
   }
+  toast(`LINE ID：${lineId}`, 'info');
+  await new Promise(r => setTimeout(r, 1500));
   toast('發送測試訊息中...', 'info');
   try {
-    const { data: { session } } = await sb.auth.getSession();
     const res = await fetch(`${SUPABASE_URL}/functions/v1/line-notify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lineUserIds: [lineId], message: '✅ 牙材系統通知測試\n如果你收到這則訊息，代表 LINE 通知設定正確！' })
     });
-    const text = await res.text();
-    if (!res.ok) { toast('發送失敗：' + text, 'error'); return; }
-    toast('測試訊息已發送，請確認 LINE 是否收到');
+    const json = await res.json();
+    if (!res.ok) { toast('發送失敗：' + JSON.stringify(json), 'error'); return; }
+    if (json.errors?.length) {
+      toast('LINE 回傳錯誤：' + JSON.stringify(json.errors[0]), 'error');
+    } else {
+      toast('✅ 測試訊息已發送，請確認 LINE 是否收到');
+    }
   } catch(e) {
     toast('發送錯誤：' + e.message, 'error');
   }

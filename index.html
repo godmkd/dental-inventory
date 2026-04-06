@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>牙材集中採購管理系統</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -1864,7 +1866,9 @@ async function submitDailyChanges() {
       if (it.changeType === 'out') {
         if (!inv) { toast(`${it.name} 無庫存紀錄`, 'error'); continue; }
         if (inv.current_stock < it.quantity) { toast(`${it.name} 庫存不足 (${inv.current_stock})`, 'error'); continue; }
-        await withTimeout(sb.from('clinic_inventory').update({ current_stock: inv.current_stock - it.quantity }).eq('id', inv.id));
+        const newStock = inv.current_stock - it.quantity;
+        await withTimeout(sb.from('clinic_inventory').update({ current_stock: newStock }).eq('id', inv.id));
+        if (newStock < inv.safety_stock) notifyLowStock(dailyClinicId, it.name, newStock, inv.safety_stock);
       } else {
         if (inv) {
           await withTimeout(sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id));
@@ -3330,6 +3334,7 @@ async function rushDelivery(dcId) {
   const { error } = await withTimeout(sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId));
   if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
   toast('已記錄催貨');
+  notifyRushOrder(`催貨人：${userProfile.display_name}\n時間：${fmtDate(now)}`);
 }
 
 async function rushSingleItem(dcId, itemId) {
@@ -3341,6 +3346,7 @@ async function rushSingleItem(dcId, itemId) {
   const { error } = await withTimeout(sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId));
   if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
   toast(`已催貨：${mat}`);
+  notifyRushOrder(`品項：${mat}\n診所：${clinicName(dc?.clinic_id)}\n催貨人：${userProfile.display_name}`);
 }
 
 async function startReceive(dcId, orderId, clinicId) {
@@ -3888,13 +3894,30 @@ initOSDates();
 
 async function renderOrderStats(el) {
   el.innerHTML = `
-    <div class="os-filters">
-      <label>起始日</label><input type="date" id="osFrom" value="${osDateFrom}">
-      <label>結束日</label><input type="date" id="osTo" value="${osDateTo}">
-      <button class="btn btn-primary btn-sm" onclick="applyOSFilter()">查詢</button>
+    <div class="sub-tabs" id="statsSubTabs" style="margin-bottom:12px">
+      <div class="sub-tab active" data-tab="orders" onclick="switchStatTab('orders',this)">📋 叫貨明細</div>
+      <div class="sub-tab" data-tab="trend" onclick="switchStatTab('trend',this)">📊 消耗趨勢</div>
     </div>
-    <div id="osResult"><div style="text-align:center;padding:30px;color:var(--text-light)">載入中...</div></div>`;
+    <div id="statsOrdersTab">
+      <div class="os-filters">
+        <label>起始日</label><input type="date" id="osFrom" value="${osDateFrom}">
+        <label>結束日</label><input type="date" id="osTo" value="${osDateTo}">
+        <button class="btn btn-primary btn-sm" onclick="applyOSFilter()">查詢</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportExcel()">⬇ 匯出 Excel</button>
+      </div>
+      <div id="osResult"><div style="text-align:center;padding:30px;color:var(--text-light)">載入中...</div></div>
+    </div>
+    <div id="statsTrendTab" style="display:none"></div>`;
   await loadOrderStats();
+}
+
+function switchStatTab(tab, el) {
+  document.querySelectorAll('#statsSubTabs .sub-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('statsOrdersTab').style.display = tab === 'orders' ? '' : 'none';
+  const trendEl = document.getElementById('statsTrendTab');
+  trendEl.style.display = tab === 'trend' ? '' : 'none';
+  if (tab === 'trend' && !trendEl.hasChildNodes()) renderConsumptionTrend(trendEl);
 }
 
 async function applyOSFilter() {
@@ -4370,6 +4393,193 @@ async function deleteTutorial(id) {
   if (error) { toast('刪除失敗：' + error.message, 'error'); return; }
   toast('教學已刪除');
   renderTutorials();
+}
+
+// ===================== LINE NOTIFY =====================
+async function sendLineNotify(message, lineUserIds) {
+  if (!lineUserIds || lineUserIds.length === 0) return;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return;
+    await fetch(`${SUPABASE_URL}/functions/v1/line-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ lineUserIds, message })
+    });
+  } catch (e) { console.warn('LINE notify failed:', e); }
+}
+
+async function notifyLowStock(clinicId, materialName, current, safety) {
+  // Find clinic manager(s) for this clinic with LINE ID
+  const { data: users } = await withTimeout(
+    sb.from('user_profiles').select('line_user_id').eq('clinic_id', clinicId).eq('is_active', true).neq('line_user_id', '')
+  );
+  // Also notify admins
+  const { data: admins } = await withTimeout(
+    sb.from('user_profiles').select('line_user_id').eq('role', 'owner').eq('is_active', true).neq('line_user_id', '')
+  );
+  const ids = [...new Set([...(users || []), ...(admins || [])].map(u => u.line_user_id).filter(Boolean))];
+  const clinicLabel = clinicName(clinicId);
+  await sendLineNotify(`⚠️ 低庫存警示\n診所：${clinicLabel}\n品項：${materialName}\n目前庫存：${current}（安全庫存：${safety}）\n請盡快補貨！`, ids);
+}
+
+async function notifyRushOrder(orderInfo) {
+  // Notify owners/admins
+  const { data: admins } = await withTimeout(
+    sb.from('user_profiles').select('line_user_id').in('role', ['owner', 'admin']).eq('is_active', true).neq('line_user_id', '')
+  );
+  const ids = (admins || []).map(u => u.line_user_id).filter(Boolean);
+  await sendLineNotify(`🚨 催貨通知\n${orderInfo}`, ids);
+}
+
+// ===================== EXCEL EXPORT =====================
+async function exportExcel() {
+  toast('準備匯出...', 'info');
+  await Promise.all([loadClinics(), loadMaterials()]);
+
+  const dateFrom = document.getElementById('osFrom')?.value || '';
+  const dateTo   = document.getElementById('osTo')?.value   || '';
+
+  // Sheet 1: 叫貨明細
+  let q1 = sb.from('order_items').select('*');
+  if (dateFrom) q1 = q1.gte('created_at', dateFrom + 'T00:00:00');
+  if (dateTo)   q1 = q1.lte('created_at', dateTo   + 'T23:59:59');
+  const { data: items } = await withTimeout(q1);
+
+  const statusMap = { pending:'待處理', confirmed:'已確認', shipped:'已出貨', delivered:'已到貨', cancelled:'已取消' };
+  const orderRows = [['診所','品項','數量','單位','單價','優惠價','小計','狀態','叫貨日期']];
+  (items || []).forEach(it => {
+    const m = allMaterials.find(x => x.id === it.material_id) || {};
+    const price = it.is_custom_price ? (it.custom_price || 0) : (it.unit_price || 0);
+    const subtotal = it.is_custom_price ? price : (it.quantity * (it.unit_price || 0));
+    orderRows.push([
+      clinicName(it.clinic_id), m.name || '(已刪除)',
+      it.quantity, m.unit || '',
+      it.unit_price || 0,
+      it.is_custom_price ? (it.custom_price || 0) : '',
+      subtotal,
+      statusMap[it.item_status] || it.item_status || '',
+      (it.created_at || '').slice(0, 10)
+    ]);
+  });
+
+  // Sheet 2: 庫存現況
+  const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*'));
+  const invRows = [['診所','品項','類別','目前庫存','安全庫存']];
+  (inv || []).forEach(r => {
+    const m = allMaterials.find(x => x.id === r.material_id) || {};
+    invRows.push([clinicName(r.clinic_id), m.name || '', categoryName(m.category_id), r.current_stock, r.safety_stock]);
+  });
+
+  // Sheet 3: 消耗紀錄 (out)
+  let q3 = sb.from('inventory_logs').select('*').eq('type', 'out').order('created_at', { ascending: false });
+  if (dateFrom) q3 = q3.gte('created_at', dateFrom + 'T00:00:00');
+  if (dateTo)   q3 = q3.lte('created_at', dateTo   + 'T23:59:59');
+  const { data: logs } = await withTimeout(q3);
+  const logRows = [['診所','品項','數量','操作人員','備註','日期']];
+  (logs || []).forEach(l => {
+    const m = allMaterials.find(x => x.id === l.material_id) || {};
+    logRows.push([clinicName(l.clinic_id), m.name || '', l.quantity, l.operator_name || '', l.notes || '', (l.created_at || '').slice(0, 10)]);
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(orderRows), '叫貨明細');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invRows),   '庫存現況');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logRows),   '消耗紀錄');
+
+  const filename = `牙材報表_${dateFrom || 'all'}_${dateTo || 'all'}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  toast('匯出完成：' + filename);
+}
+
+// ===================== CONSUMPTION TREND =====================
+let _trendChart = null;
+async function renderConsumptionTrend(el) {
+  el.innerHTML = `
+    <div class="os-filters" style="flex-wrap:wrap;gap:8px">
+      <label>起始月</label><input type="month" id="trendFrom" value="${new Date(Date.now()-6*30*86400000).toISOString().slice(0,7)}">
+      <label>結束月</label><input type="month" id="trendTo"   value="${new Date().toISOString().slice(0,7)}">
+      <label>顯示前</label><select id="trendTopN" style="padding:6px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border);color:var(--text)">
+        <option value="5">5 項</option><option value="10" selected>10 項</option><option value="20">20 項</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="loadTrendData()">查詢</button>
+    </div>
+    <div style="position:relative;max-width:100%;overflow-x:auto">
+      <canvas id="trendCanvas" style="min-height:300px"></canvas>
+    </div>
+    <div id="trendTable" style="margin-top:16px"></div>`;
+  await loadTrendData();
+}
+
+async function loadTrendData() {
+  const from = (document.getElementById('trendFrom')?.value || '') + '-01';
+  const toRaw = document.getElementById('trendTo')?.value || '';
+  const to = toRaw ? toRaw + '-31' : '';
+  const topN = parseInt(document.getElementById('trendTopN')?.value || '10');
+
+  let q = sb.from('inventory_logs').select('material_id,quantity,created_at').eq('type','out');
+  if (from) q = q.gte('created_at', from);
+  if (to)   q = q.lte('created_at', to);
+  const { data: logs, error } = await withTimeout(q);
+  if (error || !logs?.length) {
+    document.getElementById('trendTable').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-light)">此期間無消耗資料</p>';
+    return;
+  }
+
+  // Aggregate by material
+  const byMat = {};
+  const byMatMonth = {};
+  logs.forEach(l => {
+    const mid = l.material_id;
+    const month = (l.created_at || '').slice(0, 7);
+    byMat[mid] = (byMat[mid] || 0) + (l.quantity || 0);
+    if (!byMatMonth[mid]) byMatMonth[mid] = {};
+    byMatMonth[mid][month] = (byMatMonth[mid][month] || 0) + (l.quantity || 0);
+  });
+
+  // Top N materials
+  const sorted = Object.entries(byMat).sort((a, b) => b[1] - a[1]).slice(0, topN);
+  const matIds = sorted.map(([id]) => parseInt(id));
+  await loadMaterials();
+
+  // All months in range
+  const months = [...new Set(logs.map(l => (l.created_at || '').slice(0, 7)))].sort();
+
+  // Chart
+  const colors = ['#63b3ed','#68d391','#f6ad55','#fc8181','#b794f4','#4fd1c5','#f687b3','#fbd38d','#a0aec0','#90cdf4','#9ae6b4','#fca5a5'];
+  const datasets = matIds.map((mid, i) => ({
+    label: (allMaterials.find(m => m.id === mid) || {}).name || mid,
+    data: months.map(mo => byMatMonth[mid]?.[mo] || 0),
+    backgroundColor: colors[i % colors.length],
+    borderColor: colors[i % colors.length],
+    fill: false, tension: 0.3
+  }));
+
+  if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
+  const ctx = document.getElementById('trendCanvas')?.getContext('2d');
+  if (ctx) {
+    _trendChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: months, datasets },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#e2e8f0' } } },
+        scales: {
+          x: { ticks: { color: '#a0aec0' }, grid: { color: 'rgba(255,255,255,.05)' } },
+          y: { ticks: { color: '#a0aec0' }, grid: { color: 'rgba(255,255,255,.05)' } }
+        }
+      }
+    });
+  }
+
+  // Summary table
+  let tbl = '<div class="card"><div class="table-wrap"><table><thead><tr><th>品項</th><th>總消耗量</th></tr></thead><tbody>';
+  sorted.forEach(([mid, total]) => {
+    const m = allMaterials.find(x => x.id == mid) || {};
+    tbl += `<tr><td>${escHtml(m.name || mid)}</td><td>${total} ${escHtml(m.unit || '')}</td></tr>`;
+  });
+  tbl += '</tbody></table></div></div>';
+  document.getElementById('trendTable').innerHTML = tbl;
 }
 
 // ===================== START =====================

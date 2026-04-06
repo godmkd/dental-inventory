@@ -3473,6 +3473,7 @@ async function renderAdminMgmt() {
       <div class="sub-tab ${adminSubTab === 'materials' ? 'active' : ''}" data-tab="materials" onclick="adminSubTab='materials';renderAdminContent()">📦 品項</div>
       <div class="sub-tab ${adminSubTab === 'categories' ? 'active' : ''}" data-tab="categories" onclick="adminSubTab='categories';renderAdminContent()">📁 類別</div>
       <div class="sub-tab ${adminSubTab === 'order-stats' ? 'active' : ''}" data-tab="order-stats" onclick="adminSubTab='order-stats';renderAdminContent()">📊 叫貨統計</div>
+      ${hasPermission('manage_orders') ? `<div class="sub-tab ${adminSubTab === 'notify-config' ? 'active' : ''}" data-tab="notify-config" onclick="adminSubTab='notify-config';renderAdminContent()">🔔 通知設定</div>` : ''}
     </div>` : ''}
     <div id="adminContent"></div>`;
   renderAdminContent();
@@ -3487,6 +3488,7 @@ async function renderAdminContent() {
   else if (adminSubTab === 'suppliers') await renderAdminSuppliers(el);
   else if (adminSubTab === 'materials') await renderAdminMaterials(el);
   else if (adminSubTab === 'order-stats') await renderOrderStats(el);
+  else if (adminSubTab === 'notify-config') await renderNotifyConfig(el);
   else await renderAdminCategories(el);
 }
 
@@ -4405,6 +4407,81 @@ async function deleteTutorial(id) {
   renderTutorials();
 }
 
+// ===================== NOTIFY CONFIG =====================
+let _notifyConfig = null;
+
+async function loadNotifyConfig() {
+  if (_notifyConfig) return _notifyConfig;
+  const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', 'notification_config').single());
+  _notifyConfig = data?.value || {
+    low_stock:  { roles: ['owner'], include_clinic: true },
+    rush_order: { roles: ['owner', 'admin'] }
+  };
+  return _notifyConfig;
+}
+
+async function renderNotifyConfig(el) {
+  const cfg = await loadNotifyConfig();
+  await loadRoles();
+
+  const roleOptions = allRoles.filter(r => !r.is_system).map(r =>
+    `<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+      <input type="checkbox" value="${r.name}" ${(cfg.low_stock?.roles||[]).includes(r.name) ? 'checked' : ''}
+        onchange="notifyConfigToggleRole('low_stock',this)">
+      ${escHtml(r.display_name)}
+    </label>`
+  ).join('');
+
+  const rushOptions = allRoles.filter(r => !r.is_system).map(r =>
+    `<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+      <input type="checkbox" value="${r.name}" ${(cfg.rush_order?.roles||[]).includes(r.name) ? 'checked' : ''}
+        onchange="notifyConfigToggleRole('rush_order',this)">
+      ${escHtml(r.display_name)}
+    </label>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="page-title" style="font-size:1rem;margin-bottom:16px">🔔 通知設定</div>
+    <div class="card" style="margin-bottom:16px;padding:16px 20px">
+      <h4 style="margin:0 0 12px">⚠️ 低庫存通知</h4>
+      <p style="font-size:.83rem;color:var(--text-light);margin-bottom:10px">當庫存低於安全庫存量時，通知以下角色：</p>
+      ${roleOptions}
+      <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
+        <input type="checkbox" id="notifyIncludeClinic" ${cfg.low_stock?.include_clinic ? 'checked' : ''}
+          onchange="notifyConfigToggleClinic(this)">
+        同時通知該診所的所有使用者
+      </label>
+      <p style="font-size:.78rem;color:var(--text-lighter);margin-top:8px">低庫存閾值 = 各品項的「安全庫存量」（在品項管理裡設定）</p>
+    </div>
+    <div class="card" style="padding:16px 20px">
+      <h4 style="margin:0 0 12px">🚨 催貨通知</h4>
+      <p style="font-size:.83rem;color:var(--text-light);margin-bottom:10px">按下催貨時，通知以下角色：</p>
+      ${rushOptions}
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn btn-primary" onclick="saveNotifyConfig()">儲存設定</button>
+    </div>`;
+}
+
+window.notifyConfigToggleRole = function(type, cb) {
+  if (!_notifyConfig) return;
+  const roles = _notifyConfig[type].roles || [];
+  if (cb.checked) { if (!roles.includes(cb.value)) roles.push(cb.value); }
+  else { _notifyConfig[type].roles = roles.filter(r => r !== cb.value); return; }
+  _notifyConfig[type].roles = roles;
+};
+window.notifyConfigToggleClinic = function(cb) {
+  if (_notifyConfig) _notifyConfig.low_stock.include_clinic = cb.checked;
+};
+
+async function saveNotifyConfig() {
+  const { error } = await withTimeout(sb.from('app_settings').upsert({
+    key: 'notification_config', value: _notifyConfig, updated_at: new Date().toISOString()
+  }));
+  if (error) { toast('儲存失敗：' + error.message, 'error'); return; }
+  toast('通知設定已儲存');
+}
+
 // ===================== LINE NOTIFY =====================
 async function sendLineNotify(message, lineUserIds) {
   if (!lineUserIds || lineUserIds.length === 0) return;
@@ -4420,25 +4497,36 @@ async function sendLineNotify(message, lineUserIds) {
 }
 
 async function notifyLowStock(clinicId, materialName, current, safety) {
-  // Find clinic manager(s) for this clinic with LINE ID
-  const { data: users } = await withTimeout(
-    sb.from('user_profiles').select('line_user_id').eq('clinic_id', clinicId).eq('is_active', true).neq('line_user_id', '')
-  );
-  // Also notify admins
-  const { data: admins } = await withTimeout(
-    sb.from('user_profiles').select('line_user_id').eq('role', 'owner').eq('is_active', true).neq('line_user_id', '')
-  );
-  const ids = [...new Set([...(users || []), ...(admins || [])].map(u => u.line_user_id).filter(Boolean))];
-  const clinicLabel = clinicName(clinicId);
-  await sendLineNotify(`⚠️ 低庫存警示\n診所：${clinicLabel}\n品項：${materialName}\n目前庫存：${current}（安全庫存：${safety}）\n請盡快補貨！`, ids);
+  const cfg = await loadNotifyConfig();
+  const roles = cfg.low_stock?.roles || ['owner'];
+  const includeClinic = cfg.low_stock?.include_clinic !== false;
+  let allUsers = [];
+  if (roles.length) {
+    const { data } = await withTimeout(
+      sb.from('user_profiles').select('line_user_id').in('role', roles).eq('is_active', true).neq('line_user_id', '')
+    );
+    allUsers = data || [];
+  }
+  if (includeClinic) {
+    const { data } = await withTimeout(
+      sb.from('user_profiles').select('line_user_id').eq('clinic_id', clinicId).eq('is_active', true).neq('line_user_id', '')
+    );
+    allUsers = [...allUsers, ...(data || [])];
+  }
+  const ids = [...new Set(allUsers.map(u => u.line_user_id).filter(Boolean))];
+  if (!ids.length) return;
+  await sendLineNotify(`⚠️ 低庫存警示\n診所：${clinicName(clinicId)}\n品項：${materialName}\n目前庫存：${current}（安全庫存：${safety}）\n請盡快補貨！`, ids);
 }
 
 async function notifyRushOrder(orderInfo) {
-  // Notify owners/admins
-  const { data: admins } = await withTimeout(
-    sb.from('user_profiles').select('line_user_id').in('role', ['owner', 'admin']).eq('is_active', true).neq('line_user_id', '')
+  const cfg = await loadNotifyConfig();
+  const roles = cfg.rush_order?.roles || ['owner', 'admin'];
+  if (!roles.length) return;
+  const { data } = await withTimeout(
+    sb.from('user_profiles').select('line_user_id').in('role', roles).eq('is_active', true).neq('line_user_id', '')
   );
-  const ids = (admins || []).map(u => u.line_user_id).filter(Boolean);
+  const ids = (data || []).map(u => u.line_user_id).filter(Boolean);
+  if (!ids.length) return;
   await sendLineNotify(`🚨 催貨通知\n${orderInfo}`, ids);
 }
 

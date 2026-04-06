@@ -414,7 +414,7 @@ th,td{padding:6px 4px!important}
 #logoBubble.edit-mode{background:rgba(99,179,237,.2)!important;border-color:rgba(99,179,237,.6)!important}
 #editCancelBtn{display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:rgba(30,27,60,.95);border:1px solid rgba(255,255,255,.2);color:var(--text-light);border-radius:20px;padding:8px 20px;cursor:pointer;font-size:.85rem;white-space:nowrap}
 #editCancelBtn:hover{color:#fff;border-color:rgba(255,255,255,.4)}
-.content-section{min-height:100vh;padding:20px;background:#000;display:none;scroll-margin-top:92px}
+.content-section{min-height:100vh;padding:20px;background:transparent;display:none;scroll-margin-top:92px}
 .content-section.active{display:block}
 .back-home-btn{position:sticky;top:12px;z-index:50;background:#000;color:var(--text);border:1px solid rgba(255,255,255,.15);padding:8px 18px;border-radius:20px;cursor:pointer;font-size:.88rem;transition:all .2s;margin-bottom:12px}
 .back-home-btn:hover{background:rgba(99,179,237,.15);border-color:var(--accent);color:var(--accent)}
@@ -744,9 +744,11 @@ function enterEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
     el.style.touchAction = 'none';
-    el.addEventListener('touchstart', _bubbleDragStart, { passive: false });
-    el.addEventListener('mousedown', _bubbleDragStart);
-    if (el.dataset.page !== 'system-logo') el.addEventListener('click', _suppressClick, true);
+    if (el.dataset.page !== 'system-logo') {
+      el.addEventListener('touchstart', _bubbleDragStart, { passive: false });
+      el.addEventListener('mousedown', _bubbleDragStart);
+      el.addEventListener('click', _suppressClick, true);
+    }
   });
   const w = window.innerWidth, h = window.innerHeight;
   const vp = (w < h && w <= 900) ? '直幅' : (w > h && h <= 500) ? '橫幅' : '電腦';
@@ -764,9 +766,11 @@ function exitEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.remove('edit-mode-bubble');
     el.style.touchAction = '';
-    el.removeEventListener('touchstart', _bubbleDragStart);
-    el.removeEventListener('mousedown', _bubbleDragStart);
-    if (el.dataset.page !== 'system-logo') el.removeEventListener('click', _suppressClick, true);
+    if (el.dataset.page !== 'system-logo') {
+      el.removeEventListener('touchstart', _bubbleDragStart);
+      el.removeEventListener('mousedown', _bubbleDragStart);
+      el.removeEventListener('click', _suppressClick, true);
+    }
   });
   _dragEnd(); // clean up any ongoing drag
 }
@@ -814,6 +818,7 @@ function _dragEnd() {
 }
 function _bubbleDragStart(e) {
   if (!editMode) return;
+  e.preventDefault();
   const el = e.currentTarget;
   const t = e.touches ? e.changedTouches[0] : e;
   if (_dragEl) _dragEnd();

@@ -4224,25 +4224,25 @@ async function updateDisplayName() {
 }
 
 // ===================== TUTORIALS =====================
-function getTutorials() {
-  try { return JSON.parse(localStorage.getItem('tutorials') || '[]'); } catch(e) { return []; }
-}
-function saveTutorials(arr) { localStorage.setItem('tutorials', JSON.stringify(arr)); }
-
 async function renderTutorials(container) {
-  const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
-  const tutorials = getTutorials();
+  const mc = container || document.getElementById('mainContent');
+  mc.innerHTML = '<div class="loading" style="padding:40px;text-align:center">載入中...</div>';
+
+  const { data: tutorials, error } = await withTimeout(
+    sb.from('tutorials').select('*').order('created_at', { ascending: false })
+  );
+  if (error) { mc.innerHTML = '<div class="empty-state">載入失敗：' + escHtml(error.message) + '</div>'; return; }
+
   const canManage = hasPermission('manage_materials') || hasPermission('all');
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
 
-  // Filter tutorials by clinic
+  // Filter by clinic
   const filterClinicId = window._tutorialFilterClinic || '';
   let filtered = tutorials;
   if (filterClinicId !== '') {
     const cid = parseInt(filterClinicId);
     filtered = tutorials.filter(t => !t.clinic_id || t.clinic_id === cid);
   } else if (!canSeeAdmin()) {
-    // Non-admin: only see "全部" or own clinic
     filtered = tutorials.filter(t => !t.clinic_id || t.clinic_id === userProfile.clinic_id);
   }
 
@@ -4289,9 +4289,12 @@ function openLightbox(src) {
   document.getElementById('lightboxOverlay').classList.add('show');
 }
 
-function openTutorialModal(editId) {
-  const tutorials = getTutorials();
-  const t = editId ? tutorials.find(x => x.id === editId) : null;
+async function openTutorialModal(editId) {
+  let t = null;
+  if (editId) {
+    const { data } = await withTimeout(sb.from('tutorials').select('*').eq('id', editId).single());
+    t = data;
+  }
   const isEdit = !!t;
 
   let clinicOpts = '<option value="">全部診所</option>';
@@ -4335,36 +4338,23 @@ async function saveTutorial(editId) {
   if (!title) { toast('請輸入標題', 'error'); return; }
 
   let images = [];
-  // If editing and no new files, keep old images
-  const tutorials = getTutorials();
-  const existing = editId ? tutorials.find(x => x.id === editId) : null;
-
   if (fileInput.files.length > 0) {
     for (const file of fileInput.files) {
       const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsDataURL(file); });
       images.push(dataUrl);
     }
-  } else if (existing) {
-    images = existing.images || [];
+  } else if (editId) {
+    const { data } = await withTimeout(sb.from('tutorials').select('images').eq('id', editId).single());
+    images = data?.images || [];
   }
 
-  if (editId && existing) {
-    existing.title = title;
-    existing.content = content;
-    existing.clinic_id = clinic_id;
-    existing.images = images;
-  } else {
-    tutorials.push({
-      id: Date.now().toString(),
-      title,
-      content,
-      images,
-      clinic_id,
-      created_at: new Date().toISOString(),
-      author: userProfile.display_name || '-'
-    });
-  }
-  saveTutorials(tutorials);
+  const record = editId
+    ? { id: editId, title, content, images, clinic_id, author: userProfile.display_name || '-' }
+    : { id: Date.now().toString(), title, content, images, clinic_id, created_at: new Date().toISOString(), author: userProfile.display_name || '-' };
+
+  const { error } = await withTimeout(sb.from('tutorials').upsert(record));
+  if (error) { toast('儲存失敗：' + error.message, 'error'); return; }
+
   closeModal();
   toast(editId ? '教學已更新' : '教學已新增');
   renderTutorials();
@@ -4373,8 +4363,8 @@ async function saveTutorial(editId) {
 async function deleteTutorial(id) {
   const ok = await showConfirm('刪除教學', '確定要刪除這篇教學文章嗎？');
   if (!ok) return;
-  const tutorials = getTutorials().filter(t => t.id !== id);
-  saveTutorials(tutorials);
+  const { error } = await withTimeout(sb.from('tutorials').delete().eq('id', id));
+  if (error) { toast('刪除失敗：' + error.message, 'error'); return; }
   toast('教學已刪除');
   renderTutorials();
 }

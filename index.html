@@ -1018,6 +1018,7 @@ function buildBubbles() {
     if (b.special === 'logo') {
       idAttr = 'id="logoBubble"'; onclick = 'handleLogoBubbleClick()';
       iconId = 'id="logoBubbleIcon"';
+      labelHtml = `<span class="bubble-label" id="logoBubbleLabel">${b.label}</span>`;
     } else if (b.special === 'user') {
       idAttr = 'id="userBubble"'; onclick = 'handleUserBubbleClick()';
       iconId = 'id="userBubbleIcon"';

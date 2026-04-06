@@ -17,7 +17,7 @@
   --border:rgba(255,255,255,.1);--border-light:rgba(255,255,255,.06);--radius:8px;--shadow:0 1px 3px rgba(0,0,0,.3);
   --font-mono:'SF Mono','Cascadia Code','Consolas',monospace;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);background-attachment:fixed;color:var(--text);min-height:100vh;overflow-x:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);color:var(--text);min-height:100vh;overflow-x:hidden}
 
 /* Login */
 .login-page{display:none;align-items:center;justify-content:center;min-height:100vh;width:100%;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);z-index:999}
@@ -748,10 +748,6 @@ function enterEditMode() {
     el.addEventListener('mousedown', _bubbleDragStart);
     if (el.dataset.page !== 'system-logo') el.addEventListener('click', _suppressClick, true);
   });
-  document.addEventListener('touchmove', _globalDragMove, { passive: false });
-  document.addEventListener('touchend', _globalDragEnd);
-  document.addEventListener('mousemove', _globalDragMove);
-  document.addEventListener('mouseup', _globalDragEnd);
   const w = window.innerWidth, h = window.innerHeight;
   const vp = (w < h && w <= 900) ? '直幅' : (w > h && h <= 500) ? '橫幅' : '電腦';
   toast(`已進入${vp}版面調整模式，拖動泡泡後點左上 ✅ 儲存`, 'info');
@@ -772,10 +768,7 @@ function exitEditMode() {
     el.removeEventListener('mousedown', _bubbleDragStart);
     if (el.dataset.page !== 'system-logo') el.removeEventListener('click', _suppressClick, true);
   });
-  document.removeEventListener('touchmove', _globalDragMove);
-  document.removeEventListener('touchend', _globalDragEnd);
-  document.removeEventListener('mousemove', _globalDragMove);
-  document.removeEventListener('mouseup', _globalDragEnd);
+  _dragEnd(); // clean up any ongoing drag
 }
 
 async function saveLayoutAndExit() {
@@ -797,33 +790,46 @@ async function saveLayoutAndExit() {
   exitEditMode();
 }
 
-// Container bubble drag
+// Container bubble drag — attach move/end to element (iOS dispatches touch to original target)
 let _dragEl = null, _dragOX = 0, _dragOY = 0;
-function _tc(e) { return e.touches ? e.touches[0] : e; }
+
+function _dragMove(e) {
+  if (!_dragEl) return;
+  e.preventDefault();
+  const t = e.touches ? e.changedTouches[0] : e;
+  const pr = _dragEl.parentElement.getBoundingClientRect();
+  _dragEl.style.left = Math.max(0, Math.min((t.clientX - pr.left - _dragOX) / _dragEl.parentElement.offsetWidth  * 100, 96)).toFixed(1) + '%';
+  _dragEl.style.top  = Math.max(0, Math.min((t.clientY - pr.top  - _dragOY) / _dragEl.parentElement.offsetHeight * 100, 96)).toFixed(1) + '%';
+}
+function _dragEnd() {
+  if (!_dragEl) return;
+  _dragEl.removeEventListener('touchmove',   _dragMove);
+  _dragEl.removeEventListener('touchend',    _dragEnd);
+  _dragEl.removeEventListener('touchcancel', _dragEnd);
+  document.removeEventListener('mousemove', _dragMove);
+  document.removeEventListener('mouseup',   _dragEnd);
+  _dragEl.style.transition = '';
+  _dragEl = null;
+}
 function _bubbleDragStart(e) {
   if (!editMode) return;
   e.preventDefault();
-  const t = _tc(e), el = e.currentTarget;
-  if (_dragEl) { _dragEl.style.transition = ''; _dragEl = null; }
+  const el = e.currentTarget;
+  const t = e.touches ? e.changedTouches[0] : e;
+  if (_dragEl) _dragEnd();
   _dragEl = el;
   el.style.transition = 'none';
   const r = el.getBoundingClientRect();
   _dragOX = t.clientX - r.left;
   _dragOY = t.clientY - r.top;
-}
-function _globalDragMove(e) {
-  if (!_dragEl) return;
-  e.preventDefault();
-  const t = _tc(e);
-  const pr = _dragEl.parentElement.getBoundingClientRect();
-  const pw = _dragEl.parentElement.offsetWidth, ph = _dragEl.parentElement.offsetHeight;
-  _dragEl.style.left = Math.max(0, Math.min((t.clientX - pr.left - _dragOX) / pw * 100, 96)).toFixed(1) + '%';
-  _dragEl.style.top  = Math.max(0, Math.min((t.clientY - pr.top  - _dragOY) / ph * 100, 96)).toFixed(1) + '%';
-}
-function _globalDragEnd() {
-  if (!_dragEl) return;
-  _dragEl.style.transition = '';
-  _dragEl = null;
+  if (e.touches) {
+    el.addEventListener('touchmove',   _dragMove, { passive: false });
+    el.addEventListener('touchend',    _dragEnd);
+    el.addEventListener('touchcancel', _dragEnd);
+  } else {
+    document.addEventListener('mousemove', _dragMove);
+    document.addEventListener('mouseup',   _dragEnd);
+  }
 }
 
 
@@ -1400,7 +1406,7 @@ function applyGlobalBg() {
       `linear-gradient(135deg,rgba(15,12,41,${o}) 0%,rgba(48,43,99,${o}) 50%,rgba(36,36,62,${o}) 100%),url(${url})`;
     document.body.style.backgroundSize = 'auto,cover';
     document.body.style.backgroundPosition = 'center,center';
-    document.body.style.backgroundAttachment = 'fixed,fixed';
+    document.body.style.backgroundAttachment = 'scroll,scroll';
     document.body.style.backgroundRepeat = 'repeat,no-repeat';
     document.body.classList.add('has-bg');
   } else {

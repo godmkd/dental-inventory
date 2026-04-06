@@ -736,7 +736,6 @@ function enterEditMode() {
   editMode = true;
   document.getElementById('userMenu')?.classList.remove('open');
   document.getElementById('home').style.overflow = 'hidden';
-  document.body.style.overflow = 'hidden';
   document.getElementById('logoBubbleIcon').textContent = '✅';
   document.getElementById('logoBubbleLabel').textContent = '確定儲存';
   document.getElementById('logoBubble').classList.add('edit-mode');
@@ -745,8 +744,10 @@ function enterEditMode() {
     el.classList.add('edit-mode-bubble');
     el.style.touchAction = 'none';
     if (el.dataset.page !== 'system-logo') {
-      el.addEventListener('touchstart', _bubbleDragStart, { passive: false });
-      el.addEventListener('mousedown', _bubbleDragStart);
+      el.addEventListener('pointerdown',   _bubbleDragStart);
+      el.addEventListener('pointermove',   _dragPointerMove);
+      el.addEventListener('pointerup',     _dragPointerUp);
+      el.addEventListener('pointercancel', _dragPointerUp);
       el.addEventListener('click', _suppressClick, true);
     }
   });
@@ -758,7 +759,6 @@ function enterEditMode() {
 function exitEditMode() {
   editMode = false;
   document.getElementById('home').style.overflow = '';
-  document.body.style.overflow = '';
   document.getElementById('logoBubbleIcon').textContent = '🦷';
   document.getElementById('logoBubbleLabel').textContent = '牙材採購系統';
   document.getElementById('logoBubble').classList.remove('edit-mode');
@@ -767,12 +767,15 @@ function exitEditMode() {
     el.classList.remove('edit-mode-bubble');
     el.style.touchAction = '';
     if (el.dataset.page !== 'system-logo') {
-      el.removeEventListener('touchstart', _bubbleDragStart);
-      el.removeEventListener('mousedown', _bubbleDragStart);
+      el.removeEventListener('pointerdown',   _bubbleDragStart);
+      el.removeEventListener('pointermove',   _dragPointerMove);
+      el.removeEventListener('pointerup',     _dragPointerUp);
+      el.removeEventListener('pointercancel', _dragPointerUp);
       el.removeEventListener('click', _suppressClick, true);
     }
   });
   _dragEnd(); // clean up any ongoing drag
+  document.getElementById('logoBubble').style.touchAction = 'manipulation';
 }
 
 async function saveLayoutAndExit() {
@@ -794,49 +797,39 @@ async function saveLayoutAndExit() {
   exitEditMode();
 }
 
-// Container bubble drag — attach move/end to element (iOS dispatches touch to original target)
-let _dragEl = null, _dragOX = 0, _dragOY = 0;
+// Bubble drag — Pointer Events + setPointerCapture (works on iOS/Android/desktop, no race conditions)
+let _dragEl = null, _dragOX = 0, _dragOY = 0, _dragPid = null;
 
-function _dragMove(e) {
+function _dragPointerMove(e) {
   if (!_dragEl) return;
-  e.preventDefault();
-  const t = e.touches ? e.changedTouches[0] : e;
   const pr = _dragEl.parentElement.getBoundingClientRect();
-  _dragEl.style.left = Math.max(0, Math.min((t.clientX - pr.left - _dragOX) / _dragEl.parentElement.offsetWidth  * 100, 96)).toFixed(1) + '%';
-  _dragEl.style.top  = Math.max(0, Math.min((t.clientY - pr.top  - _dragOY) / _dragEl.parentElement.offsetHeight * 100, 96)).toFixed(1) + '%';
+  _dragEl.style.left = Math.max(0, Math.min((e.clientX - pr.left - _dragOX) / _dragEl.parentElement.offsetWidth  * 100, 96)).toFixed(1) + '%';
+  _dragEl.style.top  = Math.max(0, Math.min((e.clientY - pr.top  - _dragOY) / _dragEl.parentElement.offsetHeight * 100, 96)).toFixed(1) + '%';
 }
-function _dragEnd() {
+function _dragPointerUp(e) {
   if (!_dragEl) return;
-  _dragEl.removeEventListener('touchmove',   _dragMove);
-  _dragEl.removeEventListener('touchend',    _dragEnd);
-  _dragEl.removeEventListener('touchcancel', _dragEnd);
-  document.removeEventListener('mousemove', _dragMove);
-  document.removeEventListener('mouseup',   _dragEnd);
+  try { _dragEl.releasePointerCapture(e.pointerId); } catch(_) {}
   _dragEl.style.transition = '';
   _dragEl.style.animationName = '';
   _dragEl = null;
+  _dragPid = null;
 }
 function _bubbleDragStart(e) {
   if (!editMode) return;
   e.preventDefault();
+  if (_dragEl) _dragPointerUp({ pointerId: _dragPid });
   const el = e.currentTarget;
-  const t = e.touches ? e.changedTouches[0] : e;
-  if (_dragEl) _dragEnd();
   _dragEl = el;
+  _dragPid = e.pointerId;
+  el.setPointerCapture(e.pointerId);
   el.style.transition = 'none';
   el.style.animationName = 'none';
   const r = el.getBoundingClientRect();
-  _dragOX = t.clientX - r.left;
-  _dragOY = t.clientY - r.top;
-  if (e.touches) {
-    el.addEventListener('touchmove',   _dragMove, { passive: false });
-    el.addEventListener('touchend',    _dragEnd);
-    el.addEventListener('touchcancel', _dragEnd);
-  } else {
-    document.addEventListener('mousemove', _dragMove);
-    document.addEventListener('mouseup',   _dragEnd);
-  }
+  _dragOX = e.clientX - r.left;
+  _dragOY = e.clientY - r.top;
 }
+// Keep _dragEnd as alias for exitEditMode cleanup
+function _dragEnd() { _dragPointerUp({ pointerId: _dragPid }); }
 
 
 async function setWaitEmail() {

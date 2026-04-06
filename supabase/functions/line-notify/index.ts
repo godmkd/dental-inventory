@@ -2,7 +2,7 @@
 // Deploy: supabase functions deploy line-notify
 // Secret:  supabase secrets set LINE_CHANNEL_TOKEN=your_long_lived_token
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

@@ -743,13 +743,11 @@ function enterEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
     el.style.touchAction = 'none';
-    if (el.dataset.page !== 'system-logo') {
-      el.addEventListener('pointerdown',   _bubbleDragStart);
-      el.addEventListener('pointermove',   _dragPointerMove);
-      el.addEventListener('pointerup',     _dragPointerUp);
-      el.addEventListener('pointercancel', _dragPointerUp);
-      el.addEventListener('click', _suppressClick, true);
-    }
+    el.addEventListener('pointerdown',   _bubbleDragStart);
+    el.addEventListener('pointermove',   _dragPointerMove);
+    el.addEventListener('pointerup',     _dragPointerUp);
+    el.addEventListener('pointercancel', _dragPointerUp);
+    el.addEventListener('click', _suppressClick, true);
   });
   const w = window.innerWidth, h = window.innerHeight;
   const vp = (w < h && w <= 900) ? '直幅' : (w > h && h <= 500) ? '橫幅' : '電腦';
@@ -766,13 +764,11 @@ function exitEditMode() {
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.remove('edit-mode-bubble');
     el.style.touchAction = '';
-    if (el.dataset.page !== 'system-logo') {
-      el.removeEventListener('pointerdown',   _bubbleDragStart);
-      el.removeEventListener('pointermove',   _dragPointerMove);
-      el.removeEventListener('pointerup',     _dragPointerUp);
-      el.removeEventListener('pointercancel', _dragPointerUp);
-      el.removeEventListener('click', _suppressClick, true);
-    }
+    el.removeEventListener('pointerdown',   _bubbleDragStart);
+    el.removeEventListener('pointermove',   _dragPointerMove);
+    el.removeEventListener('pointerup',     _dragPointerUp);
+    el.removeEventListener('pointercancel', _dragPointerUp);
+    el.removeEventListener('click', _suppressClick, true);
   });
   _dragEnd(); // clean up any ongoing drag
   document.getElementById('logoBubble').style.touchAction = 'manipulation';
@@ -798,29 +794,36 @@ async function saveLayoutAndExit() {
 }
 
 // Bubble drag — Pointer Events + setPointerCapture (works on iOS/Android/desktop, no race conditions)
-let _dragEl = null, _dragOX = 0, _dragOY = 0, _dragPid = null;
+let _dragEl = null, _dragOX = 0, _dragOY = 0, _dragPid = null, _dragSX = 0, _dragSY = 0, _dragMoved = false;
 
 function _dragPointerMove(e) {
   if (!_dragEl) return;
+  if (!_dragMoved) {
+    const dx = e.clientX - _dragSX, dy = e.clientY - _dragSY;
+    if (Math.sqrt(dx*dx + dy*dy) < 6) return; // ignore tiny jitter
+    _dragMoved = true;
+  }
   const pr = _dragEl.parentElement.getBoundingClientRect();
   _dragEl.style.left = Math.max(0, Math.min((e.clientX - pr.left - _dragOX) / _dragEl.parentElement.offsetWidth  * 100, 96)).toFixed(1) + '%';
   _dragEl.style.top  = Math.max(0, Math.min((e.clientY - pr.top  - _dragOY) / _dragEl.parentElement.offsetHeight * 100, 96)).toFixed(1) + '%';
 }
 function _dragPointerUp(e) {
   if (!_dragEl) return;
-  try { _dragEl.releasePointerCapture(e.pointerId); } catch(_) {}
-  _dragEl.style.transition = '';
-  _dragEl.style.animationName = '';
-  _dragEl = null;
-  _dragPid = null;
+  const el = _dragEl, moved = _dragMoved;
+  try { el.releasePointerCapture(e.pointerId); } catch(_) {}
+  el.style.transition = '';
+  el.style.animationName = '';
+  _dragEl = null; _dragPid = null; _dragMoved = false;
+  // Logo bubble tapped (not dragged) in edit mode → save
+  if (!moved && el.dataset.page === 'system-logo') saveLayoutAndExit();
 }
 function _bubbleDragStart(e) {
   if (!editMode) return;
   e.preventDefault();
   if (_dragEl) _dragPointerUp({ pointerId: _dragPid });
   const el = e.currentTarget;
-  _dragEl = el;
-  _dragPid = e.pointerId;
+  _dragEl = el; _dragPid = e.pointerId; _dragMoved = false;
+  _dragSX = e.clientX; _dragSY = e.clientY;
   el.setPointerCapture(e.pointerId);
   el.style.transition = 'none';
   el.style.animationName = 'none';

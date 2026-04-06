@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS public.materials (
   supplier_id  BIGINT REFERENCES public.suppliers(id) ON DELETE SET NULL,
   unit_price   DECIMAL(10,2) DEFAULT 0,
   notes        TEXT DEFAULT '',
+  created_by   UUID REFERENCES auth.users(id),
   created_at   TIMESTAMPTZ DEFAULT NOW(),
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
@@ -159,7 +160,8 @@ CREATE TABLE IF NOT EXISTS public.tutorials (
   images      JSONB NOT NULL DEFAULT '[]',
   clinic_id   INTEGER REFERENCES public.clinics(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  author      TEXT
+  author      TEXT,
+  created_by  UUID REFERENCES auth.users(id)
 );
 
 

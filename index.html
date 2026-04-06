@@ -917,6 +917,8 @@ function roleLabel(roleStr, roleId) {
   return { owner: '系統管理員', admin: '總管理者', clinic_manager: '診所管理者' }[roleStr] || roleStr;
 }
 
+function canEditOwned(createdBy) { return !!(currentUser && createdBy === currentUser.id); }
+
 function hasPermission(perm) {
   if (!userProfile) return false;
   if (userProfile.role_id) {
@@ -1000,13 +1002,13 @@ function buildBubbles() {
     { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '23%', left: '75%', pt: '21%', pl: '60%', lt: '18%', ll: '55%',  delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
     // ── Cluster 3：系統管理（右區）──
     { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '8%',  left: '72%', pt: '44%', pl: '8%',  lt: '8%',  ll: '65%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
-    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '10%', left: '81%', pt: '32%', pl: '10%', lt: '20%', ll: '63%',  delay: '0.5s', duration: '7.5s', anim: 'float3', perm: 'manage_suppliers' },
-    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '15%', left: '88%', pt: '32%', pl: '60%', lt: '10%', ll: '74%',  delay: '2.1s', duration: '6s',   anim: 'float2', perm: 'manage_categories' },
+    { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '10%', left: '81%', pt: '32%', pl: '10%', lt: '20%', ll: '63%',  delay: '0.5s', duration: '7.5s', anim: 'float3' },
+    { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '15%', left: '88%', pt: '32%', pl: '60%', lt: '10%', ll: '74%',  delay: '2.1s', duration: '6s',   anim: 'float2' },
     { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '36%', left: '81%', pt: '45%', pl: '36%', lt: '40%', ll: '64%',  delay: '3.5s', duration: '6.5s', anim: 'float' },
-    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '48%', left: '72%', pt: '33%', pl: '35%', lt: '55%', ll: '63%',  delay: '1.3s', duration: '5.5s', anim: 'float',  perm: 'manage_materials' },
+    { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '48%', left: '72%', pt: '33%', pl: '35%', lt: '55%', ll: '63%',  delay: '1.3s', duration: '5.5s', anim: 'float' },
     { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '48%', left: '85%', pt: '33%', pl: '83%', lt: '55%', ll: '74%',  delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
     { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '34%', left: '88%', pt: '44%', pl: '61%', lt: '40%', ll: '75%',  delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
-    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '76%', pt: '56%', pl: '12%', lt: '68%', ll: '65%',  delay: '3.7s', duration: '5.2s', anim: 'float',  perm: 'manage_clinics' },
+    { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '76%', pt: '56%', pl: '12%', lt: '68%', ll: '65%',  delay: '3.7s', duration: '5.2s', anim: 'float' },
     { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '84%', pt: '57%', pl: '37%', lt: '70%', ll: '73%',  delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
     { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '68%', ll: '82%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
   ];
@@ -3475,16 +3477,17 @@ async function renderAdminContent() {
 // --- Clinics CRUD ---
 async function renderAdminClinics(el) {
   await loadClinics();
+  const canManage = hasPermission('manage_clinics');
   el.innerHTML = `
-    <div class="toolbar"><button class="btn btn-primary" onclick="editClinic()">＋ 新增診所</button></div>
+    <div class="toolbar">${canManage ? '<button class="btn btn-primary" onclick="editClinic()">＋ 新增診所</button>' : ''}</div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>名稱</th><th>地址</th><th>電話</th><th>備註</th><th>操作</th></tr></thead>
+      <thead><tr><th>名稱</th><th>地址</th><th>電話</th><th>備註</th>${canManage ? '<th>操作</th>' : ''}</tr></thead>
       <tbody>${allClinics.map(c => `<tr>
         <td>${escHtml(c.name)}</td><td>${escHtml(c.address || '-')}</td><td>${escHtml(c.phone || '-')}</td><td>${escHtml(c.notes || '-')}</td>
-        <td>
+        ${canManage ? `<td>
           <button class="btn btn-ghost btn-sm" onclick="editClinic(${c.id})">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteClinic(${c.id})">刪除</button>
-        </td>
+        </td>` : ''}
       </tr>`).join('')}</tbody>
     </table></div></div>`;
 }
@@ -3520,16 +3523,17 @@ async function deleteClinic(id) {
 // --- Suppliers CRUD ---
 async function renderAdminSuppliers(el) {
   await loadSuppliers();
+  const canManage = hasPermission('manage_suppliers');
   el.innerHTML = `
-    <div class="toolbar"><button class="btn btn-primary" onclick="editSupplier()">＋ 新增廠商</button></div>
+    <div class="toolbar">${canManage ? '<button class="btn btn-primary" onclick="editSupplier()">＋ 新增廠商</button>' : ''}</div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>名稱</th><th>聯絡人</th><th>電話</th><th>備註</th><th>操作</th></tr></thead>
+      <thead><tr><th>名稱</th><th>聯絡人</th><th>電話</th><th>備註</th>${canManage ? '<th>操作</th>' : ''}</tr></thead>
       <tbody>${allSuppliers.map(s => `<tr>
         <td>${escHtml(s.name)}</td><td>${escHtml(s.contact || '-')}</td><td>${escHtml(s.phone || '-')}</td><td>${escHtml(s.notes || '-')}</td>
-        <td>
+        ${canManage ? `<td>
           <button class="btn btn-ghost btn-sm" onclick="editSupplier(${s.id})">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${s.id})">刪除</button>
-        </td>
+        </td>` : ''}
       </tr>`).join('')}</tbody>
     </table></div></div>`;
 }
@@ -3578,16 +3582,14 @@ async function renderAdminMaterials(el) {
     </div>
     <div class="card"><div class="table-wrap"><table id="adminMatTable">
       <thead><tr><th>圖片</th><th>名稱</th><th>類別</th><th>規格</th><th>單位</th><th>廠商</th>${canSeePrice() ? '<th>單價</th>' : ''}<th>操作</th></tr></thead>
-      <tbody>${allMaterials.map(m => `<tr data-name="${m.name.toLowerCase()}" data-cat="${m.category_id || 0}">
+      <tbody>${allMaterials.map(m => { const canEdit = hasPermission('manage_materials') || canEditOwned(m.created_by); return `<tr data-name="${m.name.toLowerCase()}" data-cat="${m.category_id || 0}">
         <td>${m.image_url ? `<img class="img-thumb" src="${m.image_url}" onclick="window.open('${m.image_url}')">` : '-'}</td>
         <td><strong>${escHtml(m.name)}</strong></td><td>${categoryName(m.category_id)}</td>
         <td>${escHtml(m.spec || '-')}</td><td>${escHtml(m.unit)}</td><td>${supplierName(m.supplier_id)}</td>
         ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}
-        <td>
-          <button class="btn btn-ghost btn-sm" onclick="editMaterial(${m.id})">編輯</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteMaterial(${m.id})">刪除</button>
-        </td>
-      </tr>`).join('')}</tbody>
+        <td>${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="editMaterial(${m.id})">編輯</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMaterial(${m.id})">刪除</button>` : ''}</td>
+      </tr>`; }).join('')}</tbody>
     </table></div></div>`;
   window._adminMatCatFilter = 0;
 }
@@ -3703,7 +3705,7 @@ async function saveMaterial(id) {
     if (!obj.name) { toast('請輸入名稱', 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
     let err;
     if (id) { ({ error: err } = await withTimeout(sb.from('materials').update(obj).eq('id', id))); }
-    else { ({ error: err } = await withTimeout(sb.from('materials').insert(obj))); }
+    else { ({ error: err } = await withTimeout(sb.from('materials').insert({ ...obj, created_by: currentUser?.id }))); }
     if (err) { toast('儲存失敗: ' + err.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
     toast('已儲存'); closeModal(); await loadMaterials(); renderAdminContent();
   } catch (e) { toast('錯誤: ' + e.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; }
@@ -3725,27 +3727,28 @@ async function renderAdminCategories(el) {
   await loadCategories();
   catOrigOrder = allCategories.map(c => c.id);
   catSortChanged = false;
+  const canManage = hasPermission('manage_categories');
+  window._adminCatCanManage = canManage;
   el.innerHTML = `
-    <div class="toolbar"><button class="btn btn-primary" onclick="editCategory()">＋ 新增類別</button></div>
+    <div class="toolbar">${canManage ? '<button class="btn btn-primary" onclick="editCategory()">＋ 新增類別</button>' : ''}</div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th></th><th>名稱</th><th>操作</th></tr></thead>
-      <tbody id="catSortBody">${allCategories.map((c, idx) => `<tr class="cat-drag-item" draggable="true" data-cat-id="${c.id}"
-            ondragstart="catDragStart(event,${c.id})" ondragover="catDragOver(event)" ondragleave="catDragLeave(event)" ondrop="catDrop(event,${c.id})" ondragend="catDragEnd(event)">
-        <td>
+      <thead><tr>${canManage ? '<th></th>' : ''}<th>名稱</th>${canManage ? '<th>操作</th>' : ''}</tr></thead>
+      <tbody id="catSortBody">${allCategories.map((c, idx) => `<tr ${canManage ? `class="cat-drag-item" draggable="true" data-cat-id="${c.id}" ondragstart="catDragStart(event,${c.id})" ondragover="catDragOver(event)" ondragleave="catDragLeave(event)" ondrop="catDrop(event,${c.id})" ondragend="catDragEnd(event)"` : ''}>
+        ${canManage ? `<td>
           <span class="drag-handle" style="display:inline-block;margin-right:4px">⠿</span>
           <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveCat(${c.id},-1)" ${idx === 0 ? 'disabled' : ''}>▲</button>
           <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveCat(${c.id},1)" ${idx === allCategories.length - 1 ? 'disabled' : ''}>▼</button>
-        </td><td>${escHtml(c.name)}</td>
-        <td>
+        </td>` : ''}<td>${escHtml(c.name)}</td>
+        ${canManage ? `<td>
           <button class="btn btn-ghost btn-sm" onclick="editCategory(${c.id})">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteCategory(${c.id})">刪除</button>
-        </td>
+        </td>` : ''}
       </tr>`).join('')}</tbody>
     </table></div></div>
-    <div id="catSortBar" style="display:none" class="sort-confirm-bar">
+    ${canManage ? `<div id="catSortBar" style="display:none" class="sort-confirm-bar">
       <button class="btn btn-primary" onclick="saveCatSort()">✓ 確認排序</button>
       <button class="btn btn-ghost" onclick="cancelCatSort()">✕ 取消</button>
-    </div>`;
+    </div>` : ''}`;
 }
 
 window.moveCat = function(id, direction) {
@@ -4233,7 +4236,7 @@ async function renderTutorials(container) {
   );
   if (error) { mc.innerHTML = '<div class="empty-state">載入失敗：' + escHtml(error.message) + '</div>'; return; }
 
-  const canManage = hasPermission('manage_materials') || hasPermission('all');
+  const canManageAll = hasPermission('manage_materials') || hasPermission('all');
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
 
   // Filter by clinic
@@ -4257,7 +4260,7 @@ async function renderTutorials(container) {
       <select class="search-box" style="flex:none;width:auto" onchange="window._tutorialFilterClinic=this.value;renderTutorials()">
         ${clinicOpts}
       </select>
-      ${canManage ? '<button class="btn btn-primary btn-sm" onclick="openTutorialModal()">＋ 新增教學</button>' : ''}
+      <button class="btn btn-primary btn-sm" onclick="openTutorialModal()">＋ 新增教學</button>
     </div>`;
 
   if (filtered.length === 0) {
@@ -4270,7 +4273,7 @@ async function renderTutorials(container) {
           <h4>${escHtml(t.title)}</h4>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="badge badge-confirmed" style="font-size:.72rem">${escHtml(clinicLabel)}</span>
-            ${canManage ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openTutorialModal('${t.id}')">✏️</button><button class="btn btn-danger btn-xs" onclick="event.stopPropagation();deleteTutorial('${t.id}')">🗑</button>` : ''}
+            ${(canManageAll || canEditOwned(t.created_by)) ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openTutorialModal('${t.id}')">✏️</button><button class="btn btn-danger btn-xs" onclick="event.stopPropagation();deleteTutorial('${t.id}')">🗑</button>` : ''}
           </div>
         </div>
         <div class="tutorial-card-body">
@@ -4350,7 +4353,7 @@ async function saveTutorial(editId) {
 
   const record = editId
     ? { id: editId, title, content, images, clinic_id, author: userProfile.display_name || '-' }
-    : { id: Date.now().toString(), title, content, images, clinic_id, created_at: new Date().toISOString(), author: userProfile.display_name || '-' };
+    : { id: Date.now().toString(), title, content, images, clinic_id, created_at: new Date().toISOString(), author: userProfile.display_name || '-', created_by: currentUser?.id };
 
   const { error } = await withTimeout(sb.from('tutorials').upsert(record));
   if (error) { toast('儲存失敗：' + error.message, 'error'); return; }

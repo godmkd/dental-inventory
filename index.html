@@ -863,6 +863,16 @@ async function loadProfile() {
   }
   if (error) { toast('載入資料失敗: ' + error.message, 'error'); showLogin(); return; }
   userProfile = data;
+  // Update line_user_id if missing (for users who registered before this field was added)
+  if (!data.line_user_id) {
+    const meta = currentUser.user_metadata || {};
+    const lineId = (currentUser.identities || []).find(i => i.provider === 'line')?.id
+      || meta.provider_id || meta.sub || '';
+    if (lineId) {
+      await withTimeout(sb.from('user_profiles').update({ line_user_id: lineId }).eq('id', currentUser.id));
+      userProfile.line_user_id = lineId;
+    }
+  }
   if (!data.is_active) { toast('您的帳號已被停用', 'error'); await withTimeout(sb.auth.signOut()); showLogin(); return; }
   if (data.role === 'clinic_manager' && !data.clinic_id) {
     document.getElementById('loginPage').style.display = 'none';

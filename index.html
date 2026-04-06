@@ -1916,13 +1916,30 @@ async function submitDailyChanges() {
         if (!inv) { toast(`${it.name} 無庫存紀錄`, 'error'); continue; }
         if (inv.current_stock < it.quantity) { toast(`${it.name} 庫存不足 (${inv.current_stock})`, 'error'); continue; }
         const newStock = inv.current_stock - it.quantity;
-        await withTimeout(sb.from('clinic_inventory').update({ current_stock: newStock }).eq('id', inv.id));
-        if (newStock < inv.safety_stock) notifyLowStock(dailyClinicId, it.name, newStock, inv.safety_stock);
+        const safety = inv.safety_stock ?? 5;
+        const notifyLevel = inv.notify_level ?? 0;
+        let newNotifyLevel = notifyLevel;
+        if (newStock < safety / 2 && notifyLevel < 2) {
+          notifyLowStock(dailyClinicId, it.name, newStock, safety, 'half');
+          newNotifyLevel = 2;
+        } else if (newStock < safety && notifyLevel < 1) {
+          notifyLowStock(dailyClinicId, it.name, newStock, safety, 'low');
+          newNotifyLevel = 1;
+        }
+        const updateData = { current_stock: newStock };
+        if (newNotifyLevel !== notifyLevel) updateData.notify_level = newNotifyLevel;
+        await withTimeout(sb.from('clinic_inventory').update(updateData).eq('id', inv.id));
       } else {
         if (inv) {
-          await withTimeout(sb.from('clinic_inventory').update({ current_stock: inv.current_stock + it.quantity }).eq('id', inv.id));
+          const safety = inv.safety_stock ?? 5;
+          const newStock = inv.current_stock + it.quantity;
+          const resetNotify = newStock >= safety && (inv.notify_level ?? 0) > 0;
+          await withTimeout(sb.from('clinic_inventory').update({
+            current_stock: newStock,
+            ...(resetNotify ? { notify_level: 0 } : {})
+          }).eq('id', inv.id));
         } else {
-          await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: dailyClinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5 }));
+          await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: dailyClinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5, notify_level: 0 }));
         }
       }
       await withTimeout(sb.from('inventory_logs').insert({
@@ -3378,24 +3395,32 @@ async function doReceiveSingle(itemId, dcId, orderId, clinicId) {
 
 async function rushDelivery(dcId) {
   const now = new Date().toISOString();
-  const { data: dc } = await withTimeout(sb.from('delivery_confirmations').select('notes').eq('id', dcId).single());
+  const { data: dc } = await withTimeout(sb.from('delivery_confirmations').select('notes,rush_notified,clinic_id').eq('id', dcId).single());
   const newNotes = (dc?.notes || '') + `\n[診所催貨] ${fmtDate(now)} by ${userProfile.display_name}`;
-  const { error } = await withTimeout(sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId));
+  const updateObj = { notes: newNotes.trim() };
+  if (!dc?.rush_notified) updateObj.rush_notified = true;
+  const { error } = await withTimeout(sb.from('delivery_confirmations').update(updateObj).eq('id', dcId));
   if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
   toast('已記錄催貨');
-  notifyRushOrder(`催貨人：${userProfile.display_name}\n時間：${fmtDate(now)}`);
+  if (!dc?.rush_notified) {
+    notifyRushOrder(`🚨 催貨通知\n診所：${clinicName(dc?.clinic_id)}\n催貨人：${userProfile.display_name}\n時間：${fmtDate(now)}`);
+  }
 }
 
 async function rushSingleItem(dcId, itemId) {
   const now = new Date().toISOString();
   const { data: item } = await withTimeout(sb.from('order_items').select('material_id').eq('id', itemId).single());
   const mat = item ? materialName(item.material_id) : `品項#${itemId}`;
-  const { data: dc } = await withTimeout(sb.from('delivery_confirmations').select('notes').eq('id', dcId).single());
+  const { data: dc } = await withTimeout(sb.from('delivery_confirmations').select('notes,rush_notified,clinic_id').eq('id', dcId).single());
   const newNotes = (dc?.notes || '') + `\n[診所催貨-個別] ${mat} ${fmtDate(now)} by ${userProfile.display_name}`;
-  const { error } = await withTimeout(sb.from('delivery_confirmations').update({ notes: newNotes.trim() }).eq('id', dcId));
+  const updateObj = { notes: newNotes.trim() };
+  if (!dc?.rush_notified) updateObj.rush_notified = true;
+  const { error } = await withTimeout(sb.from('delivery_confirmations').update(updateObj).eq('id', dcId));
   if (error) { toast('催貨記錄失敗: ' + error.message, 'error'); return; }
   toast(`已催貨：${mat}`);
-  notifyRushOrder(`品項：${mat}\n診所：${clinicName(dc?.clinic_id)}\n催貨人：${userProfile.display_name}`);
+  if (!dc?.rush_notified) {
+    notifyRushOrder(`🚨 催貨通知\n品項：${mat}\n診所：${clinicName(dc?.clinic_id)}\n催貨人：${userProfile.display_name}`);
+  }
 }
 
 async function startReceive(dcId, orderId, clinicId) {
@@ -4645,7 +4670,7 @@ async function sendLineNotify(message, lineUserIds) {
   } catch (e) { console.warn('LINE notify failed:', e); }
 }
 
-async function notifyLowStock(clinicId, materialName, current, safety) {
+async function notifyLowStock(clinicId, materialName, current, safety, level = 'low') {
   const cfg = await loadNotifyConfig();
   const userIds = cfg.low_stock?.clinic_users?.[String(clinicId)] || [];
   if (!userIds.length) return;
@@ -4654,7 +4679,10 @@ async function notifyLowStock(clinicId, materialName, current, safety) {
   );
   const ids = [...new Set((data || []).map(u => u.line_user_id).filter(Boolean))];
   if (!ids.length) return;
-  await sendLineNotify(`⚠️ 低庫存警示\n診所：${clinicName(clinicId)}\n品項：${materialName}\n目前庫存：${current}（安全庫存：${safety}）\n請盡快補貨！`, ids);
+  const isHalf = level === 'half';
+  const emoji = isHalf ? '🚨' : '⚠️';
+  const title = isHalf ? '庫存低於安全量一半！' : '低庫存警示';
+  await sendLineNotify(`${emoji} ${title}\n診所：${clinicName(clinicId)}\n品項：${materialName}\n目前庫存：${current}（安全庫存：${safety}）\n請盡快補貨！`, ids);
 }
 
 async function notifyRushOrder(orderInfo) {

@@ -499,6 +499,7 @@ th,td{padding:6px 4px!important}
 <!-- User menu (position:fixed, shown when user bubble tapped) -->
 <div class="user-menu" id="userMenu">
   <div class="user-menu-name" id="userMenuName"></div>
+  <button class="btn btn-ghost" style="width:100%;font-size:.85rem;margin-bottom:6px;text-align:left" onclick="document.getElementById('userMenu').classList.remove('open');navigateToBubble('account-settings')">⚙️ 帳戶設定</button>
   <button class="btn btn-danger" style="width:100%;font-size:.85rem" onclick="doLogout()">登出</button>
 </div>
 <div id="editCancelBtn" onclick="exitEditMode()">✗ 取消調整</div>
@@ -987,7 +988,7 @@ function getNavItems() {
     { id: 'order-mgmt', icon: '📋', label: '叫貨管理', perm: 'manage_orders' },
     { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
     { id: 'user-mgmt', icon: '👥', label: '人員管理', perms: ['manage_users', 'manage_roles'] },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定' }
+    { id: 'notify-settings', icon: '🔔', label: '通知設定', perm: 'manage_orders' }
   ];
   return all.filter(it => {
     if (!it.perm && !it.perms) return true;
@@ -1016,7 +1017,7 @@ function buildBubbles() {
     { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '8%',  left: '72%', pt: '44%', pl: '8%',  lt: '8%',  ll: '65%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
     { id: 'admin-suppliers',  icon: '🏭', label: '廠商管理', size: 'large',  top: '10%', left: '81%', pt: '32%', pl: '10%', lt: '20%', ll: '63%',  delay: '0.5s', duration: '7.5s', anim: 'float3' },
     { id: 'admin-categories', icon: '📁', label: '類別管理', size: 'large',  top: '15%', left: '88%', pt: '32%', pl: '60%', lt: '10%', ll: '74%',  delay: '2.1s', duration: '6s',   anim: 'float2' },
-    { id: 'account-settings', icon: '⚙️', label: '帳戶設定', size: 'medium', top: '36%', left: '81%', pt: '45%', pl: '36%', lt: '40%', ll: '64%',  delay: '3.5s', duration: '6.5s', anim: 'float' },
+    { id: 'notify-settings',  icon: '🔔', label: '通知設定', size: 'medium', top: '36%', left: '81%', pt: '45%', pl: '36%', lt: '40%', ll: '64%',  delay: '3.5s', duration: '6.5s', anim: 'float',  perm: 'manage_orders' },
     { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '48%', left: '72%', pt: '33%', pl: '35%', lt: '55%', ll: '63%',  delay: '1.3s', duration: '5.5s', anim: 'float' },
     { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '48%', left: '85%', pt: '33%', pl: '83%', lt: '55%', ll: '74%',  delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
     { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '34%', left: '88%', pt: '44%', pl: '61%', lt: '40%', ll: '75%',  delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
@@ -1144,6 +1145,7 @@ async function navigateTo(pageId) {
     // 原有頁面
     'stock-overview':   renderStockOverview,
     'account-settings': renderAccountSettings,
+    'notify-settings':  renderNotifySettings,
     'tutorials':        () => renderTutorials(mc),
     // 保留舊路由（內部呼叫用）
     'material-mgmt': renderMaterialMgmt,
@@ -1601,17 +1603,27 @@ async function renderStockOverview() {
       </div>
       <div id="${scId}"><div class="table-wrap"><table style="min-width:max-content">
       <thead><tr><th style="white-space:nowrap">品項</th>${clinicsToShow.map(c => `<th style="white-space:nowrap;min-width:60px">${escHtml(c.name)}</th>`).join('')}<th style="white-space:nowrap">總計</th></tr></thead><tbody>`;
+    const canSetSafety = hasPermission('manage_orders');
     mats.forEach(m => {
       let total = 0;
       const cells = clinicsToShow.map(c => {
         const rec = invMap[`${c.id}_${m.id}`];
         const stock = rec ? rec.current_stock : 0;
-        const safety = rec ? rec.safety_stock : 5;
+        const safety = rec ? rec.safety_stock : (m.default_safety_stock ?? 5);
         total += stock;
         const cls = stock <= safety ? 'stock-danger' : '';
         return `<td class="${cls}">${stock}</td>`;
       }).join('');
       html += `<tr><td><strong>${escHtml(m.name)}</strong><br><small class="text-muted">${escHtml(m.spec || '')} ${escHtml(m.unit)}</small></td>${cells}<td><strong>${total}</strong></td></tr>`;
+      if (canSetSafety) {
+        const globalVal = m.default_safety_stock ?? 5;
+        const clinicCells = clinicsToShow.map(c => {
+          const rec = invMap[`${c.id}_${m.id}`];
+          const val = rec?.safety_stock ?? '';
+          return `<td style="padding:2px 4px"><input type="number" min="0" value="${val}" placeholder="${globalVal}" style="width:52px;padding:2px 4px;font-size:.75rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:inherit;text-align:center" onblur="saveClinicSafety(${c.id},${m.id},this.value,${globalVal})"></td>`;
+        }).join('');
+        html += `<tr style="background:rgba(255,200,0,.06)"><td style="padding:2px 6px;font-size:.75rem;color:var(--text-light)">安全庫存 <input type="number" min="0" value="${globalVal}" style="width:52px;padding:2px 4px;font-size:.75rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,200,0,.4);border-radius:4px;color:inherit;text-align:center" onblur="saveGlobalSafety(${m.id},this.value,this)"></td>${clinicCells}<td></td></tr>`;
+      }
     });
     html += '</tbody></table></div></div></div>';
   }
@@ -1629,6 +1641,33 @@ async function renderStockOverview() {
       if (arrow) arrow.textContent = '▶';
     }
   }
+}
+
+async function saveGlobalSafety(materialId, value, inputEl) {
+  const v = parseInt(value);
+  if (isNaN(v) || v < 0) return;
+  const { error } = await withTimeout(sb.from('materials').update({ default_safety_stock: v }).eq('id', materialId));
+  if (error) { toast('儲存失敗：' + error.message, 'error'); return; }
+  // Update in-memory
+  const mat = allMaterials.find(m => m.id === materialId);
+  if (mat) mat.default_safety_stock = v;
+  // Update placeholder values in sibling per-clinic inputs in same row
+  if (inputEl) {
+    const row = inputEl.closest('tr');
+    if (row) row.querySelectorAll('input[type="number"]').forEach(inp => { if (inp !== inputEl) inp.placeholder = v; });
+  }
+  toast('全診所預設安全庫存已更新');
+}
+
+async function saveClinicSafety(clinicId, materialId, value, globalDefault) {
+  const raw = value.trim();
+  const v = raw === '' ? globalDefault : parseInt(raw);
+  if (isNaN(v) || v < 0) return;
+  const { error } = await withTimeout(sb.from('clinic_inventory').upsert({
+    clinic_id: clinicId, material_id: materialId, safety_stock: v
+  }, { onConflict: 'clinic_id,material_id' }));
+  if (error) { toast('儲存失敗：' + error.message, 'error'); return; }
+  toast('安全庫存已更新');
 }
 
 // ============================================================
@@ -4418,6 +4457,13 @@ async function loadNotifyConfig() {
     rush_order: { roles: ['owner', 'admin'] }
   };
   return _notifyConfig;
+}
+
+async function renderNotifySettings() {
+  if (!hasPermission('manage_orders')) { document.getElementById('mainContent').innerHTML = '<div class="empty-state"><span>🔒</span>無權限</div>'; return; }
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = '<div class="empty-state"><span>⏳</span>載入中...</div>';
+  await renderNotifyConfig(mc);
 }
 
 async function renderNotifyConfig(el) {

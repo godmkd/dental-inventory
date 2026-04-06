@@ -60,11 +60,12 @@ CREATE TABLE IF NOT EXISTS public.materials (
   unit         TEXT DEFAULT '個',
   order_unit   TEXT DEFAULT '',
   unit_ratio   DECIMAL(10,2) DEFAULT 1,
-  image_url    TEXT DEFAULT '',
-  supplier_id  BIGINT REFERENCES public.suppliers(id) ON DELETE SET NULL,
-  unit_price   DECIMAL(10,2) DEFAULT 0,
-  notes        TEXT DEFAULT '',
-  created_by   UUID REFERENCES auth.users(id),
+  image_url             TEXT DEFAULT '',
+  supplier_id           BIGINT REFERENCES public.suppliers(id) ON DELETE SET NULL,
+  unit_price            DECIMAL(10,2) DEFAULT 0,
+  default_safety_stock  INT DEFAULT 5,
+  notes                 TEXT DEFAULT '',
+  created_by            UUID REFERENCES auth.users(id),
   created_at   TIMESTAMPTZ DEFAULT NOW(),
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );

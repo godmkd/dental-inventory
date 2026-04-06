@@ -4453,9 +4453,13 @@ async function loadNotifyConfig() {
   if (_notifyConfig) return _notifyConfig;
   const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', 'notification_config').single());
   _notifyConfig = data?.value || {
-    low_stock:  { roles: ['owner'], include_clinic: true },
-    rush_order: { roles: ['owner', 'admin'] }
+    low_stock:  { clinic_users: {} },
+    rush_order: { user_ids: [], extra_line_ids: [] }
   };
+  // Migrate old format
+  if (!_notifyConfig.low_stock.clinic_users) _notifyConfig.low_stock.clinic_users = {};
+  if (!_notifyConfig.rush_order.user_ids) _notifyConfig.rush_order.user_ids = [];
+  if (!_notifyConfig.rush_order.extra_line_ids) _notifyConfig.rush_order.extra_line_ids = [];
   return _notifyConfig;
 }
 
@@ -4468,59 +4472,80 @@ async function renderNotifySettings() {
 
 async function renderNotifyConfig(el) {
   const cfg = await loadNotifyConfig();
-  await loadRoles();
+  await Promise.all([loadUsers(), loadClinics()]);
 
-  const roleOptions = allRoles.filter(r => !r.is_system).map(r =>
-    `<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-      <input type="checkbox" value="${r.name}" ${(cfg.low_stock?.roles||[]).includes(r.name) ? 'checked' : ''}
-        onchange="notifyConfigToggleRole('low_stock',this)">
-      ${escHtml(r.display_name)}
+  const activeUsers = allUsers.filter(u => u.is_active !== false);
+
+  // 低庫存：per-clinic user checkboxes
+  const lowStockHtml = allClinics.map(c => {
+    const checkedIds = cfg.low_stock.clinic_users[c.id] || [];
+    const userChecks = activeUsers.map(u =>
+      `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:.83rem">
+        <input type="checkbox" data-clinic="${c.id}" data-uid="${u.id}" ${checkedIds.includes(u.id) ? 'checked' : ''}
+          onchange="notifyToggleLowStockUser(${c.id},'${u.id}',this.checked)">
+        ${escHtml(u.display_name || u.id.slice(0,8))}${u.line_user_id ? ' ✅' : ' <span style="color:var(--text-lighter);font-size:.75rem">（未綁 LINE）</span>'}
+      </label>`
+    ).join('');
+    return `<div style="margin-bottom:14px">
+      <div style="font-weight:600;margin-bottom:6px;color:var(--accent)">🏥 ${escHtml(c.name)}</div>
+      ${userChecks || '<span style="font-size:.8rem;color:var(--text-lighter)">尚無使用者</span>'}
+    </div>`;
+  }).join('');
+
+  // 催貨通知：user checkboxes + extra LINE IDs
+  const rushUserIds = cfg.rush_order.user_ids || [];
+  const rushUserChecks = activeUsers.map(u =>
+    `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:.83rem">
+      <input type="checkbox" value="${u.id}" ${rushUserIds.includes(u.id) ? 'checked' : ''}
+        onchange="notifyToggleRushUser('${u.id}',this.checked)">
+      ${escHtml(u.display_name || u.id.slice(0,8))}${u.line_user_id ? ' ✅' : ' <span style="color:var(--text-lighter);font-size:.75rem">（未綁 LINE）</span>'}
     </label>`
   ).join('');
 
-  const rushOptions = allRoles.filter(r => !r.is_system).map(r =>
-    `<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-      <input type="checkbox" value="${r.name}" ${(cfg.rush_order?.roles||[]).includes(r.name) ? 'checked' : ''}
-        onchange="notifyConfigToggleRole('rush_order',this)">
-      ${escHtml(r.display_name)}
-    </label>`
-  ).join('');
+  const extraIds = (cfg.rush_order.extra_line_ids || []).join('\n');
 
   el.innerHTML = `
     <div class="page-title" style="font-size:1rem;margin-bottom:16px">🔔 通知設定</div>
     <div class="card" style="margin-bottom:16px;padding:16px 20px">
-      <h4 style="margin:0 0 12px">⚠️ 低庫存通知</h4>
-      <p style="font-size:.83rem;color:var(--text-light);margin-bottom:10px">當庫存低於安全庫存量時，通知以下角色：</p>
-      ${roleOptions}
-      <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
-        <input type="checkbox" id="notifyIncludeClinic" ${cfg.low_stock?.include_clinic ? 'checked' : ''}
-          onchange="notifyConfigToggleClinic(this)">
-        同時通知該診所的所有使用者
-      </label>
-      <p style="font-size:.78rem;color:var(--text-lighter);margin-top:8px">低庫存閾值 = 各品項的「安全庫存量」（在品項管理裡設定）</p>
+      <h4 style="margin:0 0 4px">⚠️ 低庫存通知</h4>
+      <p style="font-size:.8rem;color:var(--text-light);margin:0 0 14px">庫存低於安全量時，依各診所分別通知指定人員（需已綁定 LINE ✅）</p>
+      ${lowStockHtml || '<span style="font-size:.83rem;color:var(--text-lighter)">尚無診所資料</span>'}
     </div>
-    <div class="card" style="padding:16px 20px">
-      <h4 style="margin:0 0 12px">🚨 催貨通知</h4>
-      <p style="font-size:.83rem;color:var(--text-light);margin-bottom:10px">按下催貨時，通知以下角色：</p>
-      ${rushOptions}
+    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+      <h4 style="margin:0 0 4px">🚨 催貨通知</h4>
+      <p style="font-size:.8rem;color:var(--text-light);margin:0 0 10px">按下催貨時通知以下人員（需已綁定 LINE ✅）</p>
+      ${rushUserChecks || '<span style="font-size:.83rem;color:var(--text-lighter)">尚無使用者</span>'}
+      <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px">
+        <div style="font-size:.83rem;font-weight:600;margin-bottom:6px">➕ 額外 LINE ID（非系統使用者）</div>
+        <p style="font-size:.78rem;color:var(--text-lighter);margin:0 0 6px">每行一個 LINE User ID（U 開頭）</p>
+        <textarea id="rushExtraLineIds" rows="3" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:inherit;padding:6px 8px;font-size:.8rem;resize:vertical">${escHtml(extraIds)}</textarea>
+      </div>
     </div>
-    <div style="margin-top:16px">
-      <button class="btn btn-primary" onclick="saveNotifyConfig()">儲存設定</button>
-    </div>`;
+    <button class="btn btn-primary" onclick="saveNotifyConfig()">儲存設定</button>`;
 }
 
-window.notifyConfigToggleRole = function(type, cb) {
+window.notifyToggleLowStockUser = function(clinicId, userId, checked) {
   if (!_notifyConfig) return;
-  const roles = _notifyConfig[type].roles || [];
-  if (cb.checked) { if (!roles.includes(cb.value)) roles.push(cb.value); }
-  else { _notifyConfig[type].roles = roles.filter(r => r !== cb.value); return; }
-  _notifyConfig[type].roles = roles;
+  const key = String(clinicId);
+  if (!_notifyConfig.low_stock.clinic_users[key]) _notifyConfig.low_stock.clinic_users[key] = [];
+  const arr = _notifyConfig.low_stock.clinic_users[key];
+  if (checked) { if (!arr.includes(userId)) arr.push(userId); }
+  else { _notifyConfig.low_stock.clinic_users[key] = arr.filter(id => id !== userId); }
 };
-window.notifyConfigToggleClinic = function(cb) {
-  if (_notifyConfig) _notifyConfig.low_stock.include_clinic = cb.checked;
+
+window.notifyToggleRushUser = function(userId, checked) {
+  if (!_notifyConfig) return;
+  const arr = _notifyConfig.rush_order.user_ids;
+  if (checked) { if (!arr.includes(userId)) arr.push(userId); }
+  else { _notifyConfig.rush_order.user_ids = arr.filter(id => id !== userId); }
 };
 
 async function saveNotifyConfig() {
+  // Collect extra LINE IDs from textarea
+  const ta = document.getElementById('rushExtraLineIds');
+  if (ta) {
+    _notifyConfig.rush_order.extra_line_ids = ta.value.split('\n').map(s => s.trim()).filter(s => s.startsWith('U'));
+  }
   const { error } = await withTimeout(sb.from('app_settings').upsert({
     key: 'notification_config', value: _notifyConfig, updated_at: new Date().toISOString()
   }));
@@ -4544,34 +4569,28 @@ async function sendLineNotify(message, lineUserIds) {
 
 async function notifyLowStock(clinicId, materialName, current, safety) {
   const cfg = await loadNotifyConfig();
-  const roles = cfg.low_stock?.roles || ['owner'];
-  const includeClinic = cfg.low_stock?.include_clinic !== false;
-  let allUsers = [];
-  if (roles.length) {
-    const { data } = await withTimeout(
-      sb.from('user_profiles').select('line_user_id').in('role', roles).eq('is_active', true).neq('line_user_id', '')
-    );
-    allUsers = data || [];
-  }
-  if (includeClinic) {
-    const { data } = await withTimeout(
-      sb.from('user_profiles').select('line_user_id').eq('clinic_id', clinicId).eq('is_active', true).neq('line_user_id', '')
-    );
-    allUsers = [...allUsers, ...(data || [])];
-  }
-  const ids = [...new Set(allUsers.map(u => u.line_user_id).filter(Boolean))];
+  const userIds = cfg.low_stock?.clinic_users?.[String(clinicId)] || [];
+  if (!userIds.length) return;
+  const { data } = await withTimeout(
+    sb.from('user_profiles').select('line_user_id').in('id', userIds).eq('is_active', true).neq('line_user_id', '')
+  );
+  const ids = [...new Set((data || []).map(u => u.line_user_id).filter(Boolean))];
   if (!ids.length) return;
   await sendLineNotify(`⚠️ 低庫存警示\n診所：${clinicName(clinicId)}\n品項：${materialName}\n目前庫存：${current}（安全庫存：${safety}）\n請盡快補貨！`, ids);
 }
 
 async function notifyRushOrder(orderInfo) {
   const cfg = await loadNotifyConfig();
-  const roles = cfg.rush_order?.roles || ['owner', 'admin'];
-  if (!roles.length) return;
-  const { data } = await withTimeout(
-    sb.from('user_profiles').select('line_user_id').in('role', roles).eq('is_active', true).neq('line_user_id', '')
-  );
-  const ids = (data || []).map(u => u.line_user_id).filter(Boolean);
+  const userIds = cfg.rush_order?.user_ids || [];
+  const extraIds = cfg.rush_order?.extra_line_ids || [];
+  let lineIds = [...extraIds];
+  if (userIds.length) {
+    const { data } = await withTimeout(
+      sb.from('user_profiles').select('line_user_id').in('id', userIds).eq('is_active', true).neq('line_user_id', '')
+    );
+    lineIds = [...lineIds, ...(data || []).map(u => u.line_user_id).filter(Boolean)];
+  }
+  const ids = [...new Set(lineIds)];
   if (!ids.length) return;
   await sendLineNotify(`🚨 催貨通知\n${orderInfo}`, ids);
 }

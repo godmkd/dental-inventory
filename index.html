@@ -17,7 +17,7 @@
   --border:rgba(255,255,255,.1);--border-light:rgba(255,255,255,.06);--radius:8px;--shadow:0 1px 3px rgba(0,0,0,.3);
   --font-mono:'SF Mono','Cascadia Code','Consolas',monospace;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);color:var(--text);min-height:100vh;overflow-x:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#000;color:var(--text);min-height:100vh;overflow-x:hidden}
 
 /* Login */
 .login-page{display:none;align-items:center;justify-content:center;min-height:100vh;width:100%;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);z-index:999}
@@ -390,7 +390,7 @@ th,td{padding:6px 4px!important}
 .usage-hint.open .usage-hint-body{display:block}
 
 /* Bubble Home */
-.home-section{min-height:100vh;position:relative;overflow-x:auto;overflow-y:hidden;padding:0;background:#000;-webkit-overflow-scrolling:touch}
+.home-section{min-height:100vh;position:relative;overflow-x:auto;overflow-y:hidden;padding:0;background:transparent;-webkit-overflow-scrolling:touch}
 .bubble-container{position:relative;width:100vw;min-width:100vw;height:100vh}
 .bubble{position:absolute;border-radius:50%;background:rgba(255,255,255,.06);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,.12);box-shadow:0 0 30px rgba(255,255,255,.04),inset 0 0 30px rgba(255,255,255,.02),0 4px 15px rgba(0,0,0,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);animation:float 6s ease-in-out infinite;text-decoration:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .bubble:hover,.bubble.active{transform:scale(1.2);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);box-shadow:0 0 50px rgba(255,255,255,.1),0 0 100px rgba(100,150,255,.08)}
@@ -809,16 +809,17 @@ function _dragEnd() {
   document.removeEventListener('mousemove', _dragMove);
   document.removeEventListener('mouseup',   _dragEnd);
   _dragEl.style.transition = '';
+  _dragEl.style.animationName = '';
   _dragEl = null;
 }
 function _bubbleDragStart(e) {
   if (!editMode) return;
-  e.preventDefault();
   const el = e.currentTarget;
   const t = e.touches ? e.changedTouches[0] : e;
   if (_dragEl) _dragEnd();
   _dragEl = el;
   el.style.transition = 'none';
+  el.style.animationName = 'none';
   const r = el.getBoundingClientRect();
   _dragOX = t.clientX - r.left;
   _dragOY = t.clientY - r.top;

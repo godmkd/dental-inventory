@@ -1,8 +1,6 @@
 // Supabase Edge Function: LINE Push Notification
-// Deploy: supabase functions deploy line-notify
+// Deploy: supabase functions deploy line-notify --no-verify-jwt
 // Secret:  supabase secrets set LINE_CHANNEL_TOKEN=your_long_lived_token
-
-import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -13,18 +11,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
-    // Verify caller is authenticated
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return new Response("Unauthorized", { status: 401, headers: CORS });
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) return new Response("Unauthorized", { status: 401, headers: CORS });
-
     const LINE_TOKEN = Deno.env.get("LINE_CHANNEL_TOKEN");
     if (!LINE_TOKEN) return new Response("LINE_CHANNEL_TOKEN not set", { status: 500, headers: CORS });
 

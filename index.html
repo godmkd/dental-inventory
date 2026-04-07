@@ -5004,52 +5004,64 @@ async function autoGenerateOrder() {
 
 // ===================== ORDER TEMPLATES =====================
 async function openTemplateModal() {
-  await loadMaterials();
-  const { data: templates, error: tErr } = await withTimeout(sb.from('order_templates').select('*').order('created_at', { ascending: false }));
-  if (tErr) { toast('範本載入失敗：請先在 Supabase SQL Editor 執行 migrate-v8.sql', 'error'); return; }
-  const list = (templates || []).map(t => {
-    const items = (t.items || []);
-    const preview = items.slice(0,3).map(i => {
-      const m = allMaterials.find(x => x.id === i.material_id);
-      return m ? `${m.name} x${i.quantity}` : `#${i.material_id}`;
-    }).join('、') + (items.length > 3 ? `…等 ${items.length} 項` : '');
-    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)">
-      <div style="flex:1">
-        <div style="font-weight:600">${escHtml(t.name)}</div>
-        <div style="font-size:.78rem;color:var(--text-light)">${escHtml(preview || '（空範本）')}</div>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="applyTemplate(${t.id})">套用</button>
-      <button class="btn btn-danger btn-xs" onclick="deleteTemplate(${t.id})">✕</button>
-    </div>`;
-  }).join('');
-
-  openModal('📋 叫貨範本',
-    `<div style="margin-bottom:12px">${list || '<div style="text-align:center;padding:20px;color:var(--text-light)">尚無範本</div>'}</div>`,
-    ''
-  );
+  try {
+    await loadMaterials();
+    const resp = await sb.from('order_templates').select('*').order('created_at', { ascending: false });
+    if (resp.error) { toast('範本載入失敗：' + resp.error.message + '（請先執行 migrate-v8.sql）', 'error'); return; }
+    const templates = resp.data || [];
+    const list = templates.map(t => {
+      const items = (t.items || []);
+      const preview = items.slice(0,3).map(i => {
+        const m = allMaterials.find(x => x.id === i.material_id);
+        return m ? `${m.name} x${i.quantity}` : `#${i.material_id}`;
+      }).join('、') + (items.length > 3 ? `…等 ${items.length} 項` : '');
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+        <div style="flex:1">
+          <div style="font-weight:600">${escHtml(t.name)}</div>
+          <div style="font-size:.78rem;color:var(--text-light)">${escHtml(preview || '（空範本）')}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="applyTemplate(${t.id})">套用</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteTemplate(${t.id})">✕</button>
+      </div>`;
+    }).join('');
+    openModal('📋 叫貨範本',
+      `<div style="margin-bottom:12px">${list || '<div style="text-align:center;padding:20px;color:var(--text-light)">尚無範本</div>'}</div>`,
+      ''
+    );
+  } catch(e) {
+    toast('範本載入失敗：' + (e?.message || String(e)), 'error');
+  }
 }
 
 async function applyTemplate(id) {
-  const { data: t } = await withTimeout(sb.from('order_templates').select('*').eq('id', id).single());
-  if (!t?.items?.length) { toast('範本為空', 'error'); return; }
-  // Load items into orderQtyMap
-  t.items.forEach(i => { if (i.material_id && i.quantity > 0) orderQtyMap[i.material_id] = i.quantity; });
-  updateOrderSubmitBar();
-  closeModal();
-  toast(`已套用範本「${t.name}」，共 ${t.items.length} 項`);
+  try {
+    const resp = await sb.from('order_templates').select('*').eq('id', id).single();
+    const t = resp.data;
+    if (!t?.items?.length) { toast('範本為空', 'error'); return; }
+    t.items.forEach(i => { if (i.material_id && i.quantity > 0) orderQtyMap[i.material_id] = i.quantity; });
+    updateOrderSubmitBar();
+    closeModal();
+    toast(`已套用範本「${t.name}」，共 ${t.items.length} 項`);
+  } catch(e) {
+    toast('套用失敗：' + (e?.message || String(e)), 'error');
+  }
 }
 
 async function saveAsTemplate() {
-  const items = getOrderSelectedItems();
-  if (!items.length) { toast('請先選擇品項', 'error'); return; }
-  const name = prompt('範本名稱：');
-  if (!name?.trim()) return;
-  const templateItems = items.map(it => ({ material_id: it.material_id, quantity: it.quantity }));
-  const { error } = await withTimeout(sb.from('order_templates').insert({
-    name: name.trim(), items: templateItems, created_by: currentUser.id
-  }));
-  if (error) { toast('儲存失敗：' + error.message, 'error'); return; }
-  toast(`範本「${name.trim()}」已儲存`);
+  try {
+    const items = getOrderSelectedItems();
+    if (!items.length) { toast('請先選擇品項', 'error'); return; }
+    const name = prompt('範本名稱：');
+    if (!name?.trim()) return;
+    const templateItems = items.map(it => ({ material_id: it.material_id, quantity: it.quantity }));
+    const resp = await sb.from('order_templates').insert({
+      name: name.trim(), items: templateItems, created_by: currentUser.id
+    });
+    if (resp.error) { toast('儲存失敗：' + resp.error.message, 'error'); return; }
+    toast(`範本「${name.trim()}」已儲存`);
+  } catch(e) {
+    toast('儲存失敗：' + (e?.message || String(e)), 'error');
+  }
 }
 
 async function deleteTemplate(id) {

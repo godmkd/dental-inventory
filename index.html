@@ -2899,7 +2899,7 @@ async function toggleOrderCard(orderId) {
     const { data: matSups } = await withTimeout(sb.from('material_suppliers').select('*').in('material_id', matIds));
     (matSups || []).forEach(s => {
       if (!matSupMap[s.material_id]) matSupMap[s.material_id] = [];
-      matSupMap[s.material_id].push({ supplier_id: s.supplier_id, unit_price: s.unit_price, name: supplierName(s.supplier_id), is_default: s.is_default });
+      matSupMap[s.material_id].push({ supplier_id: s.supplier_id, unit_price: s.unit_price, name: supplierName(s.supplier_id), is_default: s.is_default, spec: s.spec || '' });
     });
   } catch(e) { /* table may not exist yet */ }
 
@@ -2922,7 +2922,7 @@ async function toggleOrderCard(orderId) {
         <select id="oisup_${it.id}" style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--card);color:var(--text)"
           onchange="onOrderItemSupplierChange(${it.id},${orderId},this.value)">
           <option value="">-- 選廠商 --</option>
-          ${sups.map(s=>`<option value="${s.supplier_id}"${s.supplier_id==curSupId?' selected':''}>${escHtml(s.name)} (${fmtMoney(s.unit_price)})</option>`).join('')}
+          ${sups.map(s=>`<option value="${s.supplier_id}"${s.supplier_id==curSupId?' selected':''}>${escHtml(s.name)}${s.spec?' ['+escHtml(s.spec)+']':''} (${fmtMoney(s.unit_price)})</option>`).join('')}
         </select>
       </div>` : '';
 

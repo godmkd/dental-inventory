@@ -894,6 +894,7 @@ async function enterApp() {
   buildBubbles(); // logo+user bubbles now rendered inside container
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   setupLogoBubbleDoubleTap();
+  loadColorTheme();
   applyCustomFont();
   applyAllBg();
   // Check email prompt
@@ -1223,7 +1224,30 @@ function openBgSettingModal() {
     return url ? `<img src="${url}" class="bg-preview-thumb">` : '<span style="color:var(--text-lighter);font-size:.82rem">尚未設定</span>';
   }
 
+  const savedTheme = localStorage.getItem('color_theme') || 'default';
+  const themes = [
+    { id:'default',  label:'深藍（預設）', accent:'#63b3ed', primary:'#1a1535', body:'#000' },
+    { id:'purple',   label:'深紫',         accent:'#b794f4', primary:'#1a0d35', body:'#050010' },
+    { id:'green',    label:'深綠',         accent:'#68d391', primary:'#0d2018', body:'#000' },
+    { id:'orange',   label:'深橘',         accent:'#f6ad55', primary:'#1e1205', body:'#050200' },
+    { id:'pink',     label:'深粉',         accent:'#f687b3', primary:'#200d18', body:'#050005' },
+    { id:'light',    label:'淺色',         accent:'#3182ce', primary:'#f7fafc', body:'#edf2f7', text:'#2d3748', card:'rgba(0,0,0,.05)', border:'rgba(0,0,0,.1)', textLight:'#718096' },
+  ];
+  const themeSwatches = themes.map(t =>
+    `<div onclick="applyColorTheme('${t.id}')" style="cursor:pointer;text-align:center;padding:6px 4px;border-radius:8px;border:2px solid ${savedTheme===t.id?t.accent:'transparent'};transition:border .2s" id="theme-swatch-${t.id}">
+      <div style="width:44px;height:44px;border-radius:8px;background:${t.body || '#000'};border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 4px">
+        <div style="width:24px;height:24px;border-radius:50%;background:${t.accent}"></div>
+      </div>
+      <div style="font-size:.72rem;color:var(--text-light)">${t.label}</div>
+    </div>`
+  ).join('');
+
   openModal('🎨 客製化管理', `
+    <div class="bg-section">
+      <h4>🎨 顏色主題</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px">${themeSwatches}</div>
+    </div>
+
     <div class="bg-section">
       <h4>🌐 網頁背景圖</h4>
       <div class="bg-preview-row">
@@ -1274,6 +1298,41 @@ function openBgSettingModal() {
   const sizeEl = document.getElementById('customFontSize');
   if (fontEl) fontEl.value = savedFont;
   if (sizeEl) sizeEl.value = savedSize;
+}
+
+const COLOR_THEMES = {
+  default: { accent:'#63b3ed', accentHover:'#4299e1', primary:'#1a1535', primaryLight:'#2a2555', primaryDark:'#0a0820', body:'#000', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
+  purple:  { accent:'#b794f4', accentHover:'#9f7aea', primary:'#1a0d35', primaryLight:'#2d1a55', primaryDark:'#0d0620', body:'#050010', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
+  green:   { accent:'#68d391', accentHover:'#48bb78', primary:'#0d2018', primaryLight:'#163028', primaryDark:'#051008', body:'#000', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
+  orange:  { accent:'#f6ad55', accentHover:'#ed8936', primary:'#1e1205', primaryLight:'#2e1e0a', primaryDark:'#100a02', body:'#050200', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
+  pink:    { accent:'#f687b3', accentHover:'#ed64a6', primary:'#200d18', primaryLight:'#351525', primaryDark:'#100508', body:'#050005', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
+  light:   { accent:'#3182ce', accentHover:'#2b6cb0', primary:'#f7fafc', primaryLight:'#edf2f7', primaryDark:'#e2e8f0', body:'#edf2f7', text:'#2d3748', textLight:'#718096', card:'rgba(0,0,0,.05)', border:'rgba(0,0,0,.1)' },
+};
+
+function applyColorTheme(id, save = true) {
+  const t = COLOR_THEMES[id] || COLOR_THEMES.default;
+  const r = document.documentElement.style;
+  r.setProperty('--accent', t.accent);
+  r.setProperty('--accent-hover', t.accentHover);
+  r.setProperty('--primary', t.primary);
+  r.setProperty('--primary-light', t.primaryLight);
+  r.setProperty('--primary-dark', t.primaryDark);
+  r.setProperty('--text', t.text);
+  r.setProperty('--text-light', t.textLight);
+  r.setProperty('--card', t.card);
+  r.setProperty('--border', t.border);
+  document.body.style.background = t.body;
+  if (save) localStorage.setItem('color_theme', id);
+  // Update swatch borders in modal if open
+  Object.keys(COLOR_THEMES).forEach(tid => {
+    const sw = document.getElementById('theme-swatch-' + tid);
+    if (sw) sw.style.borderColor = tid === id ? t.accent : 'transparent';
+  });
+}
+
+function loadColorTheme() {
+  const saved = localStorage.getItem('color_theme') || 'default';
+  applyColorTheme(saved, false);
 }
 
 function applyCustomFont() {

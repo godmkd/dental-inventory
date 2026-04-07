@@ -2054,6 +2054,7 @@ async function renderOrdering(container) {
         ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(orderClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderItems(this.value)">
+      <button class="btn btn-ghost btn-sm" onclick="openTemplateModal()" title="叫貨範本">📋 範本</button>
       <div class="view-toggle" id="orderViewToggle">
         <button class="btn btn-ghost btn-sm ${orderViewMode==='icon'?'active':''}" onclick="switchOrderView('icon')">🖼</button>
         <button class="btn btn-ghost btn-sm ${orderViewMode==='list'?'active':''}" onclick="switchOrderView('list')">☰</button>
@@ -2208,6 +2209,7 @@ function updateOrderSubmitBar() {
       </div>`).join('');
     footerEl.innerHTML = `
       <button class="btn btn-ghost btn-sm" onclick="clearAllOrderQty()">全部清除</button>
+      <button class="btn btn-ghost btn-sm" onclick="saveAsTemplate()">💾 存為範本</button>
       <button class="btn btn-primary btn-sm" onclick="confirmOrderList()">送出叫貨 (${items.length})</button>`;
   }
 }
@@ -4880,6 +4882,62 @@ async function loadTrendData() {
   });
   tbl += '</tbody></table></div></div>';
   document.getElementById('trendTable').innerHTML = tbl;
+}
+
+// ===================== ORDER TEMPLATES =====================
+async function openTemplateModal() {
+  const { data: templates } = await withTimeout(sb.from('order_templates').select('*').order('created_at', { ascending: false }));
+  const list = (templates || []).map(t => {
+    const items = (t.items || []);
+    const preview = items.slice(0,3).map(i => {
+      const m = allMaterials.find(x => x.id === i.material_id);
+      return m ? `${m.name} x${i.quantity}` : `#${i.material_id}`;
+    }).join('、') + (items.length > 3 ? `…等 ${items.length} 項` : '');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+      <div style="flex:1">
+        <div style="font-weight:600">${escHtml(t.name)}</div>
+        <div style="font-size:.78rem;color:var(--text-light)">${escHtml(preview || '（空範本）')}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="applyTemplate(${t.id})">套用</button>
+      <button class="btn btn-danger btn-xs" onclick="deleteTemplate(${t.id})">✕</button>
+    </div>`;
+  }).join('');
+
+  openModal('📋 叫貨範本',
+    `<div style="margin-bottom:12px">${list || '<div style="text-align:center;padding:20px;color:var(--text-light)">尚無範本</div>'}</div>`,
+    ''
+  );
+}
+
+async function applyTemplate(id) {
+  const { data: t } = await withTimeout(sb.from('order_templates').select('*').eq('id', id).single());
+  if (!t?.items?.length) { toast('範本為空', 'error'); return; }
+  // Load items into orderQtyMap
+  t.items.forEach(i => { if (i.material_id && i.quantity > 0) orderQtyMap[i.material_id] = i.quantity; });
+  updateOrderSubmitBar();
+  closeModal();
+  toast(`已套用範本「${t.name}」，共 ${t.items.length} 項`);
+}
+
+async function saveAsTemplate() {
+  const items = getOrderSelectedItems();
+  if (!items.length) { toast('請先選擇品項', 'error'); return; }
+  const name = prompt('範本名稱：');
+  if (!name?.trim()) return;
+  const templateItems = items.map(it => ({ material_id: it.material_id, quantity: it.quantity }));
+  const { error } = await withTimeout(sb.from('order_templates').insert({
+    name: name.trim(), items: templateItems, created_by: currentUser.id
+  }));
+  if (error) { toast('儲存失敗：' + error.message, 'error'); return; }
+  toast(`範本「${name.trim()}」已儲存`);
+}
+
+async function deleteTemplate(id) {
+  const ok = await showConfirm('刪除範本', '確定要刪除這個範本嗎？');
+  if (!ok) return;
+  await withTimeout(sb.from('order_templates').delete().eq('id', id));
+  toast('已刪除');
+  openTemplateModal(); // refresh
 }
 
 // ===================== MONTHLY REPORT =====================

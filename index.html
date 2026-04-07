@@ -3977,9 +3977,12 @@ initOSDates();
 
 async function renderOrderStats(el) {
   el.innerHTML = `
-    <div class="sub-tabs" id="statsSubTabs" style="margin-bottom:12px">
+    <div class="sub-tabs" id="statsSubTabs" style="margin-bottom:12px;flex-wrap:wrap">
       <div class="sub-tab active" data-tab="orders" onclick="switchStatTab('orders',this)">📋 叫貨明細</div>
       <div class="sub-tab" data-tab="trend" onclick="switchStatTab('trend',this)">📊 消耗趨勢</div>
+      <div class="sub-tab" data-tab="monthly" onclick="switchStatTab('monthly',this)">📅 月報表</div>
+      <div class="sub-tab" data-tab="price" onclick="switchStatTab('price',this)">💰 價格歷史</div>
+      <div class="sub-tab" data-tab="supplier" onclick="switchStatTab('supplier',this)">🏭 廠商統計</div>
     </div>
     <div id="statsOrdersTab">
       <div class="os-filters">
@@ -3990,17 +3993,24 @@ async function renderOrderStats(el) {
       </div>
       <div id="osResult"><div style="text-align:center;padding:30px;color:var(--text-light)">載入中...</div></div>
     </div>
-    <div id="statsTrendTab" style="display:none"></div>`;
+    <div id="statsTrendTab" style="display:none"></div>
+    <div id="statsMonthlyTab" style="display:none"></div>
+    <div id="statsPriceTab" style="display:none"></div>
+    <div id="statsSupplierTab" style="display:none"></div>`;
   await loadOrderStats();
 }
 
 function switchStatTab(tab, el) {
   document.querySelectorAll('#statsSubTabs .sub-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('statsOrdersTab').style.display = tab === 'orders' ? '' : 'none';
-  const trendEl = document.getElementById('statsTrendTab');
-  trendEl.style.display = tab === 'trend' ? '' : 'none';
-  if (tab === 'trend' && !trendEl.hasChildNodes()) renderConsumptionTrend(trendEl);
+  ['orders','trend','monthly','price','supplier'].forEach(t => {
+    const div = document.getElementById('stats' + t.charAt(0).toUpperCase() + t.slice(1) + 'Tab');
+    if (div) div.style.display = (t === tab) ? '' : 'none';
+  });
+  if (tab === 'trend') { const d = document.getElementById('statsTrendTab'); if (!d.hasChildNodes()) renderConsumptionTrend(d); }
+  if (tab === 'monthly') { const d = document.getElementById('statsMonthlyTab'); if (!d.hasChildNodes()) renderMonthlyReport(d); }
+  if (tab === 'price') { const d = document.getElementById('statsPriceTab'); if (!d.hasChildNodes()) renderPriceHistory(d); }
+  if (tab === 'supplier') { const d = document.getElementById('statsSupplierTab'); if (!d.hasChildNodes()) renderSupplierStats(d); }
 }
 
 async function applyOSFilter() {
@@ -4870,6 +4880,230 @@ async function loadTrendData() {
   });
   tbl += '</tbody></table></div></div>';
   document.getElementById('trendTable').innerHTML = tbl;
+}
+
+// ===================== MONTHLY REPORT =====================
+let _monthlyChart = null;
+async function renderMonthlyReport(el) {
+  const curYear = new Date().getFullYear();
+  el.innerHTML = `
+    <div class="os-filters" style="flex-wrap:wrap;gap:8px">
+      <label>年份</label>
+      <select id="mrYear" style="padding:6px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border);color:var(--text)">
+        ${[curYear, curYear-1, curYear-2].map(y => `<option value="${y}">${y}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="loadMonthlyReport()">查詢</button>
+    </div>
+    <div style="position:relative;max-width:100%;overflow-x:auto"><canvas id="mrCanvas" style="min-height:260px"></canvas></div>
+    <div id="mrTable" style="margin-top:16px"></div>`;
+  await loadMonthlyReport();
+}
+
+async function loadMonthlyReport() {
+  const year = document.getElementById('mrYear')?.value || new Date().getFullYear();
+  const from = `${year}-01-01T00:00:00`, to = `${year}-12-31T23:59:59`;
+  const tbl = document.getElementById('mrTable');
+  if (tbl) tbl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light)">載入中...</div>';
+
+  await Promise.all([loadClinics(), loadMaterials()]);
+  const { data: items } = await withTimeout(sb.from('order_items').select('clinic_id,quantity,unit_price,custom_price,is_custom_price,created_at').gte('created_at', from).lte('created_at', to));
+  if (!items?.length) { if (tbl) tbl.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-light)">此年度無叫貨資料</p>'; return; }
+
+  const months = Array.from({length:12}, (_,i) => String(i+1).padStart(2,'0'));
+  const labels = months.map(m => `${year}-${m}`);
+
+  // By month total
+  const monthlyTotal = {};
+  labels.forEach(l => monthlyTotal[l] = 0);
+  // By clinic+month
+  const byClinic = {};
+  allClinics.forEach(c => { byClinic[c.id] = {}; labels.forEach(l => byClinic[c.id][l] = 0); });
+
+  items.forEach(it => {
+    const mo = (it.created_at||'').slice(0,7);
+    const amount = it.is_custom_price && it.custom_price != null ? Number(it.custom_price) : Number(it.quantity||0) * Number(it.unit_price||0);
+    if (monthlyTotal[mo] !== undefined) monthlyTotal[mo] += amount;
+    if (byClinic[it.clinic_id]?.[mo] !== undefined) byClinic[it.clinic_id][mo] += amount;
+  });
+
+  const colors = ['#63b3ed','#68d391','#f6ad55','#fc8181','#b794f4','#4fd1c5','#f687b3','#fbd38d'];
+  const datasets = allClinics.map((c,i) => ({
+    label: c.name, data: labels.map(l => byClinic[c.id]?.[l] || 0),
+    backgroundColor: colors[i % colors.length], borderColor: colors[i % colors.length], fill: false, tension: 0.3
+  }));
+
+  if (_monthlyChart) { _monthlyChart.destroy(); _monthlyChart = null; }
+  const ctx = document.getElementById('mrCanvas')?.getContext('2d');
+  if (ctx) {
+    _monthlyChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: labels.map(l => l.slice(5) + '月'), datasets },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#e2e8f0' } } },
+        scales: {
+          x: { stacked: true, ticks: { color: '#a0aec0' }, grid: { color: 'rgba(255,255,255,.05)' } },
+          y: { stacked: true, ticks: { color: '#a0aec0', callback: v => '$' + v.toLocaleString() }, grid: { color: 'rgba(255,255,255,.05)' } }
+        }
+      }
+    });
+  }
+
+  // Table
+  const yearTotal = Object.values(monthlyTotal).reduce((s,v) => s+v, 0);
+  let html = '<div class="card"><div class="table-wrap"><table style="min-width:max-content"><thead><tr><th>診所</th>'
+    + months.map(m => `<th>${parseInt(m)}月</th>`).join('') + '<th>年計</th></tr></thead><tbody>';
+  allClinics.forEach(c => {
+    const row = labels.map(l => byClinic[c.id]?.[l] || 0);
+    const rowTotal = row.reduce((s,v) => s+v, 0);
+    html += `<tr><td><strong>${escHtml(c.name)}</strong></td>${row.map(v => `<td>${v>0?'$'+Math.round(v).toLocaleString():'-'}</td>`).join('')}<td><strong>$${Math.round(rowTotal).toLocaleString()}</strong></td></tr>`;
+  });
+  html += `<tr style="border-top:2px solid rgba(255,255,255,.2)"><td><strong>月合計</strong></td>${labels.map(l=>`<td><strong>$${Math.round(monthlyTotal[l]).toLocaleString()}</strong></td>`).join('')}<td><strong>$${Math.round(yearTotal).toLocaleString()}</strong></td></tr>`;
+  html += '</tbody></table></div></div>';
+  if (tbl) tbl.innerHTML = html;
+}
+
+// ===================== PRICE HISTORY =====================
+let _priceChart = null;
+async function renderPriceHistory(el) {
+  await loadMaterials();
+  const opts = allMaterials.map(m => `<option value="${m.id}">${escHtml(m.name)}</option>`).join('');
+  el.innerHTML = `
+    <div class="os-filters" style="flex-wrap:wrap;gap:8px">
+      <label>品項</label>
+      <select id="phMat" style="padding:6px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border);color:var(--text);max-width:200px">
+        <option value="">-- 選擇品項 --</option>${opts}
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="loadPriceHistory()">查詢</button>
+    </div>
+    <div style="position:relative;max-width:100%;overflow-x:auto"><canvas id="phCanvas" style="min-height:220px"></canvas></div>
+    <div id="phTable" style="margin-top:16px"></div>`;
+}
+
+async function loadPriceHistory() {
+  const matId = document.getElementById('phMat')?.value;
+  const tbl = document.getElementById('phTable');
+  if (!matId) { if (tbl) tbl.innerHTML = '<p style="text-align:center;color:var(--text-light)">請選擇品項</p>'; return; }
+  if (tbl) tbl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light)">載入中...</div>';
+
+  await loadClinics();
+  const { data: items } = await withTimeout(
+    sb.from('order_items').select('unit_price,custom_price,is_custom_price,created_at,clinic_id,order_id')
+      .eq('material_id', parseInt(matId)).order('created_at')
+  );
+  if (!items?.length) { if (tbl) tbl.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-light)">無此品項的叫貨記錄</p>'; return; }
+
+  const points = items.map(it => ({
+    date: (it.created_at||'').slice(0,10),
+    price: it.is_custom_price && it.custom_price != null ? Number(it.custom_price) : Number(it.unit_price||0),
+    clinic: clinicName(it.clinic_id), custom: !!it.is_custom_price
+  }));
+
+  if (_priceChart) { _priceChart.destroy(); _priceChart = null; }
+  const ctx = document.getElementById('phCanvas')?.getContext('2d');
+  if (ctx) {
+    _priceChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: points.map(p => p.date),
+        datasets: [{
+          label: '單價', data: points.map(p => p.price),
+          borderColor: '#63b3ed', backgroundColor: 'rgba(99,179,237,.15)',
+          tension: 0.2, fill: true, pointRadius: 5,
+          pointBackgroundColor: points.map(p => p.custom ? '#f6ad55' : '#63b3ed')
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#e2e8f0' } }, tooltip: { callbacks: { label: ctx => `$${ctx.parsed.y.toLocaleString()}` } } },
+        scales: {
+          x: { ticks: { color: '#a0aec0', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,.05)' } },
+          y: { ticks: { color: '#a0aec0', callback: v => '$' + v.toLocaleString() }, grid: { color: 'rgba(255,255,255,.05)' } }
+        }
+      }
+    });
+  }
+
+  let html = '<div class="card"><div class="table-wrap"><table><thead><tr><th>日期</th><th>診所</th><th>單價</th><th>備註</th></tr></thead><tbody>';
+  [...points].reverse().forEach(p => {
+    html += `<tr><td>${p.date}</td><td>${escHtml(p.clinic)}</td><td>$${p.price.toLocaleString()}</td><td>${p.custom ? '<span style="color:var(--warning);font-size:.8rem">優惠價</span>' : ''}</td></tr>`;
+  });
+  html += '</tbody></table></div></div>';
+  if (tbl) tbl.innerHTML = html;
+}
+
+// ===================== SUPPLIER STATS =====================
+let _supplierChart = null;
+async function renderSupplierStats(el) {
+  const now = new Date();
+  const from = now.getFullYear() + '-01-01', to = now.toISOString().slice(0,10);
+  el.innerHTML = `
+    <div class="os-filters" style="flex-wrap:wrap;gap:8px">
+      <label>起始日</label><input type="date" id="ssFrom" value="${from}">
+      <label>結束日</label><input type="date" id="ssTo" value="${to}">
+      <button class="btn btn-primary btn-sm" onclick="loadSupplierStats()">查詢</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <div style="flex:0 0 260px;max-width:260px"><canvas id="ssCanvas" style="max-height:260px"></canvas></div>
+      <div id="ssTable" style="flex:1;min-width:200px"></div>
+    </div>`;
+  await loadSupplierStats();
+}
+
+async function loadSupplierStats() {
+  const from = document.getElementById('ssFrom')?.value || '';
+  const to = document.getElementById('ssTo')?.value || '';
+  const tbl = document.getElementById('ssTable');
+  if (tbl) tbl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light)">載入中...</div>';
+
+  await Promise.all([loadMaterials(), loadSuppliers()]);
+  let q = sb.from('order_items').select('material_id,quantity,unit_price,custom_price,is_custom_price,created_at');
+  if (from) q = q.gte('created_at', from + 'T00:00:00');
+  if (to)   q = q.lte('created_at', to + 'T23:59:59');
+  const { data: items } = await withTimeout(q);
+  if (!items?.length) { if (tbl) tbl.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-light)">此期間無叫貨資料</p>'; return; }
+
+  const matSupplier = {};
+  allMaterials.forEach(m => { matSupplier[m.id] = m.supplier_id; });
+
+  const bySupplier = {};
+  items.forEach(it => {
+    const sid = matSupplier[it.material_id] || 0;
+    if (!bySupplier[sid]) bySupplier[sid] = { amount: 0, count: 0 };
+    const amount = it.is_custom_price && it.custom_price != null ? Number(it.custom_price) : Number(it.quantity||0) * Number(it.unit_price||0);
+    bySupplier[sid].amount += amount;
+    bySupplier[sid].count++;
+  });
+
+  const sorted = Object.entries(bySupplier).sort((a,b) => b[1].amount - a[1].amount);
+  const total = sorted.reduce((s,[,v]) => s+v.amount, 0);
+  const colors = ['#63b3ed','#68d391','#f6ad55','#fc8181','#b794f4','#4fd1c5','#f687b3','#fbd38d','#a0aec0'];
+
+  if (_supplierChart) { _supplierChart.destroy(); _supplierChart = null; }
+  const ctx = document.getElementById('ssCanvas')?.getContext('2d');
+  if (ctx) {
+    _supplierChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: sorted.map(([sid]) => sid == 0 ? '(未指定廠商)' : (allSuppliers.find(s => s.id == sid)?.name || `廠商#${sid}`)),
+        datasets: [{ data: sorted.map(([,v]) => Math.round(v.amount)), backgroundColor: colors }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { size: 11 } } } }
+      }
+    });
+  }
+
+  let html = '<div class="card"><div class="table-wrap"><table><thead><tr><th>廠商</th><th>採購金額</th><th>佔比</th><th>筆數</th></tr></thead><tbody>';
+  sorted.forEach(([sid, v]) => {
+    const name = sid == 0 ? '(未指定)' : (allSuppliers.find(s => s.id == sid)?.name || `廠商#${sid}`);
+    const pct = total > 0 ? (v.amount / total * 100).toFixed(1) : 0;
+    html += `<tr><td>${escHtml(name)}</td><td>$${Math.round(v.amount).toLocaleString()}</td><td>${pct}%</td><td>${v.count}</td></tr>`;
+  });
+  html += `<tr style="border-top:2px solid rgba(255,255,255,.2)"><td><strong>合計</strong></td><td><strong>$${Math.round(total).toLocaleString()}</strong></td><td>100%</td><td>${items.length}</td></tr>`;
+  html += '</tbody></table></div></div>';
+  if (tbl) tbl.innerHTML = html;
 }
 
 // ===================== START =====================

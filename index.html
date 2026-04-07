@@ -3861,11 +3861,11 @@ async function editMaterial(id) {
   }
   // If no material_suppliers but has legacy supplier_id, use that as default
   if (!existingSuppliers.length && m.supplier_id) {
-    existingSuppliers = [{ supplier_id: m.supplier_id, unit_price: m.unit_price || 0, is_default: true }];
+    existingSuppliers = [{ supplier_id: m.supplier_id, unit_price: m.unit_price || 0, is_default: true, spec: m.spec || '', order_unit: m.order_unit || '', unit_ratio: m.unit_ratio || 1 }];
   }
 
   window._matSupCounter = 0;
-  const supRowsHtml = existingSuppliers.map(s => buildMatSupRow(s.supplier_id, s.unit_price, s.is_default)).join('');
+  const supRowsHtml = existingSuppliers.map(s => buildMatSupRow(s.supplier_id, s.unit_price, s.is_default, s.spec, s.order_unit, s.unit_ratio)).join('');
 
   openModal(id ? '編輯品項' : '新增品項', `
     <div class="form-group"><label>名稱 *</label><input id="fMatName" value="${escHtml(m.name || '')}"></div>
@@ -3881,14 +3881,8 @@ async function editMaterial(id) {
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>規格</label><input id="fMatSpec" value="${escHtml(m.spec || '')}"></div>
       <div class="form-group"><label>日常單位</label><input id="fMatUnit" value="${escHtml(m.unit || '個')}"></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label>叫貨單位</label><input id="fMatOrderUnit" value="${escHtml(m.order_unit || '')}" placeholder="如：箱、盒"></div>
-      <div class="form-group"><label>換算比例</label><input id="fMatUnitRatio" type="number" step="0.01" min="0.01" value="${m.unit_ratio || 1}" title="1 叫貨單位 = ? 日常單位"></div>
-    </div>
-    <div style="font-size:.82rem;color:var(--text-light);margin:-8px 0 12px 0">1 [叫貨單位] = [換算比例] [日常單位]</div>
     <div class="form-group"><label>圖片</label>
       <input id="fMatImage" type="file" accept="image/*" onchange="previewMatImage(this)">
       ${m.image_url ? `<div id="matImgWrap"><img class="img-upload-preview" id="matImgPreview" src="${m.image_url}"><button type="button" class="btn btn-danger btn-sm" style="margin-left:8px;vertical-align:top" onclick="removeMatImage()">刪除圖片</button></div>` : '<img class="img-upload-preview" id="matImgPreview" style="display:none">'}
@@ -3899,25 +3893,39 @@ async function editMaterial(id) {
      <button class="btn btn-primary" id="btnSaveMat" onclick="saveMaterial(${id || 'null'})">儲存</button>`);
 }
 
-function buildMatSupRow(supId, price, isDef) {
+function buildMatSupRow(supId, price, isDef, spec, orderUnit, unitRatio) {
   const idx = window._matSupCounter++;
-  return `<div class="mat-sup-row" id="msRow_${idx}" style="display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap">
-    <select id="msId_${idx}" style="flex:1;min-width:100px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--input-bg,var(--card));color:var(--text)">
-      <option value="">-- 選廠商 --</option>
-      ${allSuppliers.map(s => `<option value="${s.id}"${s.id==supId?' selected':''}>${escHtml(s.name)}</option>`).join('')}
-    </select>
-    <input type="number" id="msPrice_${idx}" placeholder="單價" value="${price||0}" step="0.01" min="0" style="width:80px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--input-bg,var(--card));color:var(--text)">
-    <label style="font-size:.8rem;white-space:nowrap"><input type="checkbox" id="msDef_${idx}"${isDef?' checked':''}> 預設</label>
-    <button type="button" class="btn btn-danger btn-xs" onclick="removeMatSupRow(${idx})">✕</button>
+  const inp = 'padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:.82rem;background:var(--card);color:var(--text);width:100%';
+  return `<div class="mat-sup-row" id="msRow_${idx}" style="border:1px solid var(--border);border-radius:6px;padding:8px;margin:6px 0">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+      <select id="msId_${idx}" style="flex:1;${inp}">
+        <option value="">-- 選廠商 --</option>
+        ${allSuppliers.map(s => `<option value="${s.id}"${s.id==supId?' selected':''}>${escHtml(s.name)}</option>`).join('')}
+      </select>
+      <label style="font-size:.8rem;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="msDef_${idx}"${isDef?' checked':''}> 預設</label>
+      <button type="button" class="btn btn-danger btn-xs" style="flex-shrink:0" onclick="removeMatSupRow(${idx})">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:.8rem">
+      <div><label style="color:var(--text-light)">規格</label><input id="msSpec_${idx}" value="${escHtml(spec||'')}" style="${inp}"></div>
+      <div><label style="color:var(--text-light)">叫貨單位</label><input id="msOUnit_${idx}" value="${escHtml(orderUnit||'')}" placeholder="箱/盒" style="${inp}"></div>
+      <div><label style="color:var(--text-light)">換算比例</label><input type="number" id="msRatio_${idx}" value="${unitRatio||1}" step="0.01" min="0.01" style="${inp}"></div>
+    </div>
+    <div style="margin-top:6px;font-size:.8rem">
+      <label style="color:var(--text-light)">單價</label>
+      <input type="number" id="msPrice_${idx}" value="${price||0}" step="0.01" min="0" style="${inp}">
+    </div>
   </div>`;
 }
 
 window.addMatSupplierRow = function() {
-  document.getElementById('matSupRows').insertAdjacentHTML('beforeend', buildMatSupRow(null, 0, false));
+  document.getElementById('matSupRows').insertAdjacentHTML('beforeend', buildMatSupRow(null, 0, false, '', '', 1));
 };
 window.removeMatSupRow = function(idx) {
   const row = document.getElementById('msRow_' + idx);
   if (row) row.remove();
+};
+
+// (addMatSupplierRow and removeMatSupRow defined in buildMatSupRow block above)
 };
 
 function removeMatImage() {
@@ -3980,7 +3988,10 @@ async function saveMaterial(id) {
       const supId = parseInt(document.getElementById('msId_'+idx)?.value);
       const price = parseFloat(document.getElementById('msPrice_'+idx)?.value) || 0;
       const isDef = document.getElementById('msDef_'+idx)?.checked || false;
-      if (supId) newSuppliers.push({ supplier_id: supId, unit_price: price, is_default: isDef });
+      const spec = document.getElementById('msSpec_'+idx)?.value.trim() || '';
+      const orderUnit = document.getElementById('msOUnit_'+idx)?.value.trim() || '';
+      const unitRatio = parseFloat(document.getElementById('msRatio_'+idx)?.value) || 1;
+      if (supId) newSuppliers.push({ supplier_id: supId, unit_price: price, is_default: isDef, spec, order_unit: orderUnit, unit_ratio: unitRatio });
     });
     // Use default/first supplier for materials legacy fields
     const defSup = newSuppliers.find(s => s.is_default) || newSuppliers[0];
@@ -3989,10 +4000,10 @@ async function saveMaterial(id) {
       name: document.getElementById('fMatName').value.trim(),
       category_id: document.getElementById('fMatCat').value || null,
       supplier_id: defSup?.supplier_id || null,
-      spec: document.getElementById('fMatSpec').value.trim(),
+      spec: defSup?.spec || '',
       unit: document.getElementById('fMatUnit').value.trim() || '個',
-      order_unit: document.getElementById('fMatOrderUnit').value.trim(),
-      unit_ratio: parseFloat(document.getElementById('fMatUnitRatio').value) || 1,
+      order_unit: defSup?.order_unit || '',
+      unit_ratio: defSup?.unit_ratio || 1,
       unit_price: defSup?.unit_price || 0,
       image_url: imageUrl,
       notes: document.getElementById('fMatNotes').value.trim()

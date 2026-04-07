@@ -445,6 +445,32 @@ th,td{padding:6px 4px!important}
   .bubble-small .bubble-icon{font-size:.95rem}.bubble-small .bubble-label{font-size:.54rem}
   .user-menu{top:80px}
 }
+/* ── Light theme overrides ── */
+body[data-theme="light"]{color:#2d3748}
+body[data-theme="light"] .bubble-label{color:#2d3748}
+body[data-theme="light"] .bubble{background:rgba(255,255,255,.85);box-shadow:0 4px 16px rgba(0,0,0,.15)}
+body[data-theme="light"] .user-menu{background:rgba(255,255,255,.97);border-color:rgba(0,0,0,.15)}
+body[data-theme="light"] .user-menu-name{color:#4a5568}
+body[data-theme="light"] .modal{background:#fff;color:#2d3748}
+body[data-theme="light"] .modal-header{border-color:rgba(0,0,0,.1)}
+body[data-theme="light"] .confirm-box{background:#fff;color:#2d3748}
+body[data-theme="light"] .card{color:#2d3748}
+body[data-theme="light"] .card-title{color:#2d3748;border-color:rgba(0,0,0,.1)}
+body[data-theme="light"] .page-title{color:#2d3748}
+body[data-theme="light"] th{color:#4a5568;background:rgba(0,0,0,.05)}
+body[data-theme="light"] td{color:#2d3748}
+body[data-theme="light"] input,body[data-theme="light"] select,body[data-theme="light"] textarea{color:#2d3748;background:#fff;border-color:rgba(0,0,0,.2)}
+body[data-theme="light"] .sub-tab{color:#718096}
+body[data-theme="light"] .chip{color:#4a5568;background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.15)}
+body[data-theme="light"] .toast{background:#fff;color:#2d3748;border:1px solid rgba(0,0,0,.15)}
+body[data-theme="light"] .text-muted,body[data-theme="light"] small{color:#718096}
+body[data-theme="light"] .btn-ghost{color:#4a5568;border-color:rgba(0,0,0,.2)}
+body[data-theme="light"] .btn-ghost:hover{background:rgba(0,0,0,.08)}
+body[data-theme="light"] .os-group{background:#fff;border:1px solid rgba(0,0,0,.1)}
+body[data-theme="light"] .os-header{background:rgba(0,0,0,.04);color:#2d3748}
+body[data-theme="light"] .content-section{background:#f7fafc}
+body[data-theme="light"] .home-section{background:#f0f4f8}
+body[data-theme="light"] .content{background:transparent}
 </style>
 </head>
 <body>
@@ -1322,6 +1348,7 @@ function applyColorTheme(id, save = true) {
   r.setProperty('--card', t.card);
   r.setProperty('--border', t.border);
   document.body.style.background = t.body;
+  document.body.dataset.theme = id;
   if (save) localStorage.setItem('color_theme', id);
   // Update swatch borders in modal if open
   Object.keys(COLOR_THEMES).forEach(tid => {
@@ -4977,7 +5004,9 @@ async function autoGenerateOrder() {
 
 // ===================== ORDER TEMPLATES =====================
 async function openTemplateModal() {
-  const { data: templates } = await withTimeout(sb.from('order_templates').select('*').order('created_at', { ascending: false }));
+  await loadMaterials();
+  const { data: templates, error: tErr } = await withTimeout(sb.from('order_templates').select('*').order('created_at', { ascending: false }));
+  if (tErr) { toast('範本載入失敗：請先在 Supabase SQL Editor 執行 migrate-v8.sql', 'error'); return; }
   const list = (templates || []).map(t => {
     const items = (t.items || []);
     const preview = items.slice(0,3).map(i => {

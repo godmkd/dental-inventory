@@ -1046,7 +1046,7 @@ function buildBubbles() {
     { id: 'stock-overview',   icon: '🗂️', label: '庫存總覽', size: 'large',  top: '48%', left: '37%', pt: '22%', pl: '83%', lt: '57%', ll: '22%',  delay: '2.7s', duration: '6.5s', anim: 'float2', perm: 'view_all_inventory' },
     // ── Cluster 2：叫貨管理（中區）──
     { id: 'order-summary',    icon: '📊', label: '叫貨總覽', size: 'large',  top: '23%', left: '54%', pt: '22%', pl: '10%', lt: '18%', ll: '38%',  delay: '1.1s', duration: '7s',   anim: 'float3', perm: 'manage_orders' },
-    { id: 'order-list',       icon: '📋', label: '叫貨單管理', size: 'large',  top: '41%', left: '65%', pt: '22%', pl: '35%', lt: '40%', ll: '47%',  delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
+    { id: 'order-list',       icon: '📋', label: '貨單管理', size: 'large',  top: '41%', left: '65%', pt: '22%', pl: '35%', lt: '40%', ll: '47%',  delay: '0.3s', duration: '6.5s', anim: 'float2', perm: 'manage_orders' },
     { id: 'rush-mgmt',        icon: '🚨', label: '催貨管理', size: 'large',  top: '23%', left: '75%', pt: '21%', pl: '60%', lt: '18%', ll: '55%',  delay: '1.9s', duration: '5s',   anim: 'float',  perm: 'manage_orders' },
     // ── Cluster 3：系統管理（右區）──
     { id: 'tutorials',        icon: '📖', label: '教學',     size: 'medium', top: '8%',  left: '72%', pt: '44%', pl: '8%',  lt: '8%',  ll: '65%',  delay: '2.8s', duration: '5s',   anim: 'float3' },
@@ -1689,7 +1689,7 @@ async function renderStockOverview() {
 
   const typeTabHtml = `<div style="display:flex;gap:8px;margin-bottom:12px">
     <button class="btn btn-sm ${window._stockViewType==='consumable'?'btn-primary':'btn-ghost'}" onclick="window._stockViewType='consumable';renderStockOverview()">耗材</button>
-    <button class="btn btn-sm ${window._stockViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._stockViewType='equipment';renderStockOverview()">器械</button>
+    <button class="btn btn-sm ${window._stockViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._stockViewType='equipment';renderStockOverview()">非耗材</button>
   </div>`;
   let html = `<div class="page-title">📊 庫存總覽</div>${usageHint('stock-overview')}${typeTabHtml}`;
   for (const catId of Object.keys(matsByCat)) {
@@ -1818,7 +1818,7 @@ async function renderDailyChange(container) {
     ${usageHint('daily-change')}
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-sm ${window._dailyViewType==='consumable'?'btn-primary':'btn-ghost'}" onclick="window._dailyViewType='consumable';window._dailyFilterCatId=0;renderDailyChange()">耗材</button>
-      <button class="btn btn-sm ${window._dailyViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._dailyViewType='equipment';window._dailyFilterCatId=0;renderDailyChange()">器械</button>
+      <button class="btn btn-sm ${window._dailyViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._dailyViewType='equipment';window._dailyFilterCatId=0;renderDailyChange()">非耗材</button>
     </div>
     <div class="toolbar">
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="dailyClinicId=parseInt(this.value);renderDailyChange()">
@@ -2155,7 +2155,7 @@ async function renderOrdering(container) {
     ${usageHint('ordering')}
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-sm ${window._orderViewType==='consumable'?'btn-primary':'btn-ghost'}" onclick="window._orderViewType='consumable';window._orderFilterCatId=0;renderOrdering()">耗材</button>
-      <button class="btn btn-sm ${window._orderViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._orderViewType='equipment';window._orderFilterCatId=0;renderOrdering()">器械</button>
+      <button class="btn btn-sm ${window._orderViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._orderViewType='equipment';window._orderFilterCatId=0;renderOrdering()">非耗材</button>
     </div>
     <div class="toolbar">
       ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="orderClinicId=parseInt(this.value);loadConfirmedOrders()">
@@ -2892,14 +2892,16 @@ async function toggleOrderCard(orderId) {
   const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
   if (!items || !items.length) { body.innerHTML = '<div style="padding:16px;color:var(--text-light)">無明細</div>'; return; }
 
-  // Load material_suppliers for all materials in this order
+  // Load material_suppliers for all materials in this order (requires migrate-v9.sql)
   const matIds = [...new Set(items.map(i => i.material_id))];
-  const { data: matSups } = await withTimeout(sb.from('material_suppliers').select('*, supplier:supplier_id(name)').in('material_id', matIds));
-  const matSupMap = {}; // materialId → [{supplier_id, unit_price, name}]
-  (matSups || []).forEach(s => {
-    if (!matSupMap[s.material_id]) matSupMap[s.material_id] = [];
-    matSupMap[s.material_id].push({ supplier_id: s.supplier_id, unit_price: s.unit_price, name: s.supplier?.name || supplierName(s.supplier_id), is_default: s.is_default });
-  });
+  let matSupMap = {};
+  try {
+    const { data: matSups } = await withTimeout(sb.from('material_suppliers').select('*').in('material_id', matIds));
+    (matSups || []).forEach(s => {
+      if (!matSupMap[s.material_id]) matSupMap[s.material_id] = [];
+      matSupMap[s.material_id].push({ supplier_id: s.supplier_id, unit_price: s.unit_price, name: supplierName(s.supplier_id), is_default: s.is_default });
+    });
+  } catch(e) { /* table may not exist yet */ }
 
   let html = '<div style="padding:16px 0">';
   items.forEach(it => {
@@ -3895,28 +3897,32 @@ async function editMaterial(id) {
 
 function buildMatSupRow(supId, price, isDef, spec, orderUnit, unitRatio) {
   const idx = window._matSupCounter++;
-  const inp = 'padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:.82rem;background:var(--card);color:var(--text);width:100%';
-  return `<div class="mat-sup-row" id="msRow_${idx}" style="border:1px solid var(--border);border-radius:6px;padding:8px;margin:6px 0">
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-      <select id="msId_${idx}" style="flex:1;${inp}">
+  const inp = 'padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:.82rem;background:var(--card);color:var(--text);width:100%;box-sizing:border-box';
+  return `<div class="mat-sup-row" id="msRow_${idx}" style="border:1px solid var(--border);border-radius:6px;padding:8px 8px 8px 8px;margin:6px 0">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:6px">
+      <select id="msId_${idx}" style="${inp};flex:1">
         <option value="">-- 選廠商 --</option>
         ${allSuppliers.map(s => `<option value="${s.id}"${s.id==supId?' selected':''}>${escHtml(s.name)}</option>`).join('')}
       </select>
-      <label style="font-size:.8rem;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="msDef_${idx}"${isDef?' checked':''}> 預設</label>
-      <button type="button" class="btn btn-danger btn-xs" style="flex-shrink:0" onclick="removeMatSupRow(${idx})">✕</button>
+      <button type="button" class="btn btn-danger btn-xs" style="flex-shrink:0;margin-left:4px" onclick="removeMatSupRow(${idx})">✕</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:.8rem">
-      <div><label style="color:var(--text-light)">規格</label><input id="msSpec_${idx}" value="${escHtml(spec||'')}" style="${inp}"></div>
-      <div><label style="color:var(--text-light)">叫貨單位</label><input id="msOUnit_${idx}" value="${escHtml(orderUnit||'')}" placeholder="箱/盒" style="${inp}"></div>
-      <div><label style="color:var(--text-light)">換算比例</label><input type="number" id="msRatio_${idx}" value="${unitRatio||1}" step="0.01" min="0.01" style="${inp}"></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:.8rem;margin-bottom:6px">
+      <div><div style="color:var(--text-light);margin-bottom:2px">規格</div><input id="msSpec_${idx}" value="${escHtml(spec||'')}" style="${inp}"></div>
+      <div><div style="color:var(--text-light);margin-bottom:2px">叫貨單位</div><input id="msOUnit_${idx}" value="${escHtml(orderUnit||'')}" placeholder="箱/盒" style="${inp}"></div>
+      <div><div style="color:var(--text-light);margin-bottom:2px">換算比例</div><input type="number" id="msRatio_${idx}" value="${unitRatio||1}" step="0.01" min="0.01" style="${inp}"></div>
     </div>
-    <div style="margin-top:6px;font-size:.8rem">
-      <label style="color:var(--text-light)">單價</label>
-      <input type="number" id="msPrice_${idx}" value="${price||0}" step="0.01" min="0" style="${inp}">
+    <div style="display:flex;align-items:center;gap:8px;font-size:.8rem">
+      <div style="flex:1"><div style="color:var(--text-light);margin-bottom:2px">單價</div><input type="number" id="msPrice_${idx}" value="${price||0}" step="0.01" min="0" style="${inp}"></div>
+      <label style="white-space:nowrap;flex-shrink:0;padding-top:18px"><input type="checkbox" id="msDef_${idx}"${isDef?' checked':''} onchange="setMatSupDefault(${idx})"> 預設</label>
     </div>
   </div>`;
 }
 
+window.setMatSupDefault = function(idx) {
+  document.querySelectorAll('#matSupRows [id^="msDef_"]').forEach(cb => {
+    if (cb.id !== 'msDef_' + idx) cb.checked = false;
+  });
+};
 window.addMatSupplierRow = function() {
   document.getElementById('matSupRows').insertAdjacentHTML('beforeend', buildMatSupRow(null, 0, false, '', '', 1));
 };
@@ -4014,9 +4020,12 @@ async function saveMaterial(id) {
     }
     if (err) { toast('儲存失敗: ' + err.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
     // Save material_suppliers (delete then insert)
-    if (savedId && newSuppliers.length > 0) {
+    if (savedId) {
       await sb.from('material_suppliers').delete().eq('material_id', savedId);
-      await sb.from('material_suppliers').insert(newSuppliers.map(s => ({ ...s, material_id: savedId })));
+      if (newSuppliers.length > 0) {
+        const { error: supErr } = await withTimeout(sb.from('material_suppliers').insert(newSuppliers.map(s => ({ ...s, material_id: savedId }))));
+        if (supErr) { toast('品項已儲存，但廠商儲存失敗：' + supErr.message + '（請先執行 migrate-v9.sql）', 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
+      }
     }
     toast('已儲存'); closeModal(); await loadMaterials(); renderAdminContent();
   } catch (e) { toast('錯誤: ' + e.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; }
@@ -4049,7 +4058,7 @@ async function renderAdminCategories(el) {
           <span class="drag-handle" style="display:inline-block;margin-right:4px">⠿</span>
           <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveCat(${c.id},-1)" ${idx === 0 ? 'disabled' : ''}>▲</button>
           <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveCat(${c.id},1)" ${idx === allCategories.length - 1 ? 'disabled' : ''}>▼</button>
-        </td>` : ''}<td>${escHtml(c.name)}</td><td style="font-size:.82rem">${(c.item_type||'consumable')==='equipment'?'器械':'耗材'}</td>
+        </td>` : ''}<td>${escHtml(c.name)}</td><td style="font-size:.82rem">${(c.item_type||'consumable')==='equipment'?'非耗材':'耗材'}</td>
         ${canManage ? `<td>
           <button class="btn btn-ghost btn-sm" onclick="editCategory(${c.id})">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteCategory(${c.id})">刪除</button>

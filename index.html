@@ -2054,6 +2054,7 @@ async function renderOrdering(container) {
         ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(orderClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderItems(this.value)">
+      <button class="btn btn-ghost btn-sm" onclick="autoGenerateOrder()" title="自動叫貨">🤖 自動叫貨</button>
       <button class="btn btn-ghost btn-sm" onclick="openTemplateModal()" title="叫貨範本">📋 範本</button>
       <div class="view-toggle" id="orderViewToggle">
         <button class="btn btn-ghost btn-sm ${orderViewMode==='icon'?'active':''}" onclick="switchOrderView('icon')">🖼</button>
@@ -4882,6 +4883,37 @@ async function loadTrendData() {
   });
   tbl += '</tbody></table></div></div>';
   document.getElementById('trendTable').innerHTML = tbl;
+}
+
+// ===================== AUTO ORDER =====================
+async function autoGenerateOrder() {
+  if (!orderClinicId) { toast('請先選擇診所', 'error'); return; }
+  toast('掃描庫存中...', 'info');
+
+  const { data: inv } = await withTimeout(
+    sb.from('clinic_inventory').select('material_id,current_stock,safety_stock').eq('clinic_id', orderClinicId)
+  );
+  if (!inv?.length) { toast('此診所尚無庫存資料', 'error'); return; }
+
+  await loadMaterials();
+  const lowItems = inv.filter(i => i.current_stock < (i.safety_stock ?? 5));
+  if (!lowItems.length) { toast('所有品項庫存充足，不需叫貨 ✅'); return; }
+
+  // Pre-fill quantities: bring up to 2× safety_stock
+  let filled = 0;
+  lowItems.forEach(i => {
+    const safety = i.safety_stock ?? 5;
+    const target = safety * 2;
+    const toOrder = Math.max(1, target - i.current_stock);
+    orderQtyMap[i.material_id] = toOrder;
+    filled++;
+  });
+
+  updateOrderSubmitBar();
+  // Scroll to order panel
+  const panel = document.getElementById('orderChangePanel');
+  if (panel) { panel.classList.remove('collapsed'); panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  toast(`已自動帶入 ${filled} 項低庫存品項，請確認數量後送出`, 'info');
 }
 
 // ===================== ORDER TEMPLATES =====================

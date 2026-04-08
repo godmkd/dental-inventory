@@ -2788,9 +2788,9 @@ async function renderOrderSummary() {
       const name = mat ? escHtml(mat.name) : `#${mid}`;
       const ratio = mat ? (mat.unit_ratio || 1) : 1;
       const orderUnit = mat ? (mat.order_unit || mat.unit || '') : '';
-      const confirmedQty = Math.round((g.totalConfirmedQty * ratio) * 100) / 100;
-      const shippedQty = Math.round((g.totalShippedQty * ratio) * 100) / 100;
-      const actualQty = Math.round((g.totalActual * ratio) * 100) / 100;
+      const confirmedQty = Math.round((g.totalConfirmedQty / ratio) * 100) / 100;
+      const shippedQty = Math.round((g.totalShippedQty / ratio) * 100) / 100;
+      const actualQty = Math.round((g.totalActual / ratio) * 100) / 100;
       const diff = Math.round((confirmedQty - actualQty) * 100) / 100;
       const diffColor = diff > 0 ? 'var(--danger)' : diff < 0 ? 'var(--success)' : 'var(--text-light)';
       const itemIds = g.confirmedItems.map(i => i.id).join(',');
@@ -2818,7 +2818,7 @@ async function renderOrderSummary() {
 
 window.onSummaryActualChange = async function(val, ratio, itemIdsStr) {
   const actualInOrderUnit = parseFloat(val) || 0;
-  const actualDaily = Math.round(actualInOrderUnit / ratio);
+  const actualDaily = Math.round(actualInOrderUnit * ratio);
   const ids = itemIdsStr.split(',').map(Number);
   if (!ids.length) return;
   try {
@@ -2968,8 +2968,8 @@ async function toggleOrderCard(orderId) {
     const ratio = mat ? (mat.unit_ratio || 1) : 1;
     const orderUnit = mat ? (mat.order_unit || mat.unit) : '';
     const dailyUnit = mat ? mat.unit : '';
-    const orderQty = Math.round((it.quantity * ratio) * 100) / 100;
-    const subtotal = it.quantity * price * ratio;
+    const orderQty = Math.round((it.quantity / ratio) * 100) / 100;
+    const subtotal = it.quantity * price;
     const sups = matSupMap[it.material_id] || [];
     const curSupId = it.order_supplier_id || (sups.find(s=>s.is_default)?.supplier_id);
     if (sups.length > 0) window._orderItemSupsMap[it.id] = sups;
@@ -3053,9 +3053,9 @@ window.confirmAllItems = async function(orderId) {
       // 讀取 DOM 中管理員可能修改過的數量和換算
       const qtyEl = document.getElementById('oiq_' + it.id);
       const ratioEl = document.getElementById('oir_' + it.id);
-      const qtyInOrderUnit = qtyEl ? (parseFloat(qtyEl.value) || 0) : Math.round((it.quantity * ratio) * 100) / 100;
+      const qtyInOrderUnit = qtyEl ? (parseFloat(qtyEl.value) || 0) : Math.round((it.quantity / ratio) * 100) / 100;
       const finalRatio = ratioEl ? (parseFloat(ratioEl.value) || 1) : ratio;
-      const dailyQty = Math.round(qtyInOrderUnit / finalRatio);
+      const dailyQty = Math.round(qtyInOrderUnit * finalRatio);
       await withTimeout(sb.from('order_items').update({ quantity: dailyQty, item_status: 'confirmed' }).eq('id', it.id));
     }
     await recomputeOrderStatus(orderId);
@@ -3092,12 +3092,14 @@ window.onOrderItemSupplierChange = async function(itemId, orderId, supIdStr) {
     const sup = sups.find(s => s.supplier_id === supId);
     if (!sup) return;
     await withTimeout(sb.from('order_items').update({ order_supplier_id: supId, unit_price: sup.unit_price, is_custom_price: false }).eq('id', itemId));
-    // Update price display
+    // Update price display — subtotal = dailyQty × unit_price
     const qtyEl = document.getElementById('oiq_' + itemId);
-    const qty = parseFloat(qtyEl?.value) || 0;
-    updateOrderItemSubtotal(itemId, qty);
+    const ratioEl = document.getElementById('oir_' + itemId);
+    const qtyInOrderUnit = parseFloat(qtyEl?.value) || 0;
+    const ratio = parseFloat(ratioEl?.value) || 1;
+    const dailyQty = Math.round(qtyInOrderUnit * ratio);
     const priceEl = document.querySelector(`#oi_${itemId} .order-item-price`);
-    if (priceEl) priceEl.innerHTML = `單價: ${fmtMoney(sup.unit_price)} | 小計: <span id="ois_${itemId}">${fmtMoney(qty * sup.unit_price)}</span>`;
+    if (priceEl) priceEl.innerHTML = `單價: ${fmtMoney(sup.unit_price)} | 小計: <span id="ois_${itemId}">${fmtMoney(dailyQty * sup.unit_price)}</span>`;
   } catch(e) { toast('更新廠商失敗: ' + e.message, 'error'); }
 };
 
@@ -3106,32 +3108,30 @@ window.onOrderItemQtyChange = async function(itemId, orderId, val) {
   const qtyInOrderUnit = parseFloat(val) || 0;
   const ratioEl = document.getElementById('oir_' + itemId);
   const ratio = parseFloat(ratioEl?.value) || 1;
-  const dailyQty = Math.round(qtyInOrderUnit / ratio);
+  const dailyQty = Math.round(qtyInOrderUnit * ratio);
   const { error } = await withTimeout(sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
-  updateOrderItemSubtotal(itemId, qtyInOrderUnit);
+  updateOrderItemSubtotal(itemId, dailyQty);
 };
 
 window.onOrderItemRatioChange = async function(itemId, orderId, val) {
   const ratio = parseFloat(val) || 1;
   const qtyEl = document.getElementById('oiq_' + itemId);
   const qtyInOrderUnit = parseFloat(qtyEl?.value) || 0;
-  const dailyQty = Math.round(qtyInOrderUnit / ratio);
+  const dailyQty = Math.round(qtyInOrderUnit * ratio);
   const { error } = await withTimeout(sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
-  updateOrderItemSubtotal(itemId, qtyInOrderUnit);
+  updateOrderItemSubtotal(itemId, dailyQty);
 };
 
-function updateOrderItemSubtotal(itemId, qtyInOrderUnit) {
-  // Re-read price from the card context — we stored it in the DOM implicitly
+function updateOrderItemSubtotal(itemId, dailyQty) {
   const subtotalEl = document.getElementById('ois_' + itemId);
   if (!subtotalEl) return;
-  // Parse price from the small tag text nearby
   const row = document.getElementById('oi_' + itemId);
   if (!row) return;
   const priceMatch = row.innerHTML.match(/單價:.*?\$([0-9,]+(?:\.\d+)?)/);
   const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 0;
-  subtotalEl.innerHTML = fmtMoney(qtyInOrderUnit * price);
+  subtotalEl.innerHTML = fmtMoney(dailyQty * price);
 }
 
 // Confirm button: convert qty to daily units (qty * ratio) and set confirmed
@@ -3140,7 +3140,7 @@ window.confirmOrderItem = async function(itemId, orderId) {
   const ratioEl = document.getElementById('oir_' + itemId);
   const qtyInOrderUnit = parseFloat(qtyEl?.value) || 0;
   const ratio = parseFloat(ratioEl?.value) || 1;
-  const dailyQty = Math.round(qtyInOrderUnit / ratio);
+  const dailyQty = Math.round(qtyInOrderUnit * ratio);
 
   const { error } = await withTimeout(sb.from('order_items').update({
     quantity: dailyQty,

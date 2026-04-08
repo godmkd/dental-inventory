@@ -4516,7 +4516,6 @@ async function loadOrderStats() {
         <td>${escHtml(mat.name || '(已刪除)')}</td>
         <td>${it.quantity}</td>
         <td>${fmtMoney(unitPrice)}</td>
-        <td>${isCustom ? fmtMoney(customPrice) : '-'}</td>
         <td>${fmtMoney(subtotal)}</td>
         <td>${status}</td>
         <td>${dateStr}</td>
@@ -4532,7 +4531,7 @@ async function loadOrderStats() {
       </div>
       <div class="os-body">
         <table>
-          <thead><tr><th>品項</th><th>數量</th><th>單價</th><th>優惠價</th><th>小計</th><th>狀態</th><th>叫貨日期</th></tr></thead>
+          <thead><tr><th>品項</th><th>數量</th><th>單價</th><th>小計</th><th>狀態</th><th>叫貨日期</th></tr></thead>
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
@@ -5195,16 +5194,14 @@ async function exportExcel() {
   const { data: items } = await withTimeout(q1);
 
   const statusMap = { pending:'待處理', confirmed:'已確認', shipped:'已出貨', delivered:'已到貨', cancelled:'已取消' };
-  const orderRows = [['診所','品項','數量','單位','單價','優惠價','小計','狀態','叫貨日期']];
+  const orderRows = [['診所','品項','數量','單位','單價','小計','狀態','叫貨日期']];
   (items || []).forEach(it => {
     const m = allMaterials.find(x => x.id === it.material_id) || {};
-    const price = it.is_custom_price ? (it.custom_price || 0) : (it.unit_price || 0);
-    const subtotal = it.is_custom_price ? price : (it.quantity * (it.unit_price || 0));
+    const subtotal = it.is_custom_price && it.custom_price != null ? it.custom_price : (it.quantity * (it.unit_price || 0));
     orderRows.push([
       clinicName(it.clinic_id), m.name || '(已刪除)',
       it.quantity, m.unit || '',
       it.unit_price || 0,
-      it.is_custom_price ? (it.custom_price || 0) : '',
       subtotal,
       statusMap[it.item_status] || it.item_status || '',
       (it.created_at || '').slice(0, 10)

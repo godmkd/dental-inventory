@@ -3827,9 +3827,9 @@ async function renderAdminSuppliers(el) {
   el.innerHTML = `
     <div class="toolbar">${canManage ? '<button class="btn btn-primary" onclick="editSupplier()">＋ 新增廠商</button>' : ''}</div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>名稱</th><th>聯絡人</th><th>電話</th><th>備註</th>${canManage ? '<th>操作</th>' : ''}</tr></thead>
+      <thead><tr><th>名稱</th><th>聯絡人</th><th>電話</th><th>LINE ID</th><th>備註</th>${canManage ? '<th>操作</th>' : ''}</tr></thead>
       <tbody>${allSuppliers.map(s => `<tr>
-        <td>${escHtml(s.name)}</td><td>${escHtml(s.contact || '-')}</td><td>${escHtml(s.phone || '-')}</td><td>${escHtml(s.notes || '-')}</td>
+        <td>${escHtml(s.name)}</td><td>${escHtml(s.contact || '-')}</td><td>${escHtml(s.phone || '-')}</td><td>${escHtml(s.line_id || '-')}</td><td>${escHtml(s.notes || '-')}</td>
         ${canManage ? `<td>
           <button class="btn btn-ghost btn-sm" onclick="editSupplier(${s.id})">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${s.id})">刪除</button>
@@ -3846,13 +3846,14 @@ function editSupplier(id) {
       <div class="form-group"><label>聯絡人</label><input id="fSupContact" value="${escHtml(s.contact || '')}"></div>
       <div class="form-group"><label>電話</label><input id="fSupPhone" value="${escHtml(s.phone || '')}"></div>
     </div>
+    <div class="form-group"><label>LINE ID</label><input id="fSupLineId" value="${escHtml(s.line_id || '')}" placeholder="廠商 LINE ID"></div>
     <div class="form-group"><label>備註</label><textarea id="fSupNotes">${escHtml(s.notes || '')}</textarea></div>
   `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
      <button class="btn btn-primary" onclick="saveSupplier(${id || 'null'})">儲存</button>`);
 }
 
 async function saveSupplier(id) {
-  const obj = { name: document.getElementById('fSupName').value.trim(), contact: document.getElementById('fSupContact').value.trim(), phone: document.getElementById('fSupPhone').value.trim(), notes: document.getElementById('fSupNotes').value.trim() };
+  const obj = { name: document.getElementById('fSupName').value.trim(), contact: document.getElementById('fSupContact').value.trim(), phone: document.getElementById('fSupPhone').value.trim(), line_id: document.getElementById('fSupLineId').value.trim(), notes: document.getElementById('fSupNotes').value.trim() };
   if (!obj.name) { toast('請輸入名稱', 'error'); return; }
   let err;
   if (id) { ({ error: err } = await withTimeout(sb.from('suppliers').update(obj).eq('id', id))); }

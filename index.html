@@ -996,7 +996,7 @@ function canSeePrice() { return hasPermission('view_prices'); }
 async function loadClinics() { const { data } = await withTimeout(sb.from('clinics').select('*').order('id')); allClinics = data || []; }
 async function loadCategories() { const { data } = await withTimeout(sb.from('categories').select('*').order('sort_order')); allCategories = data || []; }
 async function loadSuppliers() { const { data } = await withTimeout(sb.from('suppliers').select('*').order('name')); allSuppliers = data || []; }
-async function loadMaterials() { const { data } = await withTimeout(sb.from('materials').select('*').order('name')); allMaterials = data || []; }
+async function loadMaterials() { const { data } = await withTimeout(sb.from('materials').select('*').order('sort_order').order('name')); allMaterials = data || []; }
 async function loadUsers() { const { data } = await withTimeout(sb.from('user_profiles').select('*').order('created_at')); allUsers = data || []; }
 async function loadRoles() { const { data } = await withTimeout(sb.from('roles').select('*').order('id')); allRoles = data || []; }
 
@@ -1010,6 +1010,25 @@ function matItemType(m) {
   if (!m?.category_id) return 'consumable';
   return allCategories.find(c => c.id === m.category_id)?.item_type || 'consumable';
 }
+function groupMatsByCat(mats) {
+  const groups = {};
+  const catOrder = allCategories.map(c => c.id);
+  mats.forEach(m => {
+    const cid = m.category_id || 0;
+    if (!groups[cid]) groups[cid] = [];
+    groups[cid].push(m);
+  });
+  // Sort group keys by category order
+  const sorted = [];
+  catOrder.forEach(cid => { if (groups[cid]) sorted.push({ catId: cid, catName: categoryName(cid), mats: groups[cid] }); });
+  if (groups[0]) sorted.push({ catId: 0, catName: '未分類', mats: groups[0] });
+  return sorted;
+}
+
+if (!window._collapsedDailyCats) window._collapsedDailyCats = new Set();
+if (!window._collapsedOrderCats) window._collapsedOrderCats = new Set();
+if (!window._collapsedAdminMatCats) window._collapsedAdminMatCats = new Set();
+
 // Type tab state
 if (!window._stockViewType) window._stockViewType = 'consumable';
 if (!window._dailyViewType) window._dailyViewType = 'consumable';
@@ -1877,52 +1896,71 @@ window.dailyFilterCat = function(catId, el) {
   renderDailyContent();
 };
 
+function dailyMatCard(m) {
+  const inv = dailyInvMap[m.id];
+  const stock = inv ? inv.current_stock : 0;
+  const safety = inv ? inv.safety_stock : 5;
+  const qty = dailyQtyMap[m.id] || 0;
+  const lowCls = stock <= safety ? ' stock-low' : '';
+  return `<div class="mat-card${lowCls}" data-name="${m.name.toLowerCase()}">
+    <button class="adj-left" onclick="adjDailyQty(${m.id},-1)">−</button>
+    <div class="mat-card-center">
+      ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
+      <div class="mat-card-name">${escHtml(m.name)}</div>
+      <div class="mat-card-stock">庫存: ${stock}</div>
+      <input type="number" id="daily_${m.id}" value="${qty}" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
+    </div>
+    <button class="adj-right" onclick="adjDailyQty(${m.id},1)">+</button>
+  </div>`;
+}
+function dailyMatRow(m) {
+  const inv = dailyInvMap[m.id];
+  const stock = inv ? inv.current_stock : 0;
+  const qty = dailyQtyMap[m.id] || 0;
+  return `<div class="item-row" data-name="${m.name.toLowerCase()}">
+    <div class="item-row-left">
+      <div class="item-name">${escHtml(m.name)}</div>
+      <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)} | 庫存: ${stock}</div>
+    </div>
+    <div class="item-row-right">
+      <div class="inline-adjuster">
+        <button class="adj-btn" onclick="adjDailyQty(${m.id},-1)">−</button>
+        <input type="number" id="daily_${m.id}" value="${qty}" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
+        <button class="adj-btn" onclick="adjDailyQty(${m.id},1)">+</button>
+      </div>
+      <button class="btn-reset-item" onclick="resetDailyQty(${m.id})" title="重置">↺</button>
+    </div>
+  </div>`;
+}
+
 function renderDailyContent() {
   const container = document.getElementById('dailyContent');
   let mats = allMaterials.filter(m => matItemType(m) === (window._dailyViewType || 'consumable'));
   if (window._dailyFilterCatId) mats = mats.filter(m => m.category_id === window._dailyFilterCatId);
 
-  // Update submit bar
   updateDailySubmitBar();
 
-  if (dailyViewMode === 'icon') {
-    container.innerHTML = `<div class="mat-grid">${mats.map(m => {
-      const inv = dailyInvMap[m.id];
-      const stock = inv ? inv.current_stock : 0;
-      const safety = inv ? inv.safety_stock : 5;
-      const qty = dailyQtyMap[m.id] || 0;
-      const lowCls = stock <= safety ? ' stock-low' : '';
-      return `<div class="mat-card${lowCls}" data-name="${m.name.toLowerCase()}">
-        <button class="adj-left" onclick="adjDailyQty(${m.id},-1)">−</button>
-        <div class="mat-card-center">
-          ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
-          <div class="mat-card-name">${escHtml(m.name)}</div>
-          <div class="mat-card-stock">庫存: ${stock}</div>
-          <input type="number" id="daily_${m.id}" value="${qty}" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
+  // 選全部時按類別分組可收合
+  if (!window._dailyFilterCatId) {
+    const groups = groupMatsByCat(mats);
+    container.innerHTML = groups.map(g => {
+      const collapsed = window._collapsedDailyCats.has(String(g.catId));
+      const bodyId = 'dailyCatBody_' + g.catId;
+      return `<div class="card" style="overflow:hidden;margin-bottom:8px">
+        <div class="card-title" style="cursor:pointer;user-select:none;padding:8px 12px;margin:0" onclick="const b=document.getElementById('${bodyId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._collapsedDailyCats.add('${g.catId}');else window._collapsedDailyCats.delete('${g.catId}')">
+          ${escHtml(g.catName)} <span style="font-size:.78rem;color:var(--text-light)">(${g.mats.length})</span> <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">${collapsed?'▶':'▼'}</span>
         </div>
-        <button class="adj-right" onclick="adjDailyQty(${m.id},1)">+</button>
+        <div id="${bodyId}" style="display:${collapsed?'none':'block'}">
+          ${dailyViewMode === 'icon'
+            ? `<div class="mat-grid" style="padding:8px">${g.mats.map(m => dailyMatCard(m)).join('')}</div>`
+            : g.mats.map(m => dailyMatRow(m)).join('')}
+        </div>
       </div>`;
-    }).join('')}</div>`;
+    }).join('');
+  } else if (dailyViewMode === 'icon') {
+    container.innerHTML = `<div class="mat-grid">${mats.map(m => dailyMatCard(m)).join('')}</div>`;
   } else {
-    container.innerHTML = `<div class="card">${mats.map(m => {
-      const inv = dailyInvMap[m.id];
-      const stock = inv ? inv.current_stock : 0;
-      const qty = dailyQtyMap[m.id] || 0;
-      return `<div class="item-row" data-name="${m.name.toLowerCase()}">
-        <div class="item-row-left">
-          <div class="item-name">${escHtml(m.name)}</div>
-          <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)} | 庫存: ${stock}</div>
-        </div>
-        <div class="item-row-right">
-          <div class="inline-adjuster">
-            <button class="adj-btn" onclick="adjDailyQty(${m.id},-1)">−</button>
-            <input type="number" id="daily_${m.id}" value="${qty}" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
-            <button class="adj-btn" onclick="adjDailyQty(${m.id},1)">+</button>
-          </div>
-          <button class="btn-reset-item" onclick="resetDailyQty(${m.id})" title="重置">↺</button>
-        </div>
-      </div>`;
-    }).join('')}</div>`;
+    container.innerHTML = `<div class="card">${mats.map(m => dailyMatRow(m)).join('')}</div>`;
   }
 }
 
@@ -2217,6 +2255,37 @@ window.orderFilterCat = function(catId, el) {
   renderOrderContent();
 };
 
+function orderMatCard(m) {
+  const qty = orderQtyMap[m.id] || 0;
+  return `<div class="mat-card" data-name="${m.name.toLowerCase()}">
+    <button class="adj-left" onclick="adjOrderQty(${m.id},-1)">−</button>
+    <div class="mat-card-center">
+      ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
+      <div class="mat-card-name">${escHtml(m.name)}</div>
+      <div class="mat-card-stock">${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
+      <input type="number" id="order_${m.id}" value="${qty}" min="0" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
+    </div>
+    <button class="adj-right" onclick="adjOrderQty(${m.id},1)">+</button>
+  </div>`;
+}
+function orderMatRow(m) {
+  const qty = orderQtyMap[m.id] || 0;
+  return `<div class="item-row" data-name="${m.name.toLowerCase()}">
+    <div class="item-row-left">
+      <div class="item-name">${escHtml(m.name)}</div>
+      <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)}${canSeePrice() ? ' | ' + fmtMoney(m.unit_price) : ''}</div>
+    </div>
+    <div class="item-row-right">
+      <div class="inline-adjuster">
+        <button class="adj-btn" onclick="adjOrderQty(${m.id},-1)">−</button>
+        <input type="number" id="order_${m.id}" value="${qty}" min="0" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
+        <button class="adj-btn" onclick="adjOrderQty(${m.id},1)">+</button>
+      </div>
+      <button class="btn-reset-item" onclick="resetOrderQty(${m.id})" title="重置">↺</button>
+    </div>
+  </div>`;
+}
+
 function renderOrderContent() {
   const container = document.getElementById('orderContent');
   let mats = allMaterials.filter(m => matItemType(m) === (window._orderViewType || 'consumable'));
@@ -2224,38 +2293,26 @@ function renderOrderContent() {
 
   updateOrderSubmitBar();
 
-  if (orderViewMode === 'icon') {
-    container.innerHTML = `<div class="mat-grid">${mats.map(m => {
-      const qty = orderQtyMap[m.id] || 0;
-      return `<div class="mat-card" data-name="${m.name.toLowerCase()}">
-        <button class="adj-left" onclick="adjOrderQty(${m.id},-1)">−</button>
-        <div class="mat-card-center">
-          ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
-          <div class="mat-card-name">${escHtml(m.name)}</div>
-          <div class="mat-card-stock">${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
-          <input type="number" id="order_${m.id}" value="${qty}" min="0" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
+  if (!window._orderFilterCatId) {
+    const groups = groupMatsByCat(mats);
+    container.innerHTML = groups.map(g => {
+      const collapsed = window._collapsedOrderCats.has(String(g.catId));
+      const bodyId = 'orderCatBody_' + g.catId;
+      return `<div class="card" style="overflow:hidden;margin-bottom:8px">
+        <div class="card-title" style="cursor:pointer;user-select:none;padding:8px 12px;margin:0" onclick="const b=document.getElementById('${bodyId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._collapsedOrderCats.add('${g.catId}');else window._collapsedOrderCats.delete('${g.catId}')">
+          ${escHtml(g.catName)} <span style="font-size:.78rem;color:var(--text-light)">(${g.mats.length})</span> <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">${collapsed?'▶':'▼'}</span>
         </div>
-        <button class="adj-right" onclick="adjOrderQty(${m.id},1)">+</button>
+        <div id="${bodyId}" style="display:${collapsed?'none':'block'}">
+          ${orderViewMode === 'icon'
+            ? `<div class="mat-grid" style="padding:8px">${g.mats.map(m => orderMatCard(m)).join('')}</div>`
+            : g.mats.map(m => orderMatRow(m)).join('')}
+        </div>
       </div>`;
-    }).join('')}</div>`;
+    }).join('');
+  } else if (orderViewMode === 'icon') {
+    container.innerHTML = `<div class="mat-grid">${mats.map(m => orderMatCard(m)).join('')}</div>`;
   } else {
-    container.innerHTML = `<div class="card">${mats.map(m => {
-      const qty = orderQtyMap[m.id] || 0;
-      return `<div class="item-row" data-name="${m.name.toLowerCase()}">
-        <div class="item-row-left">
-          <div class="item-name">${escHtml(m.name)}</div>
-          <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)}${canSeePrice() ? ' | ' + fmtMoney(m.unit_price) : ''}</div>
-        </div>
-        <div class="item-row-right">
-          <div class="inline-adjuster">
-            <button class="adj-btn" onclick="adjOrderQty(${m.id},-1)">−</button>
-            <input type="number" id="order_${m.id}" value="${qty}" min="0" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
-            <button class="adj-btn" onclick="adjOrderQty(${m.id},1)">+</button>
-          </div>
-          <button class="btn-reset-item" onclick="resetOrderQty(${m.id})" title="重置">↺</button>
-        </div>
-      </div>`;
-    }).join('')}</div>`;
+    container.innerHTML = `<div class="card">${mats.map(m => orderMatRow(m)).join('')}</div>`;
   }
 }
 
@@ -3812,8 +3869,15 @@ async function deleteSupplier(id) {
 }
 
 // --- Materials CRUD ---
+let matSortChanged = false, matOrigOrder = [];
+let dragMatId = null;
+
 async function renderAdminMaterials(el) {
   await loadMaterials();
+  matOrigOrder = allMaterials.map(m => m.id);
+  matSortChanged = false;
+  const canManage = hasPermission('manage_materials');
+
   el.innerHTML = `
     <div class="toolbar">
       <input class="search-box" placeholder="搜尋品項..." oninput="filterAdminMats(this.value)">
@@ -3823,35 +3887,177 @@ async function renderAdminMaterials(el) {
       <span class="chip active" onclick="adminMatFilter(0,this)">全部</span>
       ${allCategories.map(c => `<span class="chip" onclick="adminMatFilter(${c.id},this)">${escHtml(c.name)}</span>`).join('')}
     </div>
-    <div class="card"><div class="table-wrap"><table id="adminMatTable">
-      <thead><tr><th>圖片</th><th>名稱</th><th>類別</th><th>規格</th><th>單位</th><th>廠商</th>${canSeePrice() ? '<th>單價</th>' : ''}<th>操作</th></tr></thead>
-      <tbody>${allMaterials.map(m => { const canEdit = hasPermission('manage_materials') || canEditOwned(m.created_by); return `<tr data-name="${m.name.toLowerCase()}" data-cat="${m.category_id || 0}">
-        <td>${m.image_url ? `<img class="img-thumb" src="${m.image_url}" onclick="window.open('${m.image_url}')">` : '-'}</td>
-        <td><strong>${escHtml(m.name)}</strong></td><td>${categoryName(m.category_id)}</td>
-        <td>${escHtml(m.spec || '-')}</td><td>${escHtml(m.unit)}</td><td>${supplierName(m.supplier_id)}</td>
-        ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}
-        <td>${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="editMaterial(${m.id})">編輯</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteMaterial(${m.id})">刪除</button>` : ''}</td>
-      </tr>`; }).join('')}</tbody>
-    </table></div></div>`;
+    <div id="adminMatContent"></div>
+    ${canManage ? `<div id="matSortBar" style="display:none" class="sort-confirm-bar">
+      <button class="btn btn-primary" onclick="saveMatSort()">✓ 確認排序</button>
+      <button class="btn btn-ghost" onclick="cancelMatSort()">✕ 取消</button>
+    </div>` : ''}`;
   window._adminMatCatFilter = 0;
+  renderAdminMatContent();
+}
+
+function adminMatRow(m, canManage, showDrag) {
+  const canEdit = hasPermission('manage_materials') || canEditOwned(m.created_by);
+  const dragAttrs = showDrag ? `class="cat-drag-item" draggable="true" data-mat-id="${m.id}" ondragstart="matDragStart(event,${m.id})" ondragover="matDragOver(event)" ondragleave="matDragLeave(event)" ondrop="matDrop(event,${m.id})" ondragend="matDragEnd(event)"` : '';
+  return `<tr ${dragAttrs} data-name="${m.name.toLowerCase()}" data-cat="${m.category_id || 0}">
+    ${showDrag ? `<td>
+      <span class="drag-handle" style="display:inline-block;margin-right:4px">⠿</span>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveMatInCat(${m.id},-1)">▲</button>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveMatInCat(${m.id},1)">▼</button>
+    </td>` : ''}
+    <td>${m.image_url ? `<img class="img-thumb" src="${m.image_url}" onclick="window.open('${m.image_url}')">` : '-'}</td>
+    <td><strong>${escHtml(m.name)}</strong></td><td>${categoryName(m.category_id)}</td>
+    <td>${escHtml(m.spec || '-')}</td><td>${escHtml(m.unit)}</td><td>${supplierName(m.supplier_id)}</td>
+    ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}
+    <td>${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="editMaterial(${m.id})">編輯</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteMaterial(${m.id})">刪除</button>` : ''}</td>
+  </tr>`;
+}
+
+function renderAdminMatContent() {
+  const container = document.getElementById('adminMatContent');
+  if (!container) return;
+  const canManage = hasPermission('manage_materials');
+  const catFilter = window._adminMatCatFilter;
+  const searchQ = (document.querySelector('#adminContent .search-box')?.value || '').toLowerCase();
+  let mats = allMaterials;
+  if (searchQ) mats = mats.filter(m => m.name.toLowerCase().includes(searchQ));
+
+  const thDrag = canManage ? '<th></th>' : '';
+  const thPrice = canSeePrice() ? '<th>單價</th>' : '';
+  const thead = `<thead><tr>${thDrag}<th>圖片</th><th>名稱</th><th>類別</th><th>規格</th><th>單位</th><th>廠商</th>${thPrice}<th>操作</th></tr></thead>`;
+
+  if (!catFilter) {
+    // 全部：按類別分組可收合
+    const groups = groupMatsByCat(mats);
+    container.innerHTML = groups.map(g => {
+      const collapsed = window._collapsedAdminMatCats.has(String(g.catId));
+      const bodyId = 'adminMatCatBody_' + g.catId;
+      return `<div class="card" style="overflow:hidden;margin-bottom:8px">
+        <div class="card-title" style="cursor:pointer;user-select:none;padding:8px 12px;margin:0" onclick="const b=document.getElementById('${bodyId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._collapsedAdminMatCats.add('${g.catId}');else window._collapsedAdminMatCats.delete('${g.catId}')">
+          ${escHtml(g.catName)} <span style="font-size:.78rem;color:var(--text-light)">(${g.mats.length})</span> <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">${collapsed?'▶':'▼'}</span>
+        </div>
+        <div id="${bodyId}" style="display:${collapsed?'none':'block'}"><div class="table-wrap"><table id="adminMatTable_${g.catId}">
+          ${thead}
+          <tbody>${g.mats.map(m => adminMatRow(m, canManage, canManage)).join('')}</tbody>
+        </table></div></div>
+      </div>`;
+    }).join('');
+  } else {
+    mats = mats.filter(m => (m.category_id || 0) === catFilter);
+    container.innerHTML = `<div class="card"><div class="table-wrap"><table id="adminMatTable_single">
+      ${thead}
+      <tbody>${mats.map(m => adminMatRow(m, canManage, canManage)).join('')}</tbody>
+    </table></div></div>`;
+  }
 }
 
 window.filterAdminMats = function(q) {
-  q = q.toLowerCase();
-  document.querySelectorAll('#adminMatTable tbody tr').forEach(tr => {
-    const name = tr.dataset.name || '';
-    const catMatch = !window._adminMatCatFilter || parseInt(tr.dataset.cat) === window._adminMatCatFilter;
-    tr.style.display = name.includes(q) && catMatch ? '' : 'none';
-  });
+  renderAdminMatContent();
 };
 
 window.adminMatFilter = function(catId, chipEl) {
   window._adminMatCatFilter = catId;
   document.querySelectorAll('#adminMatChips .chip').forEach(c => c.classList.remove('active'));
   if (chipEl) chipEl.classList.add('active');
-  filterAdminMats(document.querySelector('#adminContent .search-box')?.value || '');
+  renderAdminMatContent();
 };
+
+// Material drag-to-reorder (within same category)
+function matDragStart(e, id) {
+  dragMatId = id;
+  e.target.closest('tr').classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function matDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('tr.cat-drag-item');
+  if (tr) {
+    document.querySelectorAll('tr.cat-drag-over').forEach(el => el.classList.remove('cat-drag-over'));
+    tr.classList.add('cat-drag-over');
+  }
+}
+function matDragLeave(e) {
+  const tr = e.target.closest('tr.cat-drag-item');
+  if (tr) tr.classList.remove('cat-drag-over');
+}
+function matDragEnd(e) {
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  document.querySelectorAll('.cat-drag-over').forEach(el => el.classList.remove('cat-drag-over'));
+}
+function matDrop(e, targetId) {
+  e.preventDefault();
+  document.querySelectorAll('.cat-drag-over').forEach(el => el.classList.remove('cat-drag-over'));
+  if (dragMatId === targetId) return;
+  const fromIdx = allMaterials.findIndex(m => m.id === dragMatId);
+  const toIdx = allMaterials.findIndex(m => m.id === targetId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  // Only allow reorder within same category
+  if ((allMaterials[fromIdx].category_id || 0) !== (allMaterials[toIdx].category_id || 0)) return;
+  const [moved] = allMaterials.splice(fromIdx, 1);
+  allMaterials.splice(toIdx, 0, moved);
+  matSortChanged = true;
+  renderAdminMatContent();
+  const bar = document.getElementById('matSortBar');
+  if (bar) bar.style.display = 'flex';
+  dragMatId = null;
+}
+
+window.moveMatInCat = function(id, direction) {
+  const idx = allMaterials.findIndex(m => m.id === id);
+  if (idx < 0) return;
+  const catId = allMaterials[idx].category_id || 0;
+  // Find prev/next in same category
+  let targetIdx = -1;
+  if (direction === -1) {
+    for (let i = idx - 1; i >= 0; i--) {
+      if ((allMaterials[i].category_id || 0) === catId) { targetIdx = i; break; }
+    }
+  } else {
+    for (let i = idx + 1; i < allMaterials.length; i++) {
+      if ((allMaterials[i].category_id || 0) === catId) { targetIdx = i; break; }
+    }
+  }
+  if (targetIdx < 0) return;
+  const [item] = allMaterials.splice(idx, 1);
+  allMaterials.splice(targetIdx, 0, item);
+  matSortChanged = true;
+  renderAdminMatContent();
+  const bar = document.getElementById('matSortBar');
+  if (bar) bar.style.display = 'flex';
+};
+
+async function saveMatSort() {
+  // Save sort_order per category group
+  let order = 0;
+  let lastCat = null;
+  for (const m of allMaterials) {
+    const cid = m.category_id || 0;
+    if (cid !== lastCat) { order = 0; lastCat = cid; }
+    const { error } = await withTimeout(sb.from('materials').update({ sort_order: order }).eq('id', m.id));
+    if (error) { toast('排序儲存失敗: ' + error.message, 'error'); return; }
+    m.sort_order = order;
+    order++;
+  }
+  matSortChanged = false;
+  const bar = document.getElementById('matSortBar');
+  if (bar) bar.style.display = 'none';
+  toast('品項排序已儲存');
+}
+
+async function cancelMatSort() {
+  const ordered = [];
+  for (const id of matOrigOrder) {
+    const m = allMaterials.find(x => x.id === id);
+    if (m) ordered.push(m);
+  }
+  allMaterials = ordered;
+  matSortChanged = false;
+  renderAdminMatContent();
+  const bar = document.getElementById('matSortBar');
+  if (bar) bar.style.display = 'none';
+}
 
 async function editMaterial(id) {
   const m = id ? allMaterials.find(x => x.id === id) : {};

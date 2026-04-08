@@ -2440,13 +2440,20 @@ async function submitOrdering() {
   if (!await showConfirm('送出叫貨', `共 ${orderConfirmItems.length} 項品項，確定送出？`)) return;
 
   try {
-    const totalAmount = orderConfirmItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
+    // 不足一單位叫貨數量時，無條件進位
+    const roundedItems = orderConfirmItems.map(it => {
+      const mat = allMaterials.find(m => m.id === it.material_id);
+      const ratio = mat ? (mat.unit_ratio || 1) : 1;
+      const qty = ratio > 1 ? Math.ceil(it.quantity / ratio) * ratio : it.quantity;
+      return { ...it, quantity: qty };
+    });
+    const totalAmount = roundedItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
     const { data: order, error: e1 } = await withTimeout(sb.from('orders').insert({
       status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes: ''
     }).select().single());
     if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
 
-    const orderItems = orderConfirmItems.map(it => ({
+    const orderItems = roundedItems.map(it => ({
       order_id: order.id, material_id: it.material_id, clinic_id: cid,
       quantity: it.quantity, unit_price: it.unit_price || 0
     }));

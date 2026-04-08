@@ -2788,9 +2788,9 @@ async function renderOrderSummary() {
       const name = mat ? escHtml(mat.name) : `#${mid}`;
       const ratio = mat ? (mat.unit_ratio || 1) : 1;
       const orderUnit = mat ? (mat.order_unit || mat.unit || '') : '';
-      const confirmedQty = Math.round((g.totalConfirmedQty / ratio) * 100) / 100;
-      const shippedQty = Math.round((g.totalShippedQty / ratio) * 100) / 100;
-      const actualQty = Math.round((g.totalActual / ratio) * 100) / 100;
+      const confirmedQty = Math.round((g.totalConfirmedQty * ratio) * 100) / 100;
+      const shippedQty = Math.round((g.totalShippedQty * ratio) * 100) / 100;
+      const actualQty = Math.round((g.totalActual * ratio) * 100) / 100;
       const diff = Math.round((confirmedQty - actualQty) * 100) / 100;
       const diffColor = diff > 0 ? 'var(--danger)' : diff < 0 ? 'var(--success)' : 'var(--text-light)';
       const itemIds = g.confirmedItems.map(i => i.id).join(',');
@@ -2818,7 +2818,7 @@ async function renderOrderSummary() {
 
 window.onSummaryActualChange = async function(val, ratio, itemIdsStr) {
   const actualInOrderUnit = parseFloat(val) || 0;
-  const actualDaily = Math.round(actualInOrderUnit * ratio);
+  const actualDaily = Math.round(actualInOrderUnit / ratio);
   const ids = itemIdsStr.split(',').map(Number);
   if (!ids.length) return;
   try {
@@ -2968,8 +2968,8 @@ async function toggleOrderCard(orderId) {
     const ratio = mat ? (mat.unit_ratio || 1) : 1;
     const orderUnit = mat ? (mat.order_unit || mat.unit) : '';
     const dailyUnit = mat ? mat.unit : '';
-    const orderQty = Math.round((it.quantity / ratio) * 100) / 100;
-    const subtotal = orderQty * price;
+    const orderQty = Math.round((it.quantity * ratio) * 100) / 100;
+    const subtotal = it.quantity * price * ratio;
     const sups = matSupMap[it.material_id] || [];
     const curSupId = it.order_supplier_id || (sups.find(s=>s.is_default)?.supplier_id);
     if (sups.length > 0) window._orderItemSupsMap[it.id] = sups;
@@ -3053,9 +3053,9 @@ window.confirmAllItems = async function(orderId) {
       // 讀取 DOM 中管理員可能修改過的數量和換算
       const qtyEl = document.getElementById('oiq_' + it.id);
       const ratioEl = document.getElementById('oir_' + it.id);
-      const qtyInOrderUnit = qtyEl ? (parseFloat(qtyEl.value) || 0) : Math.round((it.quantity / ratio) * 100) / 100;
+      const qtyInOrderUnit = qtyEl ? (parseFloat(qtyEl.value) || 0) : Math.round((it.quantity * ratio) * 100) / 100;
       const finalRatio = ratioEl ? (parseFloat(ratioEl.value) || 1) : ratio;
-      const dailyQty = Math.round(qtyInOrderUnit * finalRatio);
+      const dailyQty = Math.round(qtyInOrderUnit / finalRatio);
       await withTimeout(sb.from('order_items').update({ quantity: dailyQty, item_status: 'confirmed' }).eq('id', it.id));
     }
     await recomputeOrderStatus(orderId);
@@ -3106,10 +3106,9 @@ window.onOrderItemQtyChange = async function(itemId, orderId, val) {
   const qtyInOrderUnit = parseFloat(val) || 0;
   const ratioEl = document.getElementById('oir_' + itemId);
   const ratio = parseFloat(ratioEl?.value) || 1;
-  const dailyQty = Math.round(qtyInOrderUnit * ratio);
+  const dailyQty = Math.round(qtyInOrderUnit / ratio);
   const { error } = await withTimeout(sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
-  // Update subtotal display
   updateOrderItemSubtotal(itemId, qtyInOrderUnit);
 };
 
@@ -3117,7 +3116,7 @@ window.onOrderItemRatioChange = async function(itemId, orderId, val) {
   const ratio = parseFloat(val) || 1;
   const qtyEl = document.getElementById('oiq_' + itemId);
   const qtyInOrderUnit = parseFloat(qtyEl?.value) || 0;
-  const dailyQty = Math.round(qtyInOrderUnit * ratio);
+  const dailyQty = Math.round(qtyInOrderUnit / ratio);
   const { error } = await withTimeout(sb.from('order_items').update({ quantity: dailyQty }).eq('id', itemId));
   if (error) { toast('更新失敗: ' + error.message, 'error'); return; }
   updateOrderItemSubtotal(itemId, qtyInOrderUnit);
@@ -3141,7 +3140,7 @@ window.confirmOrderItem = async function(itemId, orderId) {
   const ratioEl = document.getElementById('oir_' + itemId);
   const qtyInOrderUnit = parseFloat(qtyEl?.value) || 0;
   const ratio = parseFloat(ratioEl?.value) || 1;
-  const dailyQty = Math.round(qtyInOrderUnit * ratio);
+  const dailyQty = Math.round(qtyInOrderUnit / ratio);
 
   const { error } = await withTimeout(sb.from('order_items').update({
     quantity: dailyQty,

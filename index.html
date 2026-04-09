@@ -1372,7 +1372,7 @@ const COLOR_THEMES = {
   green:   { accent:'#68d391', accentHover:'#48bb78', primary:'#0d2018', primaryLight:'#163028', primaryDark:'#051008', body:'#000', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
   orange:  { accent:'#f6ad55', accentHover:'#ed8936', primary:'#1e1205', primaryLight:'#2e1e0a', primaryDark:'#100a02', body:'#050200', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
   pink:    { accent:'#f687b3', accentHover:'#ed64a6', primary:'#200d18', primaryLight:'#351525', primaryDark:'#100508', body:'#050005', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
-  light:   { accent:'#3182ce', accentHover:'#2b6cb0', primary:'#f7fafc', primaryLight:'#edf2f7', primaryDark:'#e2e8f0', body:'#edf2f7', text:'#1a202c', textLight:'#4a5568', card:'rgba(0,0,0,.08)', border:'rgba(0,0,0,.18)' },
+  light:   { accent:'#3182ce', accentHover:'#2b6cb0', primary:'#ffffff', primaryLight:'#f7fafc', primaryDark:'#edf2f7', body:'#edf2f7', text:'#1a202c', textLight:'#4a5568', card:'rgba(0,0,0,.12)', border:'rgba(0,0,0,.22)' },
 };
 
 function applyColorTheme(id, save = true) {
@@ -1390,6 +1390,8 @@ function applyColorTheme(id, save = true) {
   document.body.style.backgroundColor = t.body;
   document.body.dataset.theme = id;
   if (save) localStorage.setItem('color_theme', id);
+  // Re-apply background image with theme-aware overlay
+  applyGlobalBg();
   // Update swatch borders in modal if open
   Object.keys(COLOR_THEMES).forEach(tid => {
     const sw = document.getElementById('theme-swatch-' + tid);
@@ -1634,9 +1636,12 @@ function applyGlobalBg() {
   const url = localStorage.getItem('bg_global');
   const opacity = parseInt(localStorage.getItem('bg_opacity_global') || '30', 10);
   if (url) {
-    const o = ((100 - opacity) / 100).toFixed(2); // gradient overlay opacity
-    document.body.style.backgroundImage =
-      `linear-gradient(135deg,rgba(15,12,41,${o}) 0%,rgba(48,43,99,${o}) 50%,rgba(36,36,62,${o}) 100%),url(${url})`;
+    const o = ((100 - opacity) / 100).toFixed(2);
+    const isLight = document.body.dataset.theme === 'light';
+    const overlay = isLight
+      ? `linear-gradient(135deg,rgba(247,250,252,${o}) 0%,rgba(237,242,247,${o}) 50%,rgba(226,232,240,${o}) 100%)`
+      : `linear-gradient(135deg,rgba(15,12,41,${o}) 0%,rgba(48,43,99,${o}) 50%,rgba(36,36,62,${o}) 100%)`;
+    document.body.style.backgroundImage = `${overlay},url(${url})`;
     document.body.style.backgroundSize = 'auto,cover';
     document.body.style.backgroundPosition = 'center,center';
     document.body.style.backgroundAttachment = 'scroll,fixed';

@@ -87,6 +87,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .help-tip .help-text{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:rgba(30,27,60,.97);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:.7rem;font-weight:400;color:#e2e8f0;white-space:normal;width:max-content;max-width:220px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.4);line-height:1.4;text-align:left;pointer-events:none}
 .help-tip .help-text::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(30,27,60,.97)}
 .help-tip:hover .help-text{display:block}
+.no-transition,.no-transition *,.no-transition *::before,.no-transition *::after{transition:none!important}
 .help-tip{overflow:visible!important}
 .page-title,.card-title,.toolbar,h2,h3,h4,.bg-section,.form-group{overflow:visible!important}
 body[data-theme="light"] .help-tip .help-text{background:rgba(255,255,255,.97);color:#2d3748;border-color:rgba(0,0,0,.15);box-shadow:0 4px 12px rgba(0,0,0,.12)}
@@ -1392,6 +1393,8 @@ const COLOR_THEMES = {
 
 function applyColorTheme(id, save = true) {
   const t = COLOR_THEMES[id] || COLOR_THEMES.default;
+  // Disable transitions during theme switch for instant change
+  document.documentElement.classList.add('no-transition');
   const r = document.documentElement.style;
   r.setProperty('--accent', t.accent);
   r.setProperty('--accent-hover', t.accentHover);
@@ -1407,6 +1410,8 @@ function applyColorTheme(id, save = true) {
   if (save) localStorage.setItem('color_theme', id);
   // Re-apply background image with theme-aware overlay
   applyGlobalBg();
+  // Re-enable transitions after paint
+  requestAnimationFrame(() => { requestAnimationFrame(() => { document.documentElement.classList.remove('no-transition'); }); });
   // Update swatch borders in modal if open
   Object.keys(COLOR_THEMES).forEach(tid => {
     const sw = document.getElementById('theme-swatch-' + tid);

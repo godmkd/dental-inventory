@@ -1309,7 +1309,7 @@ function openBgSettingModal() {
       </div>
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border-light)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <h4 style="margin:0;font-size:.88rem">🎞️ 背景輪播</h4>
+          <h4 style="margin:0;font-size:.88rem">🎞️ 背景輪播 <span class="help-tip">!<span class="help-text">新增多張照片，系統依設定秒數自動輪播更換背景。</span></span></h4>
           <label style="font-size:.82rem;color:var(--text-light);display:flex;align-items:center;gap:4px;cursor:pointer">
             <input type="checkbox" id="bgSlideshowOn" ${localStorage.getItem('bg_slideshow_on')==='1'?'checked':''} onchange="toggleBgSlideshow()"> 啟用
           </label>
@@ -1816,7 +1816,7 @@ async function renderStockOverview() {
     <button class="btn btn-sm ${window._stockViewType==='consumable'?'btn-primary':'btn-ghost'}" onclick="window._stockViewType='consumable';renderStockOverview()">耗材</button>
     <button class="btn btn-sm ${window._stockViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._stockViewType='equipment';renderStockOverview()">非耗材</button>
   </div>`;
-  let html = `<div class="page-title">📊 庫存總覽</div>${usageHint('stock-overview')}${typeTabHtml}`;
+  let html = `<div class="page-title">📊 庫存總覽 <span class="help-tip">!<span class="help-text">紅色表示庫存低於安全值。安全庫存可在品項下方調整。</span></span></div>${usageHint('stock-overview')}${typeTabHtml}`;
   for (const catId of Object.keys(matsByCat)) {
     const catName = catId == 0 ? '未分類' : categoryName(parseInt(catId));
     const mats = matsByCat[catId];
@@ -1939,7 +1939,7 @@ async function renderDailyChange(container) {
   }
 
   mc.innerHTML = `
-    <div class="page-title">🔄 日常變動</div>
+    <div class="page-title">🔄 日常變動 <span class="help-tip">!<span class="help-text">正數(+)為入庫，負數(-)為消耗。調整後按送出儲存。</span></span></div>
     ${usageHint('daily-change')}
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-sm ${window._dailyViewType==='consumable'?'btn-primary':'btn-ghost'}" onclick="window._dailyViewType='consumable';window._dailyFilterCatId=0;renderDailyChange()">耗材</button>
@@ -2302,7 +2302,7 @@ async function renderOrdering(container) {
   }
 
   mc.innerHTML = `
-    <div class="page-title">📦 叫貨</div>
+    <div class="page-title">📦 叫貨 <span class="help-tip">!<span class="help-text">🤖自動叫貨依安全庫存計算不足量，倍率可調整。安全庫存=0不叫貨。</span></span></div>
     ${usageHint('ordering')}
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-sm ${window._orderViewType==='consumable'?'btn-primary':'btn-ghost'}" onclick="window._orderViewType='consumable';window._orderFilterCatId=0;renderOrdering()">耗材</button>
@@ -2759,7 +2759,7 @@ async function renderOrderMgmt() {
   const isDirect = ['order-list','order-summary','rush-mgmt'].includes(currentPage);
   await loadMaterials();
 
-  const directTitle = {'order-list':'📋 各單管理','order-summary':'📊 叫貨總覽','rush-mgmt':'🚨 催貨管理'};
+  const directTitle = {'order-list':'📋 各單管理 <span class=\"help-tip\">!<span class=\"help-text\">狀態流程：待確認→已確認→已出貨→已到貨</span></span>','order-summary':'📊 叫貨總覽 <span class=\"help-tip\">!<span class=\"help-text\">待出貨＝已確認未出貨，已出貨＝在途中，已到貨會從列表移除</span></span>','rush-mgmt':'🚨 催貨管理 <span class=\"help-tip\">!<span class=\"help-text\">對遲未到貨的品項發送催貨 LINE 通知</span></span>'};
   mc.innerHTML = `
     ${isDirect ? `<div class="page-title">${directTitle[currentPage]||''}</div>` : `<div class="page-title">📋 叫貨管理</div>${usageHint('order-mgmt')}`}
     ${!isDirect ? `<div class="sub-tabs" style="margin-bottom:4px">
@@ -3119,7 +3119,7 @@ async function toggleOrderCard(orderId) {
           ${sups.map(s=>`<option value="${s.supplier_id}"${s.supplier_id==curSupId?' selected':''}>${escHtml(s.name)}${s.spec?' ['+escHtml(s.spec)+']':''} (${fmtMoney(s.unit_price)})</option>`).join('')}
         </select>` : ''}
         <label style="font-size:.82rem;color:var(--warning);display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:8px">
-          <input type="checkbox" id="oiic_${it.id}" onchange="toggleInterClinic(${it.id},${orderId})"> 庫存出貨
+          <input type="checkbox" id="oiic_${it.id}" onchange="toggleInterClinic(${it.id},${orderId})"> 庫存出貨 <span class="help-tip">!<span class="help-text">從其他診所調貨，單價變$0，出貨時自動扣來源診所庫存。</span></span>
         </label>
       </div>` : '';
 

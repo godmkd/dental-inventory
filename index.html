@@ -5485,15 +5485,27 @@ async function autoGenerateOrder() {
   const currentType = window._orderViewType || 'consumable';
   const typeLabel = currentType === 'consumable' ? '耗材' : '非耗材';
   // Filter by current item type
-  const typeMats = new Set(allMaterials.filter(m => matItemType(m) === currentType).map(m => m.id));
-  const lowItems = inv.filter(i => i.current_stock < (i.safety_stock ?? 5) && typeMats.has(i.material_id));
+  const typeMats = allMaterials.filter(m => matItemType(m) === currentType);
+  const typeMatsIds = new Set(typeMats.map(m => m.id));
+  const invMap = {};
+  (inv || []).forEach(i => { invMap[i.material_id] = i; });
+
+  // Find all items that need ordering: stock <= safety OR stock = 0 OR no inventory record
+  const lowItems = [];
+  typeMats.forEach(m => {
+    const i = invMap[m.id];
+    const stock = i ? i.current_stock : 0;
+    const safety = i ? (i.safety_stock ?? (m.default_safety_stock ?? 5)) : (m.default_safety_stock ?? 5);
+    if (stock <= safety) {
+      lowItems.push({ material_id: m.id, current_stock: stock, safety_stock: safety });
+    }
+  });
   if (!lowItems.length) { toast(`${typeLabel}品項庫存充足，不需叫貨 ✅`); return; }
 
   // Pre-fill quantities: bring up to 2× safety_stock
   let filled = 0;
   lowItems.forEach(i => {
-    const safety = i.safety_stock ?? 5;
-    const target = safety * 2;
+    const target = i.safety_stock * 2;
     const toOrder = Math.max(1, target - i.current_stock);
     orderQtyMap[i.material_id] = toOrder;
     filled++;

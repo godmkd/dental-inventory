@@ -3875,7 +3875,7 @@ window.moveClinic = function(id, direction) {
   const [item] = allClinics.splice(idx, 1);
   allClinics.splice(newIdx, 0, item);
   clinicSortChanged = true;
-  renderAdminContent();
+  rerenderClinicBody();
   const bar = document.getElementById('clinicSortBar');
   if (bar) bar.style.display = 'flex';
 };
@@ -3892,6 +3892,22 @@ async function saveClinicSort() {
   toast('診所排序已儲存');
 }
 
+function rerenderClinicBody() {
+  const tbody = document.getElementById('clinicSortBody');
+  if (!tbody) return;
+  tbody.innerHTML = allClinics.map((c, i) => `<tr>
+    <td>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveClinic(${c.id},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveClinic(${c.id},1)" ${i === allClinics.length - 1 ? 'disabled' : ''}>▼</button>
+    </td>
+    <td>${escHtml(c.name)}</td><td>${escHtml(c.address || '-')}</td><td>${escHtml(c.phone || '-')}</td><td>${escHtml(c.notes || '-')}</td>
+    <td>
+      <button class="btn btn-ghost btn-sm" onclick="editClinic(${c.id})">編輯</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteClinic(${c.id})">刪除</button>
+    </td>
+  </tr>`).join('');
+}
+
 async function cancelClinicSort() {
   const ordered = [];
   for (const id of clinicOrigOrder) {
@@ -3900,7 +3916,9 @@ async function cancelClinicSort() {
   }
   allClinics = ordered;
   clinicSortChanged = false;
-  renderAdminContent();
+  rerenderClinicBody();
+  const bar = document.getElementById('clinicSortBar');
+  if (bar) bar.style.display = 'none';
 }
 
 function editClinic(id) {

@@ -2658,9 +2658,9 @@ async function renderOrderMgmt() {
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;padding:8px 12px;background:rgba(255,200,0,.06);border-radius:var(--radius);border:1px solid rgba(255,200,0,.15)">
       <label style="font-size:.85rem;color:var(--warning);font-weight:600">🏥 庫存出貨來源診所:</label>
-      <select id="interClinicSource" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--card);color:var(--text)">
+      <select id="interClinicSource" onchange="localStorage.setItem('interClinicSource',this.value)" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--card);color:var(--text)">
         <option value="">-- 不使用庫存出貨 --</option>
-        ${allClinics.map(c=>`<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+        ${allClinics.map(c=>`<option value="${c.id}"${localStorage.getItem('interClinicSource')==String(c.id)?' selected':''}>${escHtml(c.name)}</option>`).join('')}
       </select>
       <span style="font-size:.75rem;color:var(--text-lighter)">勾選品項「庫存出貨」後，從此診所扣庫存，單價變 $0</span>
     </div>

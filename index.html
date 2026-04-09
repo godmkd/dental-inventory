@@ -581,6 +581,9 @@ body[data-theme="light"] .content{background:transparent}
 </div>
 
 <!-- Toast -->
+<div id="imgLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out" onclick="this.style.display='none'">
+  <img id="imgLightboxImg" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;box-shadow:0 4px 30px rgba(0,0,0,.5)">
+</div>
 <div class="toast-container" id="toastContainer"></div>
 
 <!-- Floating panel (used by daily changes & ordering) -->
@@ -1710,6 +1713,7 @@ function statusBadge(s) {
   return `<span class="badge badge-${s}">${map[s] || s}</span>`;
 }
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function showImgLightbox(url) { const lb = document.getElementById('imgLightbox'); document.getElementById('imgLightboxImg').src = url; lb.style.display = 'flex'; }
 
 function usageHint(pageId) {
   const hints = {
@@ -2047,7 +2051,7 @@ function dailyMatCard(m) {
   return `<div class="mat-card${lowCls}" data-name="${m.name.toLowerCase()}">
     <button class="adj-left" onclick="adjDailyQty(${m.id},-1)">−</button>
     <div class="mat-card-center">
-      ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
+      ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}" onclick="event.stopPropagation();showImgLightbox('${m.image_url}')" style="cursor:zoom-in">` : '<div class="mat-card-icon">📦</div>'}
       <div class="mat-card-name">${escHtml(m.name)}</div>
       <div class="mat-card-stock">庫存: ${stock}</div>
       <input type="number" id="daily_${m.id}" value="${qty}" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
@@ -2414,7 +2418,7 @@ function orderMatCard(m) {
   return `<div class="mat-card${lowCls}" data-name="${m.name.toLowerCase()}">
     <button class="adj-left" onclick="adjOrderQty(${m.id},-1)">−</button>
     <div class="mat-card-center">
-      ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
+      ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}" onclick="event.stopPropagation();showImgLightbox('${m.image_url}')" style="cursor:zoom-in">` : '<div class="mat-card-icon">📦</div>'}
       <div class="mat-card-name">${escHtml(m.name)}</div>
       <div class="mat-card-stock">庫存:${stock} ${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
       <input type="number" id="order_${m.id}" value="${qty}" min="0" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
@@ -4205,7 +4209,7 @@ function adminMatRow(m, canManage, showDrag) {
       <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveMatInCat(${m.id},-1)">▲</button>
       <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveMatInCat(${m.id},1)">▼</button>
     </td>` : ''}
-    <td>${m.image_url ? `<img class="img-thumb" src="${m.image_url}" onclick="window.open('${m.image_url}')">` : '-'}</td>
+    <td>${m.image_url ? `<img class="img-thumb" src="${m.image_url}" onclick="showImgLightbox('${m.image_url}')">` : '-'}</td>
     <td><strong>${escHtml(m.name)}</strong></td><td>${categoryName(m.category_id)}</td>
     <td>${escHtml(m.spec || '-')}</td><td>${escHtml(m.unit)}</td><td>${supplierName(m.supplier_id)}</td>
     ${canSeePrice() ? `<td>${fmtMoney(m.unit_price)}</td>` : ''}

@@ -1303,6 +1303,10 @@ function openBgSettingModal() {
         <input type="range" min="0" max="100" value="${globalOpacity}" oninput="bgOpacityChange(this,'global','global')">
         <span id="bgOpVal_global">${globalOpacity}%</span>
       </div>
+      <div style="margin-top:8px">
+        <div style="font-size:.78rem;color:var(--text-lighter);margin-bottom:4px">最近使用：</div>
+        <div id="recentBgList" style="display:flex;gap:6px;flex-wrap:wrap">${getRecentBgs().map((url,i) => `<img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid ${url===globalBg?'var(--accent)':'transparent'}" onclick="applyRecentBg('${i}')" title="點擊套用">`).join('') || '<span style="font-size:.75rem;color:var(--text-lighter)">無</span>'}</div>
+      </div>
     </div>
 
     <div class="bg-section">
@@ -1417,6 +1421,26 @@ function bgOpacityChange(el, type, key) {
   }
 }
 
+function getRecentBgs() {
+  try { return JSON.parse(localStorage.getItem('recent_bgs') || '[]'); } catch(e) { return []; }
+}
+function saveToRecentBgs(url) {
+  if (!url) return;
+  let recent = getRecentBgs().filter(u => u !== url);
+  recent.unshift(url);
+  if (recent.length > 5) recent = recent.slice(0, 5);
+  localStorage.setItem('recent_bgs', JSON.stringify(recent));
+}
+window.applyRecentBg = function(idx) {
+  const recent = getRecentBgs();
+  const url = recent[parseInt(idx)];
+  if (!url) return;
+  localStorage.setItem('bg_global', url);
+  applyGlobalBg();
+  toast('背景已更換');
+  openBgSettingModal();
+};
+
 async function bgPickFile(input, type, key) {
   const file = input.files[0];
   if (!file) return;
@@ -1425,6 +1449,7 @@ async function bgPickFile(input, type, key) {
     const dataUrl = await compressBgImageToDataUrl(file);
     if (type === 'global') {
       localStorage.setItem('bg_global', dataUrl);
+      saveToRecentBgs(dataUrl);
       applyGlobalBg();
     } else if (type === 'page') {
       localStorage.setItem('bg_' + key, dataUrl);

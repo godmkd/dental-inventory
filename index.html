@@ -2641,12 +2641,16 @@ function updateOrderSubmitBar() {
     bodyEl.innerHTML = '<div class="bcp-empty">尚無叫貨項目</div>';
     footerEl.innerHTML = '';
   } else {
-    bodyEl.innerHTML = items.map(it => `
-      <div class="bcp-item">
-        <span class="bcp-item-name">${escHtml(it.name)}</span>
+    if (!window._orderUrgentMap) window._orderUrgentMap = {};
+    bodyEl.innerHTML = items.map(it => {
+      const isUrg = window._orderUrgentMap[it.material_id] || false;
+      return `<div class="bcp-item">
+        <span class="bcp-item-name" style="${isUrg?'color:var(--danger);font-weight:700':''}">${isUrg?'🔴 ':''}${escHtml(it.name)}</span>
         <span class="bcp-item-qty positive">x${it.quantity}</span>
+        <label style="font-size:.72rem;color:var(--danger);display:flex;align-items:center;gap:2px;cursor:pointer;margin:0 4px"><input type="checkbox" onchange="window._orderUrgentMap[${it.material_id}]=this.checked;updateOrderSubmitBar()" ${isUrg?'checked':''}> 急</label>
         <button class="bcp-item-remove" onclick="resetOrderQty(${it.material_id})" title="取消">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     footerEl.innerHTML = `
       <button class="btn btn-ghost btn-sm" onclick="clearAllOrderQty()">全部清除</button>
       <button class="btn btn-primary btn-sm" onclick="confirmOrderList()">送出叫貨 (${items.length})</button>`;
@@ -2671,8 +2675,10 @@ window.filterOrderItems = function(q) {
 function confirmOrderList() {
   const items = getOrderSelectedItems();
   if (!items.length) { toast('請先選擇品項數量', 'error'); return; }
+  // Apply urgent flags from bottom panel
+  items.forEach(it => { it.is_urgent = !!(window._orderUrgentMap || {})[it.material_id]; });
   orderConfirmItems = items;
-  // Reset inputs and qty map
+  window._orderUrgentMap = {};
   orderQtyMap = {};
   items.forEach(it => {
     const el = document.getElementById('order_' + it.material_id);

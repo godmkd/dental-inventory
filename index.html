@@ -2176,6 +2176,13 @@ async function renderOrdering(container) {
   const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
   orderClinicId = orderClinicId || (myClinics[0] ? myClinics[0].id : null);
 
+  // Load inventory for selected clinic
+  window._orderInvMap = {};
+  if (orderClinicId) {
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', orderClinicId));
+    (inv || []).forEach(i => { window._orderInvMap[i.material_id] = i; });
+  }
+
   mc.innerHTML = `
     <div class="page-title">📦 叫貨</div>
     ${usageHint('ordering')}
@@ -2245,12 +2252,16 @@ window.orderFilterCat = function(catId, el) {
 
 function orderMatCard(m) {
   const qty = orderQtyMap[m.id] || 0;
-  return `<div class="mat-card" data-name="${m.name.toLowerCase()}">
+  const inv = window._orderInvMap?.[m.id];
+  const stock = inv ? inv.current_stock : 0;
+  const safety = inv ? inv.safety_stock : (m.default_safety_stock ?? 5);
+  const lowCls = stock <= safety ? ' stock-low' : '';
+  return `<div class="mat-card${lowCls}" data-name="${m.name.toLowerCase()}">
     <button class="adj-left" onclick="adjOrderQty(${m.id},-1)">−</button>
     <div class="mat-card-center">
       ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}">` : '<div class="mat-card-icon">📦</div>'}
       <div class="mat-card-name">${escHtml(m.name)}</div>
-      <div class="mat-card-stock">${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
+      <div class="mat-card-stock">庫存:${stock} ${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
       <input type="number" id="order_${m.id}" value="${qty}" min="0" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
     </div>
     <button class="adj-right" onclick="adjOrderQty(${m.id},1)">+</button>
@@ -2258,10 +2269,14 @@ function orderMatCard(m) {
 }
 function orderMatRow(m) {
   const qty = orderQtyMap[m.id] || 0;
+  const inv = window._orderInvMap?.[m.id];
+  const stock = inv ? inv.current_stock : 0;
+  const safety = inv ? inv.safety_stock : (m.default_safety_stock ?? 5);
+  const stockColor = stock <= safety ? 'var(--danger)' : 'var(--text-light)';
   return `<div class="item-row" data-name="${m.name.toLowerCase()}">
     <div class="item-row-left">
       <div class="item-name">${escHtml(m.name)}</div>
-      <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)}${canSeePrice() ? ' | ' + fmtMoney(m.unit_price) : ''}</div>
+      <div class="item-stock">${escHtml(m.spec || '')} ${escHtml(m.unit)} | <span style="color:${stockColor}">庫存: ${stock}</span>${canSeePrice() ? ' | ' + fmtMoney(m.unit_price) : ''}</div>
     </div>
     <div class="item-row-right">
       <div class="inline-adjuster">
@@ -5467,8 +5482,12 @@ async function autoGenerateOrder() {
   if (!inv?.length) { toast('此診所尚無庫存資料', 'error'); return; }
 
   await loadMaterials();
-  const lowItems = inv.filter(i => i.current_stock < (i.safety_stock ?? 5));
-  if (!lowItems.length) { toast('所有品項庫存充足，不需叫貨 ✅'); return; }
+  const currentType = window._orderViewType || 'consumable';
+  const typeLabel = currentType === 'consumable' ? '耗材' : '非耗材';
+  // Filter by current item type
+  const typeMats = new Set(allMaterials.filter(m => matItemType(m) === currentType).map(m => m.id));
+  const lowItems = inv.filter(i => i.current_stock < (i.safety_stock ?? 5) && typeMats.has(i.material_id));
+  if (!lowItems.length) { toast(`${typeLabel}品項庫存充足，不需叫貨 ✅`); return; }
 
   // Pre-fill quantities: bring up to 2× safety_stock
   let filled = 0;
@@ -5484,7 +5503,8 @@ async function autoGenerateOrder() {
   // Scroll to order panel
   const panel = document.getElementById('orderChangePanel');
   if (panel) { panel.classList.remove('collapsed'); panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
-  toast(`已自動帶入 ${filled} 項低庫存品項，請確認數量後送出`, 'info');
+  renderOrderContent(); // refresh to show updated quantities
+  toast(`已自動帶入 ${filled} 項低庫存${typeLabel}，請確認數量後送出`, 'info');
 }
 
 

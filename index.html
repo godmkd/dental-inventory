@@ -981,7 +981,7 @@ function canSeeAdmin() { return hasPermission('view_all_inventory'); }
 function canSeePrice() { return hasPermission('view_prices'); }
 
 // ===================== DATA =====================
-async function loadClinics() { const { data } = await withTimeout(sb.from('clinics').select('*').order('id')); allClinics = data || []; }
+async function loadClinics() { const { data } = await withTimeout(sb.from('clinics').select('*').order('sort_order').order('id')); allClinics = data || []; }
 async function loadCategories() { const { data } = await withTimeout(sb.from('categories').select('*').order('sort_order')); allCategories = data || []; }
 async function loadSuppliers() { const { data } = await withTimeout(sb.from('suppliers').select('*').order('name')); allSuppliers = data || []; }
 async function loadMaterials() { const { data } = await withTimeout(sb.from('materials').select('*').order('sort_order').order('name')); allMaterials = data || []; }
@@ -3840,21 +3840,67 @@ async function renderAdminContent() {
 }
 
 // --- Clinics CRUD ---
+let clinicSortChanged = false, clinicOrigOrder = [];
 async function renderAdminClinics(el) {
   await loadClinics();
+  clinicOrigOrder = allClinics.map(c => c.id);
+  clinicSortChanged = false;
   const canManage = hasPermission('manage_clinics');
   el.innerHTML = `
     <div class="toolbar">${canManage ? '<button class="btn btn-primary" onclick="editClinic()">＋ 新增診所</button>' : ''}</div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>名稱</th><th>地址</th><th>電話</th><th>備註</th>${canManage ? '<th>操作</th>' : ''}</tr></thead>
-      <tbody>${allClinics.map(c => `<tr>
+      <thead><tr>${canManage ? '<th></th>' : ''}<th>名稱</th><th>地址</th><th>電話</th><th>備註</th>${canManage ? '<th>操作</th>' : ''}</tr></thead>
+      <tbody id="clinicSortBody">${allClinics.map((c, idx) => `<tr>
+        ${canManage ? `<td>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveClinic(${c.id},-1)" ${idx === 0 ? 'disabled' : ''}>▲</button>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveClinic(${c.id},1)" ${idx === allClinics.length - 1 ? 'disabled' : ''}>▼</button>
+        </td>` : ''}
         <td>${escHtml(c.name)}</td><td>${escHtml(c.address || '-')}</td><td>${escHtml(c.phone || '-')}</td><td>${escHtml(c.notes || '-')}</td>
         ${canManage ? `<td>
           <button class="btn btn-ghost btn-sm" onclick="editClinic(${c.id})">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteClinic(${c.id})">刪除</button>
         </td>` : ''}
       </tr>`).join('')}</tbody>
-    </table></div></div>`;
+    </table></div></div>
+    ${canManage ? `<div id="clinicSortBar" style="display:none" class="sort-confirm-bar">
+      <button class="btn btn-primary" onclick="saveClinicSort()">✓ 確認排序</button>
+      <button class="btn btn-ghost" onclick="cancelClinicSort()">✕ 取消</button>
+    </div>` : ''}`;
+}
+
+window.moveClinic = function(id, direction) {
+  const idx = allClinics.findIndex(c => c.id === id);
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= allClinics.length) return;
+  const [item] = allClinics.splice(idx, 1);
+  allClinics.splice(newIdx, 0, item);
+  clinicSortChanged = true;
+  renderAdminContent();
+  const bar = document.getElementById('clinicSortBar');
+  if (bar) bar.style.display = 'flex';
+};
+
+async function saveClinicSort() {
+  for (let i = 0; i < allClinics.length; i++) {
+    const { error } = await withTimeout(sb.from('clinics').update({ sort_order: i }).eq('id', allClinics[i].id));
+    if (error) { toast('排序儲存失敗: ' + error.message, 'error'); return; }
+    allClinics[i].sort_order = i;
+  }
+  clinicSortChanged = false;
+  const bar = document.getElementById('clinicSortBar');
+  if (bar) bar.style.display = 'none';
+  toast('診所排序已儲存');
+}
+
+async function cancelClinicSort() {
+  const ordered = [];
+  for (const id of clinicOrigOrder) {
+    const c = allClinics.find(x => x.id === id);
+    if (c) ordered.push(c);
+  }
+  allClinics = ordered;
+  clinicSortChanged = false;
+  renderAdminContent();
 }
 
 function editClinic(id) {

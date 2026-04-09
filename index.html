@@ -2692,6 +2692,7 @@ function updateOrderConfirmArea() {
     <h3>叫貨清單 (${orderConfirmItems.length} 項)${canSeePrice() ? ' | 總計 ' + fmtMoney(total) : ''}</h3>
     ${orderConfirmItems.map((it, i) => `<div class="order-confirm-item">
       <span><strong>${escHtml(it.name)}</strong> x${it.quantity}${canSeePrice() ? ' <small class="text-muted">' + fmtMoney(it.unit_price * it.quantity) + '</small>' : ''}</span>
+      <label style="font-size:.78rem;color:var(--danger);display:flex;align-items:center;gap:3px;cursor:pointer;margin:0 8px"><input type="checkbox" onchange="orderConfirmItems[${i}].is_urgent=this.checked" ${it.is_urgent?'checked':''}> 急件</label>
       <button class="btn btn-danger btn-xs" onclick="removeOrderConfirmItem(${i})">✕</button>
     </div>`).join('')}
     <div class="order-confirm-actions">
@@ -2729,7 +2730,8 @@ async function submitOrdering() {
 
     const orderItems = roundedItems.map(it => ({
       order_id: order.id, material_id: it.material_id, clinic_id: cid,
-      quantity: it.quantity, unit_price: it.unit_price || 0
+      quantity: it.quantity, unit_price: it.unit_price || 0,
+      is_urgent: it.is_urgent || false
     }));
     const { error: e2 } = await withTimeout(sb.from('order_items').insert(orderItems));
     if (e2) { toast('明細建立失敗: ' + e2.message, 'error'); return; }
@@ -2913,7 +2915,7 @@ async function renderOrderMgmt() {
 
   const directTitle = {'order-list':'📋 各單管理 <span class=\"help-tip\">!<span class=\"help-text\">狀態流程：待確認→已確認→已出貨→已到貨</span></span>','order-summary':'📊 叫貨總覽 <span class=\"help-tip\">!<span class=\"help-text\">待出貨＝已確認未出貨，已出貨＝在途中，已到貨會從列表移除</span></span>','rush-mgmt':'🚨 催貨管理 <span class=\"help-tip\">!<span class=\"help-text\">對遲未到貨的品項發送催貨 LINE 通知</span></span>'};
   mc.innerHTML = `
-    ${isDirect ? `<div class="page-title">${directTitle[currentPage]||''}</div>` : `<div class="page-title">📋 叫貨管理</div>${usageHint('order-mgmt')}`}
+    ${isDirect ? `<div class="page-title">${directTitle[currentPage]||''}</div>` : `<div class="page-title">📋 貨單管理</div>${usageHint('order-mgmt')}`}
     ${!isDirect ? `<div class="sub-tabs" style="margin-bottom:4px">
       <div class="sub-tab ${orderMgmtTab === 'list' ? 'active' : ''}" onclick="orderMgmtTab='list';renderOrderMgmt()">各單管理</div>
       <div class="sub-tab ${orderMgmtTab === 'summary' ? 'active' : ''}" onclick="orderMgmtTab='summary';renderOrderMgmt()">叫貨總覽</div>
@@ -3249,10 +3251,14 @@ async function toggleOrderCard(orderId) {
     });
   } catch(e) { /* table may not exist yet */ }
 
+  // Sort urgent items first
+  items.sort((a, b) => (b.is_urgent ? 1 : 0) - (a.is_urgent ? 1 : 0));
+
   let html = '<div style="padding:16px 0">';
   items.forEach(it => {
     const mat = materialObj(it.material_id);
     const price = it.is_custom_price && it.custom_price != null ? it.custom_price : it.unit_price;
+    const urgentStyle = it.is_urgent ? 'color:var(--danger);font-weight:700' : '';
     const itemStatus = it.item_status || it.notes_status || 'pending';
     const ratio = mat ? (mat.unit_ratio || 1) : 1;
     const orderUnit = mat ? (mat.order_unit || mat.unit) : '';
@@ -3277,7 +3283,7 @@ async function toggleOrderCard(orderId) {
 
     html += `<div class="order-item-row" id="oi_${it.id}">
       <div class="order-item-info" style="flex:1">
-        <strong>${mat ? escHtml(mat.name) : materialName(it.material_id)}</strong>
+        <strong style="${urgentStyle}">${it.is_urgent?'🔴 ':''}${mat ? escHtml(mat.name) : materialName(it.material_id)}</strong>
         <br>
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0">
           <label style="font-size:.82rem;color:var(--text-light)">數量:</label>

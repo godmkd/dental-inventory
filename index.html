@@ -5497,7 +5497,7 @@ async function autoGenerateOrder() {
     const i = invMap[m.id];
     const stock = i ? i.current_stock : 0;
     const safety = i ? (i.safety_stock ?? (m.default_safety_stock ?? 5)) : (m.default_safety_stock ?? 5);
-    if (stock <= safety) {
+    if (safety > 0 && stock <= safety) {
       lowItems.push({ material_id: m.id, current_stock: stock, safety_stock: safety });
     }
   });

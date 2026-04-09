@@ -2656,6 +2656,14 @@ async function renderOrderMgmt() {
       <div class="sub-tab ${orderMgmtFilter === 'shipped' ? 'active' : ''}" onclick="orderMgmtFilter='shipped';renderOrderMgmt()">已出貨</div>
       <div class="sub-tab ${orderMgmtFilter === 'delivered' ? 'active' : ''}" onclick="orderMgmtFilter='delivered';renderOrderMgmt()">已到貨</div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;padding:8px 12px;background:rgba(255,200,0,.06);border-radius:var(--radius);border:1px solid rgba(255,200,0,.15)">
+      <label style="font-size:.85rem;color:var(--warning);font-weight:600">🏥 庫存出貨來源診所:</label>
+      <select id="interClinicSource" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--card);color:var(--text)">
+        <option value="">-- 不使用庫存出貨 --</option>
+        ${allClinics.map(c=>`<option value="${c.id}">${escHtml(c.name)}</option>`).join('')}
+      </select>
+      <span style="font-size:.75rem;color:var(--text-lighter)">勾選品項「庫存出貨」後，從此診所扣庫存，單價變 $0</span>
+    </div>
     <div id="orderMgmtList"></div>`;
 
   // 先取得所有 items 以計算真實狀態來篩選
@@ -2968,14 +2976,17 @@ async function toggleOrderCard(orderId) {
     const sups = matSupMap[it.material_id] || [];
     const curSupId = it.order_supplier_id || (sups.find(s=>s.is_default)?.supplier_id);
     if (sups.length > 0) window._orderItemSupsMap[it.id] = sups;
-    const supSelectHtml = sups.length > 0 && itemStatus === 'pending' ? `
+    const supSelectHtml = itemStatus === 'pending' ? `
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:4px 0">
-        <label style="font-size:.82rem;color:var(--text-light)">廠商:</label>
+        ${sups.length > 0 ? `<label style="font-size:.82rem;color:var(--text-light)">廠商:</label>
         <select id="oisup_${it.id}" style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--card);color:var(--text)"
           onchange="onOrderItemSupplierChange(${it.id},${orderId},this.value)">
           <option value="">-- 選廠商 --</option>
           ${sups.map(s=>`<option value="${s.supplier_id}"${s.supplier_id==curSupId?' selected':''}>${escHtml(s.name)}${s.spec?' ['+escHtml(s.spec)+']':''} (${fmtMoney(s.unit_price)})</option>`).join('')}
-        </select>
+        </select>` : ''}
+        <label style="font-size:.82rem;color:var(--warning);display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:8px">
+          <input type="checkbox" id="oiic_${it.id}" onchange="toggleInterClinic(${it.id},${orderId})"> 庫存出貨
+        </label>
       </div>` : '';
 
     html += `<div class="order-item-row" id="oi_${it.id}">
@@ -3067,6 +3078,7 @@ window.shipAllItems = async function(orderId) {
   try {
     for (const it of confirmedItems) {
       await withTimeout(sb.from('order_items').update({ item_status: 'shipped' }).eq('id', it.id));
+      await deductInterClinicInventory(it.id, it.material_id, it.quantity);
     }
     console.log(`[shipAllItems] All ${confirmedItems.length} items updated to shipped → calling checkAutoShipOrder(${orderId})`);
     await checkAutoShipOrder(orderId);
@@ -3097,6 +3109,56 @@ window.onOrderItemSupplierChange = async function(itemId, orderId, supIdStr) {
     if (priceEl) priceEl.innerHTML = `單價: ${fmtMoney(sup.unit_price)} | 小計: <span id="ois_${itemId}">${fmtMoney(dailyQty * sup.unit_price)}</span>`;
   } catch(e) { toast('更新廠商失敗: ' + e.message, 'error'); }
 };
+
+// 庫存出貨：從其他診所出貨，單價變0
+window.toggleInterClinic = async function(itemId, orderId) {
+  const checked = document.getElementById('oiic_' + itemId)?.checked;
+  const srcClinicId = document.getElementById('interClinicSource')?.value;
+  if (checked && !srcClinicId) {
+    alert('請先在上方選擇「庫存出貨來源診所」');
+    document.getElementById('oiic_' + itemId).checked = false;
+    return;
+  }
+  try {
+    if (checked) {
+      // 設定單價為0，標記為庫存出貨
+      await withTimeout(sb.from('order_items').update({ unit_price: 0, is_custom_price: true, custom_price: 0 }).eq('id', itemId));
+      const priceEl = document.querySelector(`#oi_${itemId} .order-item-price`);
+      if (priceEl) priceEl.innerHTML = `單價: <span style="color:var(--warning)">🏥 庫存出貨 $0</span> | 小計: <span id="ois_${itemId}">$0</span>`;
+      // 禁用廠商選擇
+      const supSel = document.getElementById('oisup_' + itemId);
+      if (supSel) supSel.disabled = true;
+      toast('已標記為庫存出貨');
+    } else {
+      // 恢復
+      const supSel = document.getElementById('oisup_' + itemId);
+      if (supSel) supSel.disabled = false;
+      toast('已取消庫存出貨');
+    }
+  } catch(e) { toast('操作失敗: ' + e.message, 'error'); }
+};
+
+// 出貨時扣除來源診所庫存
+async function deductInterClinicInventory(itemId, materialId, quantity) {
+  const srcClinicId = document.getElementById('interClinicSource')?.value;
+  const isInterClinic = document.getElementById('oiic_' + itemId)?.checked;
+  if (!isInterClinic || !srcClinicId) return;
+  try {
+    // 讀取來源診所庫存
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', srcClinicId).eq('material_id', materialId).single());
+    if (inv) {
+      const newStock = Math.max(0, inv.current_stock - quantity);
+      await withTimeout(sb.from('clinic_inventory').update({ current_stock: newStock }).eq('id', inv.id));
+      // 記錄異動
+      await withTimeout(sb.from('inventory_logs').insert({
+        clinic_id: parseInt(srcClinicId), material_id: materialId,
+        type: 'out', quantity: quantity,
+        operator_id: currentUser?.id, operator_name: userProfile?.display_name || '',
+        notes: '跨院調貨出庫'
+      }));
+    }
+  } catch(e) { console.error('扣庫存失敗:', e); }
+}
 
 // Inline edit: update order_item qty (in order units) → convert to daily units and save
 window.onOrderItemQtyChange = async function(itemId, orderId, val) {
@@ -3227,6 +3289,15 @@ async function setItemStatus(itemId, orderId, newStatus) {
   console.log(`[setItemStatus] after update, verified item:`, verifyItem);
 
   toast(`品項狀態已改為 ${statusLabelText(newStatus)}`);
+
+  // 庫存出貨：出貨時從來源診所扣庫存
+  if (newStatus === 'shipped') {
+    const item = verifyItem;
+    if (item) {
+      const { data: fullItem } = await withTimeout(sb.from('order_items').select('material_id,quantity').eq('id', itemId).single());
+      if (fullItem) await deductInterClinicInventory(itemId, fullItem.material_id, fullItem.quantity);
+    }
+  }
 
   // Check if we need to create delivery_confirmations (when item shipped)
   if (newStatus === 'shipped') {

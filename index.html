@@ -926,6 +926,7 @@ async function enterApp() {
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
   buildBubbles(); // logo+user bubbles now rendered inside container
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
+  applyUserAvatar();
   setupLogoBubbleDoubleTap();
   loadColorTheme();
   applyCustomFont();
@@ -1714,6 +1715,43 @@ function statusBadge(s) {
 }
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function showImgLightbox(url) { const lb = document.getElementById('imgLightbox'); document.getElementById('imgLightboxImg').src = url; lb.style.display = 'flex'; }
+
+async function setUserAvatar(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const canvas = document.createElement('canvas');
+  const img = new Image();
+  img.onload = () => {
+    const size = 128;
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const s = Math.min(img.width, img.height);
+    const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+    ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    localStorage.setItem('user_avatar', dataUrl);
+    applyUserAvatar();
+    toast('頭像已更新');
+    renderAccountSettings();
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+function removeUserAvatar() {
+  localStorage.removeItem('user_avatar');
+  applyUserAvatar();
+  toast('頭像已移除');
+  renderAccountSettings();
+}
+
+function applyUserAvatar() {
+  const url = localStorage.getItem('user_avatar');
+  const el = document.getElementById('userBubbleIcon');
+  if (el) {
+    if (url) el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    else el.textContent = '👤';
+  }
+}
 
 function usageHint(pageId) {
   const hints = {
@@ -5047,6 +5085,21 @@ async function renderAccountSettings() {
         <div style="display:flex;gap:8px">
           <input id="accPassword" type="password" placeholder="新密碼" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
           <button class="btn btn-primary btn-sm" onclick="updateAccountPassword()">儲存</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:.85rem;font-weight:600;margin-bottom:4px;display:block">頭像照片</label>
+        <div style="display:flex;gap:12px;align-items:center">
+          <div id="avatarPreview" style="width:56px;height:56px;border-radius:50%;background:var(--card);border:2px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:1.8rem">
+            ${localStorage.getItem('user_avatar') ? `<img src="${localStorage.getItem('user_avatar')}" style="width:100%;height:100%;object-fit:cover">` : '👤'}
+          </div>
+          <div>
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer">選擇照片
+              <input type="file" accept="image/*" style="display:none" onchange="setUserAvatar(this)">
+            </label>
+            ${localStorage.getItem('user_avatar') ? '<button class="btn btn-danger btn-sm" onclick="removeUserAvatar()">移除</button>' : ''}
+          </div>
         </div>
       </div>
 

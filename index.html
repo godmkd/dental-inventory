@@ -1372,7 +1372,7 @@ const COLOR_THEMES = {
   green:   { accent:'#68d391', accentHover:'#48bb78', primary:'#0d2018', primaryLight:'#163028', primaryDark:'#051008', body:'#000', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
   orange:  { accent:'#f6ad55', accentHover:'#ed8936', primary:'#1e1205', primaryLight:'#2e1e0a', primaryDark:'#100a02', body:'#050200', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
   pink:    { accent:'#f687b3', accentHover:'#ed64a6', primary:'#200d18', primaryLight:'#351525', primaryDark:'#100508', body:'#050005', text:'#e2e8f0', textLight:'#a0aec0', card:'rgba(255,255,255,.06)', border:'rgba(255,255,255,.1)' },
-  light:   { accent:'#3182ce', accentHover:'#2b6cb0', primary:'#f7fafc', primaryLight:'#edf2f7', primaryDark:'#e2e8f0', body:'#edf2f7', text:'#2d3748', textLight:'#718096', card:'rgba(0,0,0,.05)', border:'rgba(0,0,0,.1)' },
+  light:   { accent:'#3182ce', accentHover:'#2b6cb0', primary:'#f7fafc', primaryLight:'#edf2f7', primaryDark:'#e2e8f0', body:'#edf2f7', text:'#1a202c', textLight:'#4a5568', card:'rgba(0,0,0,.08)', border:'rgba(0,0,0,.18)' },
 };
 
 function applyColorTheme(id, save = true) {
@@ -1387,7 +1387,7 @@ function applyColorTheme(id, save = true) {
   r.setProperty('--text-light', t.textLight);
   r.setProperty('--card', t.card);
   r.setProperty('--border', t.border);
-  document.body.style.background = t.body;
+  document.body.style.backgroundColor = t.body;
   document.body.dataset.theme = id;
   if (save) localStorage.setItem('color_theme', id);
   // Update swatch borders in modal if open

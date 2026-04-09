@@ -1307,6 +1307,27 @@ function openBgSettingModal() {
         <div style="font-size:.78rem;color:var(--text-lighter);margin-bottom:4px">最近使用：</div>
         <div id="recentBgList" style="display:flex;gap:6px;flex-wrap:wrap">${getRecentBgs().map((url,i) => `<img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid ${url===globalBg?'var(--accent)':'transparent'}" onclick="applyRecentBg('${i}')" title="點擊套用">`).join('') || '<span style="font-size:.75rem;color:var(--text-lighter)">無</span>'}</div>
       </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border-light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <h4 style="margin:0;font-size:.88rem">🎞️ 背景輪播</h4>
+          <label style="font-size:.82rem;color:var(--text-light);display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="bgSlideshowOn" ${localStorage.getItem('bg_slideshow_on')==='1'?'checked':''} onchange="toggleBgSlideshow()"> 啟用
+          </label>
+          <label style="font-size:.82rem;color:var(--text-light);display:flex;align-items:center;gap:4px">
+            <input type="number" id="bgSlideshowInterval" value="${localStorage.getItem('bg_slideshow_interval')||'30'}" min="15" max="120" step="5" style="width:50px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:.82rem;text-align:center" onchange="localStorage.setItem('bg_slideshow_interval',this.value);restartBgSlideshow()"> 秒
+          </label>
+        </div>
+        <div style="font-size:.75rem;color:var(--text-lighter);margin-bottom:6px">新增 5~10 張照片，自動輪播更換背景</div>
+        <div id="bgSlideshowList" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+          ${getBgSlideshowImages().map((url,i) => `<div style="position:relative;display:inline-block">
+            <img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+            <button onclick="removeSlideshowImg(${i})" style="position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:.6rem;cursor:pointer;line-height:1">✕</button>
+          </div>`).join('')}
+        </div>
+        ${getBgSlideshowImages().length < 10 ? `<label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:.78rem">＋ 新增照片
+          <input type="file" accept="image/*" multiple style="display:none" onchange="addSlideshowImgs(this)">
+        </label>` : ''}
+      </div>
     </div>
 
     <div class="bg-section">
@@ -1419,6 +1440,73 @@ function bgOpacityChange(el, type, key) {
     localStorage.setItem('bg_opacity_global', val);
     applyGlobalBg();
   }
+}
+
+// === Background Slideshow ===
+function getBgSlideshowImages() {
+  try { return JSON.parse(localStorage.getItem('bg_slideshow_imgs') || '[]'); } catch(e) { return []; }
+}
+function saveBgSlideshowImages(imgs) {
+  localStorage.setItem('bg_slideshow_imgs', JSON.stringify(imgs.slice(0, 10)));
+}
+let _bgSlideshowTimer = null;
+let _bgSlideshowIdx = 0;
+
+window.addSlideshowImgs = async function(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  const imgs = getBgSlideshowImages();
+  for (const file of files) {
+    if (imgs.length >= 10) break;
+    try {
+      const dataUrl = await compressBgImageToDataUrl(file);
+      imgs.push(dataUrl);
+    } catch(e) { console.error(e); }
+  }
+  saveBgSlideshowImages(imgs);
+  toast(`已新增 ${files.length} 張，共 ${imgs.length} 張`);
+  openBgSettingModal();
+};
+
+window.removeSlideshowImg = function(idx) {
+  const imgs = getBgSlideshowImages();
+  imgs.splice(idx, 1);
+  saveBgSlideshowImages(imgs);
+  openBgSettingModal();
+};
+
+window.toggleBgSlideshow = function() {
+  const on = document.getElementById('bgSlideshowOn')?.checked;
+  localStorage.setItem('bg_slideshow_on', on ? '1' : '0');
+  if (on) startBgSlideshow(); else stopBgSlideshow();
+};
+
+function startBgSlideshow() {
+  stopBgSlideshow();
+  const imgs = getBgSlideshowImages();
+  if (imgs.length === 0) return;
+  const interval = (parseInt(localStorage.getItem('bg_slideshow_interval')) || 30) * 1000;
+  _bgSlideshowIdx = 0;
+  _bgSlideshowTimer = setInterval(() => {
+    const imgs2 = getBgSlideshowImages();
+    if (imgs2.length === 0) { stopBgSlideshow(); return; }
+    _bgSlideshowIdx = (_bgSlideshowIdx + 1) % imgs2.length;
+    localStorage.setItem('bg_global', imgs2[_bgSlideshowIdx]);
+    applyGlobalBg();
+  }, interval);
+}
+
+function stopBgSlideshow() {
+  if (_bgSlideshowTimer) { clearInterval(_bgSlideshowTimer); _bgSlideshowTimer = null; }
+}
+
+window.restartBgSlideshow = function() {
+  if (localStorage.getItem('bg_slideshow_on') === '1') startBgSlideshow();
+};
+
+// Auto-start slideshow on page load
+if (localStorage.getItem('bg_slideshow_on') === '1') {
+  setTimeout(() => startBgSlideshow(), 2000);
 }
 
 function getRecentBgs() {

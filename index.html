@@ -1640,8 +1640,10 @@ function applyGlobalBg() {
   if (url) {
     const o = ((100 - opacity) / 100).toFixed(2);
     const isLight = document.body.dataset.theme === 'light';
+    // Light theme: use much lower overlay opacity so image shows through
+    const lo = Math.max(0, o * 0.4).toFixed(2);
     const overlay = isLight
-      ? `linear-gradient(135deg,rgba(247,250,252,${o}) 0%,rgba(237,242,247,${o}) 50%,rgba(226,232,240,${o}) 100%)`
+      ? `linear-gradient(135deg,rgba(255,255,255,${lo}) 0%,rgba(255,255,255,${lo}) 100%)`
       : `linear-gradient(135deg,rgba(15,12,41,${o}) 0%,rgba(48,43,99,${o}) 50%,rgba(36,36,62,${o}) 100%)`;
     document.body.style.backgroundImage = `${overlay},url(${url})`;
     document.body.style.backgroundSize = 'auto,cover';

@@ -646,20 +646,8 @@ async function init() {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser) {
       try {
-        const { data, error } = await sb.auth.refreshSession();
-        if (error || !data?.session) {
-          // Try getSession as fallback
-          const { data: d2 } = await sb.auth.getSession();
-          if (!d2?.session) {
-            toast('登入已過期，請重新登入', 'error');
-            showLogin();
-            return;
-          }
-        }
-        // Session OK — re-render current page
-        if (currentPage) navigateTo(currentPage);
+        await sb.auth.refreshSession();
       } catch(e) {
-        // Network error — don't logout, just retry on next visibility change
         console.warn('Session refresh failed:', e);
       }
     }

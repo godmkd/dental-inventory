@@ -1810,7 +1810,7 @@ function applyUserAvatar() {
   if (el && bubble) {
     if (url) {
       const size = bubble.offsetWidth || 100;
-      el.style.cssText = 'width:'+Math.round(size*0.6)+'px;height:'+Math.round(size*0.6)+'px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:4px';
+      el.style.cssText = 'width:'+Math.round(size*0.85)+'px;height:'+Math.round(size*0.85)+'px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:2px';
       el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover">`;
     } else {
       el.style.cssText = '';

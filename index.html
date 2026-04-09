@@ -1716,25 +1716,84 @@ function statusBadge(s) {
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function showImgLightbox(url) { const lb = document.getElementById('imgLightbox'); document.getElementById('imgLightboxImg').src = url; lb.style.display = 'flex'; }
 
+let _avatarImg = null, _avatarOx = 0, _avatarOy = 0, _avatarScale = 1, _avatarRot = 0, _avatarDrag = null;
+
 async function setUserAvatar(input) {
   const file = input.files[0];
   if (!file) return;
-  const canvas = document.createElement('canvas');
-  const img = new Image();
-  img.onload = () => {
-    const size = 128;
-    canvas.width = size; canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const s = Math.min(img.width, img.height);
-    const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
-    ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    localStorage.setItem('user_avatar', dataUrl);
-    applyUserAvatar();
-    toast('頭像已更新');
-    renderAccountSettings();
+  _avatarImg = new Image();
+  _avatarImg.onload = () => {
+    _avatarOx = 0; _avatarOy = 0; _avatarScale = 1; _avatarRot = 0;
+    // Fit image to circle
+    _avatarScale = Math.max(200 / _avatarImg.width, 200 / _avatarImg.height);
+    openAvatarEditor();
   };
-  img.src = URL.createObjectURL(file);
+  _avatarImg.src = URL.createObjectURL(file);
+}
+
+function openAvatarEditor() {
+  const overlay = document.createElement('div');
+  overlay.id = 'avatarEditorOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px';
+  overlay.innerHTML = `
+    <div style="color:#e2e8f0;font-size:.9rem;margin-bottom:4px">拖曳移動・滾輪縮放・滑桿旋轉</div>
+    <div style="width:200px;height:200px;border-radius:50%;overflow:hidden;border:3px solid var(--accent,#63b3ed);cursor:grab;position:relative" id="avatarFrame">
+      <canvas id="avatarCanvas" width="200" height="200" style="display:block"></canvas>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;color:#a0aec0;font-size:.82rem">
+      <label>旋轉</label>
+      <input type="range" id="avatarRotSlider" value="0" min="-180" max="180" style="width:120px" oninput="_avatarRot=parseInt(this.value);drawAvatarCanvas()">
+      <span id="avatarRotVal">0°</span>
+      <label style="margin-left:8px">縮放</label>
+      <input type="range" id="avatarScaleSlider" value="100" min="20" max="400" style="width:120px" oninput="_avatarScale=parseInt(this.value)/100*Math.max(200/_avatarImg.width,200/_avatarImg.height);drawAvatarCanvas()">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeAvatarEditor()">取消</button>
+      <button class="btn btn-primary" onclick="saveAvatarFromEditor()">✅ 確認</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const frame = document.getElementById('avatarFrame');
+  frame.onpointerdown = e => { _avatarDrag = { sx: e.clientX, sy: e.clientY, ox: _avatarOx, oy: _avatarOy }; frame.setPointerCapture(e.pointerId); };
+  frame.onpointermove = e => { if (!_avatarDrag) return; _avatarOx = _avatarDrag.ox + (e.clientX - _avatarDrag.sx); _avatarOy = _avatarDrag.oy + (e.clientY - _avatarDrag.sy); drawAvatarCanvas(); };
+  frame.onpointerup = () => { _avatarDrag = null; };
+  frame.onwheel = e => { e.preventDefault(); const d = e.deltaY > 0 ? -0.05 : 0.05; _avatarScale = Math.max(0.1, _avatarScale + d * _avatarScale); const sl = document.getElementById('avatarScaleSlider'); if (sl) sl.value = Math.round(_avatarScale / Math.max(200/_avatarImg.width, 200/_avatarImg.height) * 100); drawAvatarCanvas(); };
+
+  drawAvatarCanvas();
+}
+
+function drawAvatarCanvas() {
+  const canvas = document.getElementById('avatarCanvas');
+  if (!canvas || !_avatarImg) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 200, 200);
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0, 0, 200, 200);
+  ctx.save();
+  ctx.translate(100 + _avatarOx, 100 + _avatarOy);
+  ctx.rotate(_avatarRot * Math.PI / 180);
+  ctx.scale(_avatarScale, _avatarScale);
+  ctx.drawImage(_avatarImg, -_avatarImg.width / 2, -_avatarImg.height / 2);
+  ctx.restore();
+  const rv = document.getElementById('avatarRotVal');
+  if (rv) rv.textContent = _avatarRot + '°';
+}
+
+function closeAvatarEditor() {
+  const ol = document.getElementById('avatarEditorOverlay');
+  if (ol) ol.remove();
+  if (_avatarImg?.src?.startsWith('blob:')) URL.revokeObjectURL(_avatarImg.src);
+}
+
+function saveAvatarFromEditor() {
+  const canvas = document.getElementById('avatarCanvas');
+  if (!canvas) return;
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  localStorage.setItem('user_avatar', dataUrl);
+  applyUserAvatar();
+  closeAvatarEditor();
+  toast('頭像已更新');
+  renderAccountSettings();
 }
 
 function removeUserAvatar() {

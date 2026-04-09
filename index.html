@@ -1652,18 +1652,32 @@ function applySidebarBg() {
   }
 }
 
+let _cachedBgUrl = null, _cachedBgBlob = null;
 function applyGlobalBg() {
   const url = localStorage.getItem('bg_global');
   const opacity = parseInt(localStorage.getItem('bg_opacity_global') || '30', 10);
   if (url) {
+    // Cache blob URL to avoid re-parsing large data URLs
+    if (url !== _cachedBgUrl) {
+      if (_cachedBgBlob) URL.revokeObjectURL(_cachedBgBlob);
+      try {
+        const byteString = atob(url.split(',')[1]);
+        const mime = url.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+        _cachedBgBlob = URL.createObjectURL(new Blob([ab], { type: mime }));
+      } catch(e) { _cachedBgBlob = url; }
+      _cachedBgUrl = url;
+    }
+    const bgUrl = _cachedBgBlob || url;
     const o = ((100 - opacity) / 100).toFixed(2);
     const isLight = document.body.dataset.theme === 'light';
-    // Light theme: use much lower overlay opacity so image shows through
     const lo = Math.max(0, o * 0.4).toFixed(2);
     const overlay = isLight
       ? `linear-gradient(135deg,rgba(255,255,255,${lo}) 0%,rgba(255,255,255,${lo}) 100%)`
       : `linear-gradient(135deg,rgba(15,12,41,${o}) 0%,rgba(48,43,99,${o}) 50%,rgba(36,36,62,${o}) 100%)`;
-    document.body.style.backgroundImage = `${overlay},url(${url})`;
+    document.body.style.backgroundImage = `${overlay},url(${bgUrl})`;
     document.body.style.backgroundSize = 'auto,cover';
     document.body.style.backgroundPosition = 'center,center';
     document.body.style.backgroundAttachment = 'scroll,fixed';

@@ -887,14 +887,21 @@ async function loadProfile() {
     const meta = currentUser.user_metadata || {};
     const displayName = meta.full_name || meta.name || meta.preferred_username || currentUser.email || '新使用者';
     const lineId = meta.provider_id || meta.sub || '';
+    // 查找「測試」診所作為預設
+    let defaultClinicId = null;
+    try {
+      const { data: clinics } = await withTimeout(sb.from('clinics').select('id,name'));
+      const testClinic = (clinics || []).find(c => c.name === '測試');
+      if (testClinic) defaultClinicId = testClinic.id;
+    } catch(e) {}
     const { data: newP, error: e2 } = await withTimeout(sb.from('user_profiles').insert({
-      id: currentUser.id, display_name: displayName, role: 'clinic_manager', line_user_id: lineId, is_active: true
+      id: currentUser.id, display_name: displayName, role: 'clinic_manager',
+      line_user_id: lineId, is_active: true, clinic_id: defaultClinicId
     }).select().single());
     if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }
     userProfile = newP;
-    document.getElementById('loginPage').style.display = 'none';
-    document.getElementById('waitingPage').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
+    // 直接進入系統，不需審核
+    await enterApp();
     return;
   }
   if (error) { toast('載入資料失敗: ' + error.message, 'error'); showLogin(); return; }
@@ -913,12 +920,6 @@ async function loadProfile() {
     }
   }
   if (!data.is_active) { toast('您的帳號已被停用', 'error'); await withTimeout(sb.auth.signOut()); showLogin(); return; }
-  if (data.role === 'clinic_manager' && !data.clinic_id) {
-    document.getElementById('loginPage').style.display = 'none';
-    document.getElementById('waitingPage').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
-    return;
-  }
   await enterApp();
 }
 

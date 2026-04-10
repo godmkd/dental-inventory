@@ -4460,9 +4460,9 @@ function renderAdminMatContent() {
   let mats = allMaterials;
   if (searchQ) mats = mats.filter(m => m.name.toLowerCase().includes(searchQ));
 
-  const thDrag = canManage ? '<th></th>' : '';
-  const thPrice = canSeePrice() ? '<th>單價</th>' : '';
-  const thead = `<thead><tr>${thDrag}<th>圖片</th><th>名稱</th><th>類別</th><th>規格</th><th>單位</th><th>廠商</th>${thPrice}<th>操作</th></tr></thead>`;
+  const thDrag = canManage ? '<th style="width:80px"></th>' : '';
+  const thPrice = canSeePrice() ? '<th style="width:60px">單價</th>' : '';
+  const thead = `<thead><tr>${thDrag}<th style="width:52px">圖片</th><th style="min-width:80px">名稱</th><th style="width:60px">類別</th><th style="width:60px">規格</th><th style="width:40px">單位</th><th style="width:60px">廠商</th>${thPrice}<th style="width:100px">操作</th></tr></thead>`;
 
   if (!catFilter) {
     // 全部：按類別分組可收合
@@ -4474,7 +4474,7 @@ function renderAdminMatContent() {
         <div class="card-title" style="cursor:pointer;user-select:none;padding:8px 12px;margin:0" onclick="const b=document.getElementById('${bodyId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._collapsedAdminMatCats.add('${g.catId}');else window._collapsedAdminMatCats.delete('${g.catId}')">
           ${escHtml(g.catName)} <span style="font-size:.78rem;color:var(--text-light)">(${g.mats.length})</span> <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">${collapsed?'▶':'▼'}</span>
         </div>
-        <div id="${bodyId}" style="display:${collapsed?'none':'block'}"><div class="table-wrap"><table id="adminMatTable_${g.catId}">
+        <div id="${bodyId}" style="display:${collapsed?'none':'block'}"><div class="table-wrap"><table id="adminMatTable_${g.catId}" style="table-layout:fixed;width:100%">
           ${thead}
           <tbody>${g.mats.map(m => adminMatRow(m, canManage, canManage)).join('')}</tbody>
         </table></div></div>
@@ -4482,7 +4482,7 @@ function renderAdminMatContent() {
     }).join('');
   } else {
     mats = mats.filter(m => (m.category_id || 0) === catFilter);
-    container.innerHTML = `<div class="card"><div class="table-wrap"><table id="adminMatTable_single">
+    container.innerHTML = `<div class="card"><div class="table-wrap"><table id="adminMatTable_single" style="table-layout:fixed;width:100%">
       ${thead}
       <tbody>${mats.map(m => adminMatRow(m, canManage, canManage)).join('')}</tbody>
     </table></div></div>`;

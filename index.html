@@ -2008,12 +2008,20 @@ async function renderStockOverview() {
       html += `<tr><td><strong>${escHtml(m.name)}</strong><br><small class="text-muted">${escHtml(m.spec || '')} ${escHtml(m.unit)}</small></td>${cells}<td><strong>${total}</strong></td></tr>`;
       if (canSetSafety) {
         const globalVal = m.default_safety_stock ?? 5;
+        const canManageAll = hasPermission('manage_orders');
+        const myClinicId = userProfile?.clinic_id;
         const clinicCells = clinicsToShow.map(c => {
           const rec = invMap[`${c.id}_${m.id}`];
           const val = rec?.safety_stock ?? '';
-          return `<td style="padding:2px 4px"><input type="number" min="0" value="${val}" placeholder="${globalVal}" style="width:52px;padding:2px 4px;font-size:.75rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:inherit;text-align:center" onblur="saveClinicSafety(${c.id},${m.id},this.value,${globalVal})"></td>`;
+          const canEdit = canManageAll || c.id === myClinicId;
+          return canEdit
+            ? `<td style="padding:2px 4px"><input type="number" min="0" value="${val}" placeholder="${globalVal}" style="width:52px;padding:2px 4px;font-size:.75rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:inherit;text-align:center" onblur="saveClinicSafety(${c.id},${m.id},this.value,${globalVal})"></td>`
+            : `<td style="padding:2px 4px;font-size:.75rem;color:var(--text-lighter);text-align:center">${val || globalVal}</td>`;
         }).join('');
-        html += `<tr style="background:rgba(255,200,0,.06)"><td style="padding:2px 6px;font-size:.75rem;color:var(--text-light)">安全庫存 <input type="number" min="0" value="${globalVal}" style="width:52px;padding:2px 4px;font-size:.75rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,200,0,.4);border-radius:4px;color:inherit;text-align:center" onblur="saveGlobalSafety(${m.id},this.value,this)"></td>${clinicCells}<td></td></tr>`;
+        const globalInput = canManageAll
+          ? `<input type="number" min="0" value="${globalVal}" style="width:52px;padding:2px 4px;font-size:.75rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,200,0,.4);border-radius:4px;color:inherit;text-align:center" onblur="saveGlobalSafety(${m.id},this.value,this)">`
+          : `<span style="font-size:.75rem">${globalVal}</span>`;
+        html += `<tr style="background:rgba(255,200,0,.06)"><td style="padding:2px 6px;font-size:.75rem;color:var(--text-light)">安全庫存 ${globalInput}</td>${clinicCells}<td></td></tr>`;
       }
     });
     html += '</tbody></table></div></div></div>';

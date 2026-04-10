@@ -1685,10 +1685,10 @@ function applyGlobalBg() {
       ? `linear-gradient(135deg,rgba(255,255,255,${lo}) 0%,rgba(255,255,255,${lo}) 100%)`
       : `linear-gradient(135deg,rgba(15,12,41,${o}) 0%,rgba(48,43,99,${o}) 50%,rgba(36,36,62,${o}) 100%)`;
     document.body.style.backgroundImage = `${overlay},url(${bgUrl})`;
-    document.body.style.backgroundSize = 'auto,cover';
-    document.body.style.backgroundPosition = 'center,center';
+    document.body.style.backgroundSize = 'auto,100% auto';
+    document.body.style.backgroundPosition = 'center,center top';
     document.body.style.backgroundAttachment = 'scroll,scroll';
-    document.body.style.backgroundRepeat = 'repeat,repeat';
+    document.body.style.backgroundRepeat = 'repeat,repeat-y';
     document.body.classList.add('has-bg');
   } else {
     document.body.style.backgroundImage = '';

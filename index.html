@@ -5136,6 +5136,37 @@ async function renderAdminRoles(el) {
     </div>`;
 }
 
+function rerenderRoleBody() {
+  const tbody = document.getElementById('roleSortBody');
+  if (!tbody) return;
+  const visibleRoles = allRoles.filter(r => !r.is_system || isSystemAdmin());
+  tbody.innerHTML = visibleRoles.map((r, idx) => {
+    const perms = (typeof r.permissions === 'string' ? JSON.parse(r.permissions || '[]') : r.permissions) || [];
+    let permLabels;
+    if (Array.isArray(perms)) {
+      permLabels = perms.map(p => { const f = ALL_PERMISSIONS.find(ap => ap.key === p); return f ? f.label : p; }).join('、');
+    } else if (typeof perms === 'object' && perms !== null) {
+      if (perms.all) permLabels = '全部權限';
+      else permLabels = Object.keys(perms).filter(k => perms[k]).map(p => { const f = ALL_PERMISSIONS.find(ap => ap.key === p); return f ? f.label : p; }).join('、');
+    } else permLabels = '';
+    return `<tr>
+      <td>
+        <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveRole(${r.id},-1)" ${idx===0?'disabled':''}>▲</button>
+        <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveRole(${r.id},1)" ${idx===visibleRoles.length-1?'disabled':''}>▼</button>
+      </td>
+      <td><strong>${escHtml(r.display_name)}</strong></td>
+      <td style="font-size:.82rem;max-width:400px">${permLabels
+        ? `<div style="display:flex;flex-wrap:wrap;gap:4px">${(typeof permLabels === 'string' ? permLabels.split('、') : [permLabels]).map(l => `<span style="display:inline-block;padding:2px 8px;background:var(--border-light);border-radius:12px;font-size:.78rem;white-space:nowrap">${l}</span>`).join('')}</div>`
+        : '<span class="text-muted">無</span>'}</td>
+      <td>${r.is_system ? '✓' : ''}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="editRole(${r.id})">編輯</button>
+        ${r.is_system ? '' : `<button class="btn btn-danger btn-sm" onclick="deleteRole(${r.id})">刪除</button>`}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
 window.moveRole = function(id, direction) {
   const idx = allRoles.findIndex(r => r.id === id);
   const newIdx = idx + direction;
@@ -5143,7 +5174,7 @@ window.moveRole = function(id, direction) {
   const [item] = allRoles.splice(idx, 1);
   allRoles.splice(newIdx, 0, item);
   roleSortChanged = true;
-  renderAdminContent();
+  rerenderRoleBody();
   const bar = document.getElementById('roleSortBar');
   if (bar) bar.style.display = 'flex';
 };
@@ -5165,7 +5196,9 @@ async function cancelRoleSort() {
   for (const id of roleOrigOrder) { const r = allRoles.find(x => x.id === id); if (r) ordered.push(r); }
   allRoles = ordered;
   roleSortChanged = false;
-  renderAdminContent();
+  rerenderRoleBody();
+  const bar = document.getElementById('roleSortBar');
+  if (bar) bar.style.display = 'none';
 }
 
 function editRole(id) {

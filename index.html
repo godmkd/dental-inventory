@@ -2062,24 +2062,30 @@ async function exportStockOverview() {
   (inv || []).forEach(i => { invMap[`${i.clinic_id}_${i.material_id}`] = i; });
 
   const type = window._stockViewType || 'consumable';
-  const mats = allMaterials.filter(m => matItemType(m) === type);
+  // Sort by category order, then by item sort_order
+  const mats = allMaterials.filter(m => matItemType(m) === type).sort((a, b) => {
+    const catA = allCategories.findIndex(c => c.id === a.category_id);
+    const catB = allCategories.findIndex(c => c.id === b.category_id);
+    if (catA !== catB) return catA - catB;
+    return (a.sort_order || 0) - (b.sort_order || 0);
+  });
 
-  // Build CSV
-  const header = ['類別', '品項', '規格', '單位', ...exportClinics.map(c => c.name + ' 庫存'), ...exportClinics.map(c => c.name + ' 安全庫存'), '總計'];
+  // Build CSV — each clinic: 庫存 | 安全庫存 side by side
+  const clinicHeaders = [];
+  exportClinics.forEach(c => { clinicHeaders.push(c.name + ' 庫存', c.name + ' 安全庫存'); });
+  const header = ['類別', '品項', '規格', '單位', ...clinicHeaders, '總計'];
   const rows = [header.join(',')];
   mats.forEach(m => {
     let total = 0;
-    const stocks = exportClinics.map(c => {
+    const clinicCols = [];
+    exportClinics.forEach(c => {
       const rec = invMap[`${c.id}_${m.id}`];
-      const s = rec ? rec.current_stock : 0;
-      total += s;
-      return s;
+      const stock = rec ? rec.current_stock : 0;
+      const safety = rec ? rec.safety_stock : (m.default_safety_stock ?? 5);
+      total += stock;
+      clinicCols.push(stock, safety);
     });
-    const safeties = exportClinics.map(c => {
-      const rec = invMap[`${c.id}_${m.id}`];
-      return rec ? rec.safety_stock : (m.default_safety_stock ?? 5);
-    });
-    rows.push([categoryName(m.category_id), m.name, m.spec || '', m.unit, ...stocks, ...safeties, total].map(v => `"${v}"`).join(','));
+    rows.push([categoryName(m.category_id), m.name, m.spec || '', m.unit, ...clinicCols, total].map(v => `"${v}"`).join(','));
   });
 
   const csv = '\uFEFF' + rows.join('\n');

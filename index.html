@@ -897,6 +897,9 @@ async function loadProfile() {
   }
   if (error) { toast('載入資料失敗: ' + error.message, 'error'); showLogin(); return; }
   userProfile = data;
+  // Sync avatar from Supabase to localStorage
+  if (data.avatar_url) localStorage.setItem('user_avatar', data.avatar_url);
+  else localStorage.removeItem('user_avatar');
   // Update line_user_id if missing (for users who registered before this field was added)
   if (!data.line_user_id) {
     const meta = currentUser.user_metadata || {};
@@ -1682,10 +1685,10 @@ function applyGlobalBg() {
       ? `linear-gradient(135deg,rgba(255,255,255,${lo}) 0%,rgba(255,255,255,${lo}) 100%)`
       : `linear-gradient(135deg,rgba(15,12,41,${o}) 0%,rgba(48,43,99,${o}) 50%,rgba(36,36,62,${o}) 100%)`;
     document.body.style.backgroundImage = `${overlay},url(${bgUrl})`;
-    document.body.style.backgroundSize = 'auto,cover';
-    document.body.style.backgroundPosition = 'center,center';
-    document.body.style.backgroundAttachment = 'scroll,fixed';
-    document.body.style.backgroundRepeat = 'repeat,no-repeat';
+    document.body.style.backgroundSize = 'auto,100% 100vh';
+    document.body.style.backgroundPosition = 'center,center top';
+    document.body.style.backgroundAttachment = 'scroll,scroll';
+    document.body.style.backgroundRepeat = 'repeat,repeat-y';
     document.body.classList.add('has-bg');
   } else {
     document.body.style.backgroundImage = '';
@@ -1785,26 +1788,35 @@ function closeAvatarEditor() {
   if (_avatarImg?.src?.startsWith('blob:')) URL.revokeObjectURL(_avatarImg.src);
 }
 
-function saveAvatarFromEditor() {
+async function saveAvatarFromEditor() {
   const canvas = document.getElementById('avatarCanvas');
   if (!canvas) return;
   const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
   localStorage.setItem('user_avatar', dataUrl);
+  // Save to Supabase user_profiles
+  if (currentUser && userProfile) {
+    await withTimeout(sb.from('user_profiles').update({ avatar_url: dataUrl }).eq('id', currentUser.id));
+    userProfile.avatar_url = dataUrl;
+  }
   applyUserAvatar();
   closeAvatarEditor();
   toast('頭像已更新');
   renderAccountSettings();
 }
 
-function removeUserAvatar() {
+async function removeUserAvatar() {
   localStorage.removeItem('user_avatar');
+  if (currentUser && userProfile) {
+    await withTimeout(sb.from('user_profiles').update({ avatar_url: '' }).eq('id', currentUser.id));
+    userProfile.avatar_url = '';
+  }
   applyUserAvatar();
   toast('頭像已移除');
   renderAccountSettings();
 }
 
 function applyUserAvatar() {
-  const url = localStorage.getItem('user_avatar');
+  const url = localStorage.getItem('user_avatar') || (userProfile && userProfile.avatar_url) || '';
   const bubble = document.getElementById('userBubble');
   const el = document.getElementById('userBubbleIcon');
   if (el && bubble) {

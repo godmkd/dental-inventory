@@ -2501,6 +2501,7 @@ async function loadDailyConfirmedLogs() {
       <div class="cp-item-left">
         <span class="cp-item-name">${escHtml(materialName(log.material_id))}</span>
         <span class="cp-item-qty ${isIn ? 'positive' : 'negative'}">${isIn ? '+' : '-'}${log.quantity}</span>
+        <span style="font-size:.75rem;color:var(--text-lighter)">${escHtml(log.operator_name || '')}</span>
         <span class="cp-item-time">${time}</span>
       </div>
       <button class="cp-item-cancel" onclick="cancelDailyLog(${log.id})">取消</button>

@@ -4540,7 +4540,7 @@ async function editMaterial(id) {
     </div>
     <div class="form-group"><label>圖片</label>
       <input id="fMatImage" type="file" accept="image/*" onchange="previewMatImage(this)">
-      ${m.image_url ? `<div id="matImgWrap"><img class="img-upload-preview" id="matImgPreview" src="${m.image_url}"><button type="button" class="btn btn-danger btn-sm" style="margin-left:8px;vertical-align:top" onclick="removeMatImage()">刪除圖片</button></div>` : '<img class="img-upload-preview" id="matImgPreview" style="display:none">'}
+      ${m.image_url ? `<div id="matImgWrap"><img class="img-upload-preview" id="matImgPreview" src="${m.image_url}" style="cursor:pointer" onclick="editExistingMatImage('${m.image_url}')" title="點擊編輯"><button type="button" class="btn btn-ghost btn-sm" style="margin-left:8px;vertical-align:top" onclick="editExistingMatImage('${m.image_url}')">✏️ 編輯</button><button type="button" class="btn btn-danger btn-sm" style="margin-left:4px;vertical-align:top" onclick="removeMatImage()">刪除</button></div>` : '<img class="img-upload-preview" id="matImgPreview" style="display:none">'}
       <input type="hidden" id="fMatImageUrl" value="${m.image_url || ''}">
     </div>
     <div class="form-group"><label>備註</label><textarea id="fMatNotes">${escHtml(m.notes || '')}</textarea></div>
@@ -4603,6 +4603,18 @@ function previewMatImage(input) {
     openMatImgEditor();
   };
   _matImg.src = URL.createObjectURL(input.files[0]);
+}
+
+function editExistingMatImage(url) {
+  _matImg = new Image();
+  _matImg.crossOrigin = 'anonymous';
+  _matImg.onload = () => {
+    _matImgOx = 0; _matImgOy = 0; _matImgRot = 0;
+    _matImgScale = Math.max(300 / _matImg.width, 300 / _matImg.height);
+    openMatImgEditor();
+  };
+  _matImg.onerror = () => toast('無法載入圖片，請重新選擇', 'error');
+  _matImg.src = url;
 }
 
 function openMatImgEditor() {

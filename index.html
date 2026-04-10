@@ -1379,6 +1379,13 @@ function openBgSettingModal() {
             <option value="20">特大</option>
           </select>
         </div>
+        <div>
+          <label style="font-size:.85rem;display:block;margin-bottom:4px">文字顏色</label>
+          <input type="color" id="customTextColor" value="${localStorage.getItem('custom_text_color') || '#e2e8f0'}" onchange="applyCustomTextColor(this.value)" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:var(--card);cursor:pointer">
+        </div>
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('customTextColor').value='#e2e8f0';applyCustomTextColor('')" style="margin-top:20px">重設顏色</button>
+        </div>
       </div>
     </div>
   `, '<button class="btn btn-ghost" onclick="closeModal()">關閉</button>');
@@ -1433,6 +1440,18 @@ function loadColorTheme() {
   const saved = localStorage.getItem('color_theme') || 'default';
   applyColorTheme(saved, false);
 }
+
+function applyCustomTextColor(color) {
+  if (color) {
+    document.documentElement.style.setProperty('--text', color);
+    localStorage.setItem('custom_text_color', color);
+  } else {
+    document.documentElement.style.removeProperty('--text');
+    localStorage.removeItem('custom_text_color');
+  }
+}
+// Restore text color on load
+(function(){ const c = localStorage.getItem('custom_text_color'); if(c) document.documentElement.style.setProperty('--text', c); })();
 
 function applyCustomFont() {
   const font = document.getElementById("customFont")?.value || localStorage.getItem("custom_font") || "";
@@ -2073,7 +2092,8 @@ async function exportStockOverview() {
   // Build CSV — each clinic: 庫存 | 安全庫存 side by side
   const clinicHeaders = [];
   exportClinics.forEach(c => { clinicHeaders.push(c.name + ' 庫存', c.name + ' 安全庫存'); });
-  const header = ['類別', '品項', '規格', '單位', ...clinicHeaders, '總計'];
+  const lowHeaders = exportClinics.map(c => c.name + ' 警示');
+  const header = ['類別', '品項', '規格', '單位', ...clinicHeaders, '總計', ...lowHeaders];
   const rows = [header.join(',')];
   mats.forEach(m => {
     let total = 0;
@@ -2085,7 +2105,15 @@ async function exportStockOverview() {
       total += stock;
       clinicCols.push(stock, safety);
     });
-    rows.push([categoryName(m.category_id), m.name, m.spec || '', m.unit, ...clinicCols, total].map(v => `"${v}"`).join(','));
+    // Mark low stock
+    const lowMarks = [];
+    exportClinics.forEach(c => {
+      const rec = invMap[`${c.id}_${m.id}`];
+      const stock = rec ? rec.current_stock : 0;
+      const safety = rec ? rec.safety_stock : (m.default_safety_stock ?? 5);
+      lowMarks.push(stock <= safety && safety > 0 ? '⚠️低' : '');
+    });
+    rows.push([categoryName(m.category_id), m.name, m.spec || '', m.unit, ...clinicCols, total, ...lowMarks].map(v => `"${v}"`).join(','));
   });
 
   const csv = '\uFEFF' + rows.join('\n');

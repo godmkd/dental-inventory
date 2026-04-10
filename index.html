@@ -4592,15 +4592,80 @@ function removeMatImage() {
   if (prev) { prev.src = ''; prev.style.display = 'none'; }
 }
 
+let _matImg = null, _matImgOx = 0, _matImgOy = 0, _matImgScale = 1, _matImgRot = 0, _matImgDrag = null;
+
 function previewMatImage(input) {
-  if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const prev = document.getElementById('matImgPreview');
-      prev.src = e.target.result; prev.style.display = 'block';
-    };
-    reader.readAsDataURL(input.files[0]);
-  }
+  if (!input.files || !input.files[0]) return;
+  _matImg = new Image();
+  _matImg.onload = () => {
+    _matImgOx = 0; _matImgOy = 0; _matImgRot = 0;
+    _matImgScale = Math.max(300 / _matImg.width, 300 / _matImg.height);
+    openMatImgEditor();
+  };
+  _matImg.src = URL.createObjectURL(input.files[0]);
+}
+
+function openMatImgEditor() {
+  const overlay = document.createElement('div');
+  overlay.id = 'matImgEditorOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10001;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px';
+  overlay.innerHTML = `
+    <div style="color:#e2e8f0;font-size:.9rem">拖曳移動・滾輪縮放・滑桿旋轉</div>
+    <div style="width:300px;height:300px;overflow:hidden;border:3px solid var(--accent,#63b3ed);border-radius:10px;cursor:grab;position:relative" id="matImgFrame">
+      <canvas id="matImgCanvas" width="300" height="300" style="display:block"></canvas>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;color:#a0aec0;font-size:.82rem">
+      <label>旋轉</label>
+      <input type="range" id="matImgRotSlider" value="0" min="-180" max="180" style="width:120px" oninput="_matImgRot=parseInt(this.value);drawMatImgCanvas()">
+      <span id="matImgRotVal">0°</span>
+      <label style="margin-left:8px">縮放</label>
+      <input type="range" id="matImgScaleSlider" value="100" min="20" max="400" style="width:120px" oninput="_matImgScale=parseInt(this.value)/100*Math.max(300/_matImg.width,300/_matImg.height);drawMatImgCanvas()">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeMatImgEditor()">取消</button>
+      <button class="btn btn-primary" onclick="saveMatImgFromEditor()">✅ 確認</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const frame = document.getElementById('matImgFrame');
+  frame.onpointerdown = e => { _matImgDrag = { sx: e.clientX, sy: e.clientY, ox: _matImgOx, oy: _matImgOy }; frame.setPointerCapture(e.pointerId); };
+  frame.onpointermove = e => { if (!_matImgDrag) return; _matImgOx = _matImgDrag.ox + (e.clientX - _matImgDrag.sx); _matImgOy = _matImgDrag.oy + (e.clientY - _matImgDrag.sy); drawMatImgCanvas(); };
+  frame.onpointerup = () => { _matImgDrag = null; };
+  frame.onwheel = e => { e.preventDefault(); const d = e.deltaY > 0 ? -0.05 : 0.05; _matImgScale = Math.max(0.1, _matImgScale + d * _matImgScale); const sl = document.getElementById('matImgScaleSlider'); if (sl) sl.value = Math.round(_matImgScale / Math.max(300/_matImg.width, 300/_matImg.height) * 100); drawMatImgCanvas(); };
+  drawMatImgCanvas();
+}
+
+function drawMatImgCanvas() {
+  const canvas = document.getElementById('matImgCanvas');
+  if (!canvas || !_matImg) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 300, 300);
+  ctx.fillStyle = '#222'; ctx.fillRect(0, 0, 300, 300);
+  ctx.save();
+  ctx.translate(150 + _matImgOx, 150 + _matImgOy);
+  ctx.rotate(_matImgRot * Math.PI / 180);
+  ctx.scale(_matImgScale, _matImgScale);
+  ctx.drawImage(_matImg, -_matImg.width / 2, -_matImg.height / 2);
+  ctx.restore();
+  const rv = document.getElementById('matImgRotVal');
+  if (rv) rv.textContent = _matImgRot + '°';
+}
+
+function closeMatImgEditor() {
+  const ol = document.getElementById('matImgEditorOverlay');
+  if (ol) ol.remove();
+  if (_matImg?.src?.startsWith('blob:')) URL.revokeObjectURL(_matImg.src);
+}
+
+function saveMatImgFromEditor() {
+  const canvas = document.getElementById('matImgCanvas');
+  if (!canvas) return;
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  const prev = document.getElementById('matImgPreview');
+  if (prev) { prev.src = dataUrl; prev.style.display = 'block'; }
+  document.getElementById('fMatImageUrl').value = dataUrl;
+  closeMatImgEditor();
+  toast('照片已調整');
 }
 
 async function compressImage(file, maxWidth = 500, quality = 0.5) {
@@ -4627,14 +4692,30 @@ async function saveMaterial(id) {
   try {
     let imageUrl = document.getElementById('fMatImageUrl').value;
     if (imageUrl === '__DELETE__') imageUrl = '';
-    const fileInput = document.getElementById('fMatImage');
-    if (fileInput.files && fileInput.files[0]) {
-      const compressed = await compressImage(fileInput.files[0]);
-      const path = `${Date.now()}.jpg`;
-      const { error: upErr } = await withTimeout(sb.storage.from('materials').upload(path, compressed));
-      if (upErr) { toast('圖片上傳失敗: ' + upErr.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
-      const { data: urlData } = sb.storage.from('materials').getPublicUrl(path);
-      imageUrl = urlData.publicUrl;
+    // If editor produced a data URL, use it directly (or try upload)
+    if (imageUrl && imageUrl.startsWith('data:')) {
+      // Try to upload data URL to storage
+      try {
+        const resp = await fetch(imageUrl);
+        const blob = await resp.blob();
+        const path = `${Date.now()}.jpg`;
+        const { error: upErr } = await withTimeout(sb.storage.from('materials').upload(path, blob, { contentType: 'image/jpeg' }));
+        if (!upErr) {
+          const { data: urlData } = sb.storage.from('materials').getPublicUrl(path);
+          imageUrl = urlData.publicUrl;
+        }
+        // If upload fails, keep data URL as fallback
+      } catch(e) { /* keep data URL */ }
+    } else {
+      const fileInput = document.getElementById('fMatImage');
+      if (fileInput.files && fileInput.files[0]) {
+        const compressed = await compressImage(fileInput.files[0]);
+        const path = `${Date.now()}.jpg`;
+        const { error: upErr } = await withTimeout(sb.storage.from('materials').upload(path, compressed));
+        if (upErr) { toast('圖片上傳失敗: ' + upErr.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
+        const { data: urlData } = sb.storage.from('materials').getPublicUrl(path);
+        imageUrl = urlData.publicUrl;
+      }
     }
     // Collect multi-supplier rows
     const supRows = document.querySelectorAll('#matSupRows .mat-sup-row');

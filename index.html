@@ -2089,39 +2089,36 @@ async function exportStockOverview() {
     return (a.sort_order || 0) - (b.sort_order || 0);
   });
 
-  // Build HTML table for Excel with styling
-  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">
-  <style>td,th{border:1px solid #ccc;padding:4px 8px;font-size:12px} th{background:#4472C4;color:#fff;font-weight:bold} .safety{background:#e8e8e8} .low{color:#ff0000;font-weight:bold}</style></head><body><table>`;
+  // Build data for XLSX export
+  const clinicHeaders = [];
+  exportClinics.forEach(c => { clinicHeaders.push(c.name + ' 庫存', c.name + ' 安全庫存'); });
+  const header = ['類別', '品項', '規格', '單位', ...clinicHeaders, '總計'];
+  const aoa = [header];
 
-  // Header
-  html += '<tr><th>類別</th><th>品項</th><th>規格</th><th>單位</th>';
-  exportClinics.forEach(c => { html += `<th>${escHtml(c.name)} 庫存</th><th class="safety">${escHtml(c.name)} 安全庫存</th>`; });
-  html += '<th>總計</th></tr>';
-
-  // Data rows
   mats.forEach(m => {
     let total = 0;
-    html += `<tr><td>${escHtml(categoryName(m.category_id))}</td><td>${escHtml(m.name)}</td><td>${escHtml(m.spec || '')}</td><td>${escHtml(m.unit)}</td>`;
+    const row = [categoryName(m.category_id), m.name, m.spec || '', m.unit];
     exportClinics.forEach(c => {
       const rec = invMap[`${c.id}_${m.id}`];
       const stock = rec ? rec.current_stock : 0;
       const safety = rec ? rec.safety_stock : (m.default_safety_stock ?? 5);
       total += stock;
       const isLow = stock <= safety && safety > 0;
-      html += `<td${isLow?' class="low"':''}>${stock}</td><td class="safety">${safety}</td>`;
+      row.push(isLow ? '⚠️' + stock : stock);
+      row.push(safety);
     });
-    html += `<td><b>${total}</b></td></tr>`;
+    row.push(total);
+    aoa.push(row);
   });
-  html += '</table></body></html>';
 
-  const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // Set column widths
+  ws['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 6 }, ...clinicHeaders.map(() => ({ wch: 12 })), { wch: 8 }];
+  XLSX.utils.book_append_sheet(wb, ws, '庫存總覽');
+
   const clinicLabel = exportClinics.length === allClinics.length ? '全部' : exportClinics.map(c => c.name).join('_');
-  a.download = `庫存總覽_${type==='consumable'?'耗材':'非耗材'}_${clinicLabel}_${new Date().toISOString().slice(0,10)}.xls`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  XLSX.writeFile(wb, `庫存總覽_${type==='consumable'?'耗材':'非耗材'}_${clinicLabel}_${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('已匯出 Excel');
 }
 

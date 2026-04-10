@@ -1994,7 +1994,7 @@ async function renderStockOverview() {
       </div>
       <div id="${scId}"><div class="table-wrap"><table style="min-width:max-content">
       <thead><tr><th style="white-space:nowrap">品項</th>${clinicsToShow.map(c => `<th style="white-space:nowrap;min-width:60px">${escHtml(c.name)}</th>`).join('')}<th style="white-space:nowrap">總計</th></tr></thead><tbody>`;
-    const canSetSafety = hasPermission('manage_orders');
+    const canSetSafety = hasPermission('manage_orders') || hasPermission('create_orders');
     mats.forEach(m => {
       let total = 0;
       const cells = clinicsToShow.map(c => {

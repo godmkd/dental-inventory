@@ -945,6 +945,7 @@ async function enterApp() {
   buildBubbles(); // logo+user bubbles now rendered inside container
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   applyUserAvatar();
+  loadBubbleImages().then(() => applyAllBubbleImages());
   setupLogoBubbleDoubleTap();
   loadColorTheme();
   applyCustomFont();
@@ -1368,6 +1369,37 @@ function openBgSettingModal() {
         ${getBgSlideshowImages().length < 10 ? `<label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:.78rem">＋ 新增照片
           <input type="file" accept="image/*" multiple style="display:none" onchange="addSlideshowImgs(this)">
         </label>` : ''}
+      </div>
+    </div>
+
+    <div class="bg-section">
+      <h4>🫧 泡泡圖片</h4>
+      <div style="font-size:.75rem;color:var(--text-lighter);margin-bottom:8px">為每個泡泡設定自訂照片（圓形遮罩裁切），名稱顯示在泡泡下方</div>
+      <div id="bubbleImgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px">
+        ${(() => {
+          const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
+          const config = [
+            { id:'ordering', icon:'📦', label:'叫貨' },{ id:'daily-change', icon:'🔄', label:'日常變動' },
+            { id:'receiving', icon:'✅', label:'收貨' },{ id:'stock-overview', icon:'🗂️', label:'庫存總覽' },
+            { id:'order-summary', icon:'📊', label:'叫貨總覽' },{ id:'order-list', icon:'📋', label:'貨單管理' },
+            { id:'rush-mgmt', icon:'🚨', label:'催貨管理' },{ id:'tutorials', icon:'📖', label:'教學' },
+            { id:'admin-suppliers', icon:'🏭', label:'廠商管理' },{ id:'admin-categories', icon:'📁', label:'類別管理' },
+            { id:'notify-settings', icon:'🔔', label:'通知設定' },{ id:'admin-materials', icon:'📦', label:'品項管理' },
+            { id:'order-stats', icon:'📈', label:'叫貨統計' },{ id:'customize', icon:'🎨', label:'客製化' },
+            { id:'daily-summary', icon:'📊', label:'變動總覽' },{ id:'admin-clinics', icon:'🏥', label:'診所管理' },
+            { id:'user-list', icon:'👤', label:'人員管理' },{ id:'role-mgmt', icon:'🔐', label:'角色管理' },
+          ];
+          return config.map(c => {
+            const hasImg = imgs[c.id];
+            return '<div style="text-align:center">' +
+              '<div style="width:56px;height:56px;border-radius:50%;margin:0 auto 4px;overflow:hidden;border:2px solid ' + (hasImg ? 'var(--accent)' : 'var(--border)') + ';background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative" onclick="pickBubbleImg(\'' + c.id + '\')">' +
+              (hasImg ? '<img src="' + hasImg + '" style="width:100%;height:100%;object-fit:cover">' : '<span style="font-size:1.3rem">' + c.icon + '</span>') +
+              '</div>' +
+              '<div style="font-size:.68rem;color:var(--text-light)">' + c.label + '</div>' +
+              (hasImg ? '<button class="btn btn-danger" style="font-size:.6rem;padding:1px 4px;margin-top:2px" onclick="event.stopPropagation();removeBubbleImg(\'' + c.id + '\')">移除</button>' : '') +
+            '</div>';
+          }).join('');
+        })()}
       </div>
     </div>
 
@@ -1874,6 +1906,115 @@ function applyUserAvatar() {
       if (label) label.style.cssText = '';
     }
   }
+}
+
+// ===== Bubble Image Editor =====
+let _bubbleEditId = null;
+function pickBubbleImg(bubbleId) {
+  _bubbleEditId = bubbleId;
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*';
+  input.onchange = () => {
+    const file = input.files[0];
+    if (!file) return;
+    _avatarImg = new Image();
+    _avatarImg.onload = () => {
+      _avatarOx = 0; _avatarOy = 0; _avatarScale = 1; _avatarRot = 0;
+      _avatarScale = Math.max(200 / _avatarImg.width, 200 / _avatarImg.height);
+      openBubbleImgEditor();
+    };
+    _avatarImg.src = URL.createObjectURL(file);
+  };
+  input.click();
+}
+
+function openBubbleImgEditor() {
+  const overlay = document.createElement('div');
+  overlay.id = 'avatarEditorOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px';
+  overlay.innerHTML = `
+    <div style="color:#e2e8f0;font-size:.9rem;margin-bottom:4px">拖曳移動・滾輪縮放・滑桿旋轉</div>
+    <div style="width:200px;height:200px;border-radius:50%;overflow:hidden;border:3px solid var(--accent,#63b3ed);cursor:grab;position:relative" id="avatarFrame">
+      <canvas id="avatarCanvas" width="200" height="200" style="display:block"></canvas>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;color:#a0aec0;font-size:.82rem">
+      <label>旋轉</label>
+      <input type="range" id="avatarRotSlider" value="0" min="-180" max="180" style="width:120px" oninput="_avatarRot=parseInt(this.value);drawAvatarCanvas()">
+      <span id="avatarRotVal">0°</span>
+      <label style="margin-left:8px">縮放</label>
+      <input type="range" id="avatarScaleSlider" value="100" min="20" max="400" style="width:120px" oninput="_avatarScale=parseInt(this.value)/100*Math.max(200/_avatarImg.width,200/_avatarImg.height);drawAvatarCanvas()">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeAvatarEditor()">取消</button>
+      <button class="btn btn-primary" onclick="saveBubbleImgFromEditor()">✅ 確認</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const frame = document.getElementById('avatarFrame');
+  frame.onpointerdown = e => { _avatarDrag = { sx: e.clientX, sy: e.clientY, ox: _avatarOx, oy: _avatarOy }; frame.setPointerCapture(e.pointerId); };
+  frame.onpointermove = e => { if (!_avatarDrag) return; _avatarOx = _avatarDrag.ox + (e.clientX - _avatarDrag.sx); _avatarOy = _avatarDrag.oy + (e.clientY - _avatarDrag.sy); drawAvatarCanvas(); };
+  frame.onpointerup = () => { _avatarDrag = null; };
+  frame.onwheel = e => { e.preventDefault(); const d = e.deltaY > 0 ? -0.05 : 0.05; _avatarScale = Math.max(0.1, _avatarScale + d * _avatarScale); const sl = document.getElementById('avatarScaleSlider'); if (sl) sl.value = Math.round(_avatarScale / Math.max(200/_avatarImg.width, 200/_avatarImg.height) * 100); drawAvatarCanvas(); };
+
+  drawAvatarCanvas();
+}
+
+async function saveBubbleImgFromEditor() {
+  const canvas = document.getElementById('avatarCanvas');
+  if (!canvas || !_bubbleEditId) return;
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
+  imgs[_bubbleEditId] = dataUrl;
+  localStorage.setItem('bubble_images', JSON.stringify(imgs));
+  // Save to Supabase
+  if (currentUser) {
+    const existing = JSON.parse(localStorage.getItem('bubble_images_cloud') || '{}');
+    const merged = { ...existing, ...imgs };
+    await withTimeout(sb.from('app_settings').upsert({ key: 'bubble_images', value: merged, updated_at: new Date().toISOString() }, { onConflict: 'key' }));
+    localStorage.setItem('bubble_images_cloud', JSON.stringify(merged));
+  }
+  closeAvatarEditor();
+  applyAllBubbleImages();
+  openBgSettingModal(); // Refresh the customize modal
+}
+
+function removeBubbleImg(bubbleId) {
+  const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
+  delete imgs[bubbleId];
+  localStorage.setItem('bubble_images', JSON.stringify(imgs));
+  // Update Supabase
+  if (currentUser) {
+    sb.from('app_settings').upsert({ key: 'bubble_images', value: imgs, updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(() => {});
+  }
+  applyAllBubbleImages();
+  openBgSettingModal(); // Refresh
+}
+
+function applyAllBubbleImages() {
+  const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
+  for (const [pageId, dataUrl] of Object.entries(imgs)) {
+    const bubble = document.querySelector(`.bubble[data-page="${pageId}"]`);
+    if (!bubble) continue;
+    const iconEl = bubble.querySelector('.bubble-icon');
+    const labelEl = bubble.querySelector('.bubble-label');
+    if (iconEl && dataUrl) {
+      iconEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;z-index:1';
+      iconEl.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover">`;
+      bubble.style.position = 'relative';
+      bubble.style.overflow = 'visible';
+      if (labelEl) labelEl.style.cssText = 'position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:.75rem;z-index:2;text-shadow:0 1px 3px rgba(0,0,0,.5)';
+    }
+  }
+}
+
+async function loadBubbleImages() {
+  try {
+    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', 'bubble_images').maybeSingle());
+    if (data && data.value) {
+      localStorage.setItem('bubble_images', JSON.stringify(data.value));
+      localStorage.setItem('bubble_images_cloud', JSON.stringify(data.value));
+    }
+  } catch(e) { console.log('loadBubbleImages error:', e); }
 }
 
 function usageHint(pageId) {

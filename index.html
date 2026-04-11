@@ -900,6 +900,11 @@ async function loadProfile() {
     }).select().single());
     if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }
     userProfile = newP;
+    // Insert into user_clinics for multi-clinic support
+    if (defaultClinicId) {
+      await sb.from('user_clinics').insert({ user_id: currentUser.id, clinic_id: defaultClinicId });
+    }
+    window._userClinicIds = defaultClinicId ? [defaultClinicId] : [];
     // 直接進入系統，不需審核
     await enterApp();
     return;
@@ -920,6 +925,13 @@ async function loadProfile() {
     }
   }
   if (!data.is_active) { toast('您的帳號已被停用', 'error'); await withTimeout(sb.auth.signOut()); showLogin(); return; }
+  // Load user's clinics from user_clinics table (multi-clinic support)
+  const { data: userClinicData } = await sb.from('user_clinics').select('clinic_id').eq('user_id', currentUser.id);
+  window._userClinicIds = (userClinicData || []).map(uc => uc.clinic_id);
+  // Fallback: if no user_clinics records but has legacy clinic_id, use that
+  if (!window._userClinicIds.length && userProfile.clinic_id) {
+    window._userClinicIds = [userProfile.clinic_id];
+  }
   await enterApp();
 }
 
@@ -1986,7 +1998,7 @@ async function renderStockOverview() {
   const mc = document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadCategories(), loadMaterials()]);
   const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*'));
-  const clinicsToShow = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  const clinicsToShow = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
   const invMap = {};
   (inv || []).forEach(i => { invMap[`${i.clinic_id}_${i.material_id}`] = i; });
 
@@ -2035,11 +2047,10 @@ async function renderStockOverview() {
       if (canSetSafety) {
         const globalVal = m.default_safety_stock ?? 5;
         const canManageAll = hasPermission('manage_orders');
-        const myClinicId = userProfile?.clinic_id;
         const clinicCells = clinicsToShow.map(c => {
           const rec = invMap[`${c.id}_${m.id}`];
           const val = rec?.safety_stock ?? '';
-          const canEdit = canManageAll || c.id === myClinicId;
+          const canEdit = canManageAll || window._userClinicIds.includes(c.id);
           return canEdit
             ? `<td style="padding:2px 4px"><input type="number" min="0" value="${val}" placeholder="${globalVal}" style="width:52px;padding:2px 4px;font-size:.75rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:inherit;text-align:center" onblur="saveClinicSafety(${c.id},${m.id},this.value,${globalVal})"></td>`
             : `<td style="padding:2px 4px;font-size:.75rem;color:var(--text-lighter);text-align:center">${val || globalVal}</td>`;
@@ -2074,7 +2085,7 @@ async function exportStockOverview() {
   let exportClinics;
   if (isAdmin && selVal === 'all') exportClinics = allClinics;
   else if (isAdmin && selVal) exportClinics = allClinics.filter(c => c.id === parseInt(selVal));
-  else exportClinics = allClinics.filter(c => c.id === userProfile.clinic_id);
+  else exportClinics = allClinics.filter(c => window._userClinicIds.includes(c.id));
 
   const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*'));
   const invMap = {};
@@ -2184,7 +2195,7 @@ async function renderDailyChange(container) {
   const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
 
-  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
   dailyClinicId = dailyClinicId || (myClinics[0] ? myClinics[0].id : null);
 
   if (dailyClinicId) {
@@ -2549,7 +2560,7 @@ async function renderOrdering(container) {
   await Promise.all([loadClinics(), loadMaterials()]);
   orderConfirmItems = [];
 
-  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
   orderClinicId = orderClinicId || (myClinics[0] ? myClinics[0].id : null);
 
   // Load inventory for selected clinic
@@ -2821,7 +2832,7 @@ window.removeOrderConfirmItem = function(idx) {
 
 async function submitOrdering() {
   if (!orderConfirmItems.length) { toast('清單是空的', 'error'); return; }
-  const cid = orderClinicId || userProfile.clinic_id;
+  const cid = orderClinicId || (window._userClinicIds.length ? window._userClinicIds[0] : null);
   if (!cid) { toast('請選擇診所', 'error'); return; }
 
   if (!await showConfirm('送出叫貨', `共 ${orderConfirmItems.length} 項品項，確定送出？`)) return;
@@ -2875,7 +2886,7 @@ async function loadConfirmedOrders() {
   const bodyEl = document.getElementById('orderConfirmedBody');
   if (!titleEl || !bodyEl) return;
 
-  const cid = orderClinicId || userProfile.clinic_id;
+  const cid = orderClinicId || (window._userClinicIds.length ? window._userClinicIds[0] : null);
 
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
   const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
@@ -3813,7 +3824,7 @@ let receiveClinicId = null;
 async function renderReceiving(container) {
   const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
-  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
   receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
   const clinicIds = receiveClinicId ? [receiveClinicId] : myClinics.map(c => c.id);
 
@@ -5363,7 +5374,7 @@ async function renderUsersList(el) {
       <tbody>${allUsers.map(u => `<tr>
         <td>${escHtml(u.display_name)}</td>
         <td>${roleLabel(u.role, u.role_id)}</td>
-        <td>${u.clinic_id ? escHtml(clinicName(u.clinic_id)) : '<span class="text-muted">未指派</span>'}</td>
+        <td>${u.clinic_id ? escHtml(allClinics.filter(c => c.id === u.clinic_id).map(c => c.name).join(', ') || clinicName(u.clinic_id)) : '<span class="text-muted">未指派</span>'}</td>
         <td>${u.is_active ? '<span class="text-success">啟用</span>' : '<span class="text-danger">停用</span>'}</td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">編輯</button>
@@ -5373,7 +5384,7 @@ async function renderUsersList(el) {
     </table></div></div>`;
 }
 
-function editUser(id) {
+async function editUser(id) {
   const u = allUsers.find(x => x.id === id);
   if (!u) return;
   let roleDropdown;
@@ -5390,12 +5401,28 @@ function editUser(id) {
       <option value="clinic_manager" ${u.role === 'clinic_manager' ? 'selected' : ''}>診所管理者</option>
     </select>`;
   }
+  // Load user's clinics for checkbox display
+  let userClinicIds = [];
+  try {
+    const { data: ucData } = await sb.from('user_clinics').select('clinic_id').eq('user_id', u.id);
+    userClinicIds = (ucData || []).map(uc => uc.clinic_id);
+  } catch(e) {}
+  // Fallback to legacy clinic_id
+  if (!userClinicIds.length && u.clinic_id) userClinicIds = [u.clinic_id];
+
+  const clinicCheckboxes = allClinics.map(c =>
+    `<label style="display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer">
+      <input type="checkbox" class="fUserClinicCb" value="${c.id}" ${userClinicIds.includes(c.id) ? 'checked' : ''}>
+      ${escHtml(c.name)}
+    </label>`
+  ).join('');
+
   openModal('編輯人員', `
     <div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>
     <div class="form-row">
       <div class="form-group"><label>角色</label>${roleDropdown}</div>
-      <div class="form-group"><label>所屬診所</label>
-        <select id="fUserClinic">${optionsHTML(allClinics, 'id', 'name', u.clinic_id)}</select>
+      <div class="form-group"><label>所屬診所（可複選）</label>
+        <div id="fUserClinics" style="max-height:200px;overflow-y:auto;padding:4px">${clinicCheckboxes}</div>
       </div>
     </div>
   `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
@@ -5404,9 +5431,11 @@ function editUser(id) {
 
 async function saveUser(id) {
   const roleVal = document.getElementById('fUserRole').value;
+  // Collect selected clinic IDs from checkboxes
+  const selectedClinicIds = Array.from(document.querySelectorAll('.fUserClinicCb:checked')).map(cb => parseInt(cb.value));
   const obj = {
     display_name: document.getElementById('fUserName').value.trim(),
-    clinic_id: document.getElementById('fUserClinic').value || null
+    clinic_id: selectedClinicIds.length ? selectedClinicIds[0] : null  // backward compatibility
   };
   if (!obj.display_name) { toast('請輸入姓名', 'error'); return; }
   if (allRoles.length > 0 && roleVal) {
@@ -5416,6 +5445,15 @@ async function saveUser(id) {
   }
   const { error } = await withTimeout(sb.from('user_profiles').update(obj).eq('id', id));
   if (error) { toast('儲存失敗: ' + error.message, 'error'); return; }
+  // Update user_clinics table
+  await sb.from('user_clinics').delete().eq('user_id', id);
+  if (selectedClinicIds.length) {
+    await sb.from('user_clinics').insert(selectedClinicIds.map(cid => ({ user_id: id, clinic_id: cid })));
+  }
+  // If editing self, update local cache
+  if (id === currentUser.id) {
+    window._userClinicIds = selectedClinicIds;
+  }
   toast('已更新'); closeModal(); await loadUsers(); renderUserMgmt();
 }
 
@@ -5525,7 +5563,7 @@ async function renderTutorials(container) {
   if (error) { mc.innerHTML = '<div class="empty-state">載入失敗：' + escHtml(error.message) + '</div>'; return; }
 
   const canManageAll = hasPermission('manage_materials') || hasPermission('all');
-  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => c.id === userProfile.clinic_id);
+  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
 
   // Filter by clinic
   const filterClinicId = window._tutorialFilterClinic || '';
@@ -5534,7 +5572,7 @@ async function renderTutorials(container) {
     const cid = parseInt(filterClinicId);
     filtered = tutorials.filter(t => !t.clinic_id || t.clinic_id === cid);
   } else if (!canSeeAdmin()) {
-    filtered = tutorials.filter(t => !t.clinic_id || t.clinic_id === userProfile.clinic_id);
+    filtered = tutorials.filter(t => !t.clinic_id || window._userClinicIds.includes(t.clinic_id));
   }
 
   let clinicOpts = '<option value="">全部診所</option>';

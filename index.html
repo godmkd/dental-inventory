@@ -2496,13 +2496,15 @@ async function loadDailyConfirmedLogs() {
   }
   bodyEl.innerHTML = items.map(log => {
     const isIn = log.type === 'in';
-    const time = new Date(log.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    const dt = new Date(log.created_at);
+    const dateStr = dt.toLocaleDateString('zh-TW', { month:'2-digit', day:'2-digit' });
+    const time = dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
     return `<div class="cp-item">
       <div class="cp-item-left">
         <span class="cp-item-name">${escHtml(materialName(log.material_id))}</span>
         <span class="cp-item-qty ${isIn ? 'positive' : 'negative'}">${isIn ? '+' : '-'}${log.quantity}</span>
         <span style="font-size:.75rem;color:var(--text-lighter)">${escHtml(log.operator_name || '')}</span>
-        <span class="cp-item-time">${time}</span>
+        <span class="cp-item-time">${dateStr} ${time}</span>
       </div>
       <button class="cp-item-cancel" onclick="cancelDailyLog(${log.id})">取消</button>
     </div>`;
@@ -2909,7 +2911,10 @@ async function loadConfirmedOrders() {
 
   bodyEl.innerHTML = filteredOrders.map(o => {
     const ois = (oiMap[o.id] || []).filter(oi => !cid || oi.clinic_id === cid);
-    const time = new Date(o.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    const dt = new Date(o.created_at);
+    const dateStr = dt.toLocaleDateString('zh-TW', { month:'2-digit', day:'2-digit' });
+    const time = dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    const creatorName = o.created_by === currentUser?.id ? (userProfile?.display_name || '我') : (o._creatorName || '');
     const itemsHtml = ois.map(oi => {
       const isSt = oi.item_status || 'pending';
       const canCancel = (isSt === 'pending' || isSt === 'confirmed');
@@ -2920,7 +2925,7 @@ async function loadConfirmedOrders() {
     }).join('');
     return `<div class="cp-item" style="flex-direction:column;align-items:stretch;gap:0">
       <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid var(--border)">
-        <span class="cp-item-name">#${o.id} ${statusBadge(o.status)} <span class="cp-item-time">${time}</span></span>
+        <span class="cp-item-name">#${o.id} ${statusBadge(o.status)} <span style="font-size:.75rem;color:var(--text-lighter)">${creatorName}</span> <span class="cp-item-time">${dateStr} ${time}</span></span>
         ${o.status === 'pending' && !ois.some(oi => (oi.item_status === 'shipped' || oi.item_status === 'delivered')) ? `<button class="cp-item-cancel" onclick="cancelOrder(${o.id})">整單取消</button>` : ''}
       </div>
       <div style="margin-top:4px">${itemsHtml}</div>

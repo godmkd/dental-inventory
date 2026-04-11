@@ -664,26 +664,38 @@ async function init() {
   });
 
   // Auto refresh session when page becomes visible (after tab switch or phone wake)
+  let _lastVisible = Date.now();
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser) {
+      const elapsed = Date.now() - _lastVisible;
+      console.log(`App resumed after ${Math.round(elapsed/1000)}s`);
       try {
+        // Refresh session
         const { data, error } = await sb.auth.refreshSession();
         if (error || !data?.session) {
-          console.warn('Session expired, re-authenticating...');
+          // Session lost — try to recover
           const { data: user } = await sb.auth.getUser();
           if (!user?.user) {
-            // Session truly expired, show login
-            currentUser = null;
-            showLogin();
+            // Truly expired — auto reload to re-login
+            location.reload();
             return;
           }
         }
-        // Session OK — refresh data silently
-        console.log('App resumed, session OK');
+        // If away > 30s, do a lightweight connectivity check
+        if (elapsed > 30000) {
+          const { error: pingErr } = await sb.from('clinics').select('id').limit(1);
+          if (pingErr) {
+            console.warn('Connection lost, reloading...');
+            location.reload();
+            return;
+          }
+        }
       } catch(e) {
-        console.warn('Session refresh failed:', e);
+        console.warn('Resume failed, reloading...', e);
+        location.reload();
       }
     }
+    _lastVisible = Date.now();
   });
 }
 

@@ -1068,7 +1068,8 @@ function getNavItems() {
     { id: 'order-mgmt', icon: '📋', label: '叫貨管理', perm: 'manage_orders' },
     { id: 'admin-mgmt', icon: '⚙️', label: '行政管理', perms: ['manage_materials', 'manage_categories', 'manage_suppliers', 'manage_clinics'] },
     { id: 'user-mgmt', icon: '👥', label: '人員管理', perms: ['manage_users', 'manage_roles'] },
-    { id: 'notify-settings', icon: '🔔', label: '通知設定', perm: 'manage_orders' }
+    { id: 'notify-settings', icon: '🔔', label: '通知設定', perm: 'manage_orders' },
+    { id: 'daily-summary', icon: '📊', label: '變動總覽', perm: 'daily_changes' }
   ];
   return all.filter(it => {
     if (!it.perm && !it.perms) return true;
@@ -1101,6 +1102,7 @@ function buildBubbles() {
     { id: 'admin-materials',  icon: '📦', label: '品項管理', size: 'large',  top: '48%', left: '72%', pt: '33%', pl: '35%', lt: '55%', ll: '63%',  delay: '1.3s', duration: '5.5s', anim: 'float' },
     { id: 'order-stats',      icon: '📈', label: '叫貨統計', size: 'large',  top: '48%', left: '85%', pt: '33%', pl: '83%', lt: '55%', ll: '74%',  delay: '2.9s', duration: '6.8s', anim: 'float3', perm: 'view_prices' },
     { id: 'customize',        icon: '🎨', label: '客製化',   size: 'medium', top: '34%', left: '88%', pt: '44%', pl: '61%', lt: '40%', ll: '75%',  delay: '4.2s', duration: '7.5s', anim: 'float2', perm: 'change_background' },
+    { id: 'daily-summary',    icon: '📊', label: '變動總覽', size: 'medium', top: '60%', left: '70%', pt: '55%', pl: '50%', lt: '55%', ll: '60%',  delay: '3.5s', duration: '7s',   anim: 'float2', perm: 'daily_changes' },
     { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '76%', pt: '56%', pl: '12%', lt: '68%', ll: '65%',  delay: '3.7s', duration: '5.2s', anim: 'float' },
     { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '84%', pt: '57%', pl: '37%', lt: '70%', ll: '73%',  delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
     { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '68%', ll: '82%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
@@ -1224,6 +1226,7 @@ async function navigateTo(pageId) {
     'role-mgmt':        renderUserMgmt,
     // 原有頁面
     'stock-overview':   renderStockOverview,
+    'daily-summary':    renderDailySummary,
     'account-settings': renderAccountSettings,
     'notify-settings':  renderNotifySettings,
     'tutorials':        () => renderTutorials(mc),
@@ -2130,6 +2133,162 @@ async function exportStockOverview() {
 
   const clinicLabel = exportClinics.length === allClinics.length ? '全部' : exportClinics.map(c => c.name).join('_');
   XLSX.writeFile(wb, `庫存總覽_${type==='consumable'?'耗材':'非耗材'}_${clinicLabel}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('已匯出 Excel');
+}
+
+// ============================================================
+// 日常變動總覽
+// ============================================================
+async function renderDailySummary() {
+  const mc = document.getElementById('mainContent');
+  await Promise.all([loadClinics(), loadCategories(), loadMaterials()]);
+
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  const selYear = window._dsMeta?.year ?? curYear;
+  const selMonth = window._dsMeta?.month ?? curMonth;
+  const selClinic = window._dsMeta?.clinic ?? '';
+
+  const clinicsToShow = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
+
+  const yearOpts = [curYear, curYear - 1, curYear - 2].map(y =>
+    `<option value="${y}"${y === selYear ? ' selected' : ''}>${y}</option>`
+  ).join('');
+  const monthOpts = Array.from({ length: 12 }, (_, i) => i + 1).map(m =>
+    `<option value="${m}"${m === selMonth ? ' selected' : ''}>${m} 月</option>`
+  ).join('');
+  const clinicOpts = `<option value="">全部診所</option>` +
+    clinicsToShow.map(c => `<option value="${c.id}"${String(c.id) === String(selClinic) ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('');
+
+  let html = `<div class="page-title">📊 變動總覽</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <select id="dsYear" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--card);color:var(--text)">${yearOpts}</select>
+      <select id="dsMonth" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--card);color:var(--text)">${monthOpts}</select>
+      <select id="dsClinic" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.85rem;background:var(--card);color:var(--text)">${clinicOpts}</select>
+      <button class="btn btn-primary btn-sm" onclick="queryDailySummary()">查詢</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportDailySummary()">📥 匯出</button>
+    </div>
+    <div id="dsSummaryResult"><div class="card"><div class="empty-state"><span>📊</span>請選擇月份後按查詢</div></div></div>`;
+  mc.innerHTML = html;
+
+  // Auto-query if returning to page
+  if (window._dsMeta?.queried) queryDailySummary();
+}
+
+async function queryDailySummary() {
+  const year = parseInt(document.getElementById('dsYear').value);
+  const month = parseInt(document.getElementById('dsMonth').value);
+  const clinicId = document.getElementById('dsClinic').value;
+  window._dsMeta = { year, month, clinic: clinicId, queried: true };
+
+  const resultDiv = document.getElementById('dsSummaryResult');
+  resultDiv.innerHTML = '<div class="card"><div class="empty-state">載入中…</div></div>';
+
+  const startDate = new Date(year, month - 1, 1).toISOString();
+  const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
+
+  let query = sb.from('inventory_logs').select('material_id,type,quantity')
+    .gte('created_at', startDate)
+    .lte('created_at', endDate);
+
+  if (clinicId) {
+    query = query.eq('clinic_id', parseInt(clinicId));
+  } else if (!canSeeAdmin()) {
+    query = query.in('clinic_id', window._userClinicIds);
+  }
+
+  const { data: logs, error } = await withTimeout(query);
+  if (error) {
+    resultDiv.innerHTML = `<div class="card"><div class="empty-state" style="color:var(--danger)">查詢失敗：${escHtml(error.message)}</div></div>`;
+    return;
+  }
+
+  // Group by material_id
+  const grouped = {};
+  (logs || []).forEach(log => {
+    if (!grouped[log.material_id]) grouped[log.material_id] = { inQty: 0, outQty: 0 };
+    if (log.type === 'in') grouped[log.material_id].inQty += log.quantity;
+    else if (log.type === 'out') grouped[log.material_id].outQty += log.quantity;
+  });
+
+  const matIds = Object.keys(grouped).map(Number);
+  if (matIds.length === 0) {
+    resultDiv.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>該月份無任何變動紀錄</div></div>';
+    return;
+  }
+
+  // Build rows sorted by category then material name
+  const rows = matIds.map(mid => {
+    const mat = allMaterials.find(m => m.id === mid);
+    const catId = mat ? mat.category_id : 0;
+    const catSortIdx = allCategories.findIndex(c => c.id === catId);
+    return {
+      materialId: mid,
+      materialName: mat ? mat.name : `#${mid}`,
+      categoryName: categoryName(catId),
+      categorySortIdx: catSortIdx >= 0 ? catSortIdx : 9999,
+      inQty: grouped[mid].inQty,
+      outQty: grouped[mid].outQty,
+      net: grouped[mid].inQty - grouped[mid].outQty
+    };
+  }).sort((a, b) => {
+    if (a.categorySortIdx !== b.categorySortIdx) return a.categorySortIdx - b.categorySortIdx;
+    return a.materialName.localeCompare(b.materialName, 'zh-Hant');
+  });
+
+  // Store for export
+  window._dsSummaryRows = rows;
+
+  let totalIn = 0, totalOut = 0, totalNet = 0;
+  let tableHtml = `<div class="card"><div class="table-wrap"><table style="min-width:max-content">
+    <thead><tr><th>品項</th><th>類別</th><th style="text-align:right">入庫</th><th style="text-align:right">消耗</th><th style="text-align:right">淨變動</th></tr></thead><tbody>`;
+  rows.forEach(r => {
+    totalIn += r.inQty;
+    totalOut += r.outQty;
+    totalNet += r.net;
+    const netColor = r.net > 0 ? 'color:#22c55e' : r.net < 0 ? 'color:#ef4444' : '';
+    tableHtml += `<tr>
+      <td>${escHtml(r.materialName)}</td>
+      <td>${escHtml(r.categoryName)}</td>
+      <td style="text-align:right;color:#22c55e">+${r.inQty}</td>
+      <td style="text-align:right;color:#ef4444">-${r.outQty}</td>
+      <td style="text-align:right;${netColor};font-weight:600">${r.net > 0 ? '+' : ''}${r.net}</td>
+    </tr>`;
+  });
+  const totalNetColor = totalNet > 0 ? 'color:#22c55e' : totalNet < 0 ? 'color:#ef4444' : '';
+  tableHtml += `<tr style="border-top:2px solid var(--border);font-weight:700">
+    <td colspan="2">合計</td>
+    <td style="text-align:right;color:#22c55e">+${totalIn}</td>
+    <td style="text-align:right;color:#ef4444">-${totalOut}</td>
+    <td style="text-align:right;${totalNetColor}">${totalNet > 0 ? '+' : ''}${totalNet}</td>
+  </tr></tbody></table></div></div>`;
+  resultDiv.innerHTML = tableHtml;
+}
+
+async function exportDailySummary() {
+  const rows = window._dsSummaryRows;
+  if (!rows || !rows.length) { toast('請先查詢資料', 'error'); return; }
+
+  const meta = window._dsMeta || {};
+  const header = ['品項', '類別', '入庫', '消耗', '淨變動'];
+  const aoa = [header];
+  let totalIn = 0, totalOut = 0, totalNet = 0;
+  rows.forEach(r => {
+    totalIn += r.inQty;
+    totalOut += r.outQty;
+    totalNet += r.net;
+    aoa.push([r.materialName, r.categoryName, r.inQty, r.outQty, r.net]);
+  });
+  aoa.push(['合計', '', totalIn, totalOut, totalNet]);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
+  XLSX.utils.book_append_sheet(wb, ws, '變動總覽');
+
+  const clinicLabel = meta.clinic ? clinicName(parseInt(meta.clinic)) : '全部';
+  XLSX.writeFile(wb, `變動總覽_${meta.year || ''}年${meta.month || ''}月_${clinicLabel}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   toast('已匯出 Excel');
 }
 

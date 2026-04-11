@@ -5411,7 +5411,7 @@ async function editUser(id) {
   if (!userClinicIds.length && u.clinic_id) userClinicIds = [u.clinic_id];
 
   const clinicCheckboxes = allClinics.map(c =>
-    `<label style="display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer">
+    `<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;cursor:pointer;font-size:.88rem">
       <input type="checkbox" class="fUserClinicCb" value="${c.id}" ${userClinicIds.includes(c.id) ? 'checked' : ''}>
       ${escHtml(c.name)}
     </label>`
@@ -5422,7 +5422,7 @@ async function editUser(id) {
     <div class="form-row">
       <div class="form-group"><label>角色</label>${roleDropdown}</div>
       <div class="form-group"><label>所屬診所（可複選）</label>
-        <div id="fUserClinics" style="max-height:200px;overflow-y:auto;padding:4px">${clinicCheckboxes}</div>
+        <div id="fUserClinics" style="display:flex;flex-wrap:wrap;padding:4px">${clinicCheckboxes}</div>
       </div>
     </div>
   `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>

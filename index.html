@@ -5411,9 +5411,9 @@ async function editUser(id) {
   if (!userClinicIds.length && u.clinic_id) userClinicIds = [u.clinic_id];
 
   const clinicCheckboxes = allClinics.map(c =>
-    `<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;cursor:pointer;font-size:.88rem">
-      <input type="checkbox" class="fUserClinicCb" value="${c.id}" ${userClinicIds.includes(c.id) ? 'checked' : ''}>
-      ${escHtml(c.name)}
+    `<label style="display:flex;align-items:center;gap:6px;padding:4px 12px 4px 0;cursor:pointer;font-size:.88rem;white-space:nowrap">
+      <input type="checkbox" class="fUserClinicCb" value="${c.id}" style="flex-shrink:0" ${userClinicIds.includes(c.id) ? 'checked' : ''}>
+      <span>${escHtml(c.name)}</span>
     </label>`
   ).join('');
 

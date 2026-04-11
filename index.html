@@ -667,7 +667,19 @@ async function init() {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser) {
       try {
-        await sb.auth.refreshSession();
+        const { data, error } = await sb.auth.refreshSession();
+        if (error || !data?.session) {
+          console.warn('Session expired, re-authenticating...');
+          const { data: user } = await sb.auth.getUser();
+          if (!user?.user) {
+            // Session truly expired, show login
+            currentUser = null;
+            showLogin();
+            return;
+          }
+        }
+        // Session OK — refresh data silently
+        console.log('App resumed, session OK');
       } catch(e) {
         console.warn('Session refresh failed:', e);
       }

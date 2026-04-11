@@ -1966,12 +1966,10 @@ async function saveBubbleImgFromEditor() {
   const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
   imgs[_bubbleEditId] = dataUrl;
   localStorage.setItem('bubble_images', JSON.stringify(imgs));
-  // Save to Supabase
+  // Save to Supabase (per user)
   if (currentUser) {
-    const existing = JSON.parse(localStorage.getItem('bubble_images_cloud') || '{}');
-    const merged = { ...existing, ...imgs };
-    await withTimeout(sb.from('app_settings').upsert({ key: 'bubble_images', value: merged, updated_at: new Date().toISOString() }, { onConflict: 'key' }));
-    localStorage.setItem('bubble_images_cloud', JSON.stringify(merged));
+    const userKey = 'bubble_images_' + currentUser.id;
+    await withTimeout(sb.from('app_settings').upsert({ key: userKey, value: imgs, updated_at: new Date().toISOString() }, { onConflict: 'key' }));
   }
   closeAvatarEditor();
   applyAllBubbleImages();
@@ -1982,9 +1980,10 @@ function removeBubbleImg(bubbleId) {
   const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
   delete imgs[bubbleId];
   localStorage.setItem('bubble_images', JSON.stringify(imgs));
-  // Update Supabase
+  // Update Supabase (per user)
   if (currentUser) {
-    sb.from('app_settings').upsert({ key: 'bubble_images', value: imgs, updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(() => {});
+    const userKey = 'bubble_images_' + currentUser.id;
+    sb.from('app_settings').upsert({ key: userKey, value: imgs, updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(() => {});
   }
   applyAllBubbleImages();
   openBgSettingModal(); // Refresh
@@ -2009,10 +2008,11 @@ function applyAllBubbleImages() {
 
 async function loadBubbleImages() {
   try {
-    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', 'bubble_images').maybeSingle());
+    if (!currentUser) return;
+    const userKey = 'bubble_images_' + currentUser.id;
+    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', userKey).maybeSingle());
     if (data && data.value) {
       localStorage.setItem('bubble_images', JSON.stringify(data.value));
-      localStorage.setItem('bubble_images_cloud', JSON.stringify(data.value));
     }
   } catch(e) { console.log('loadBubbleImages error:', e); }
 }

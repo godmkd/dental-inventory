@@ -898,7 +898,7 @@ async function loadProfile() {
       if (testClinic) defaultClinicId = testClinic.id;
     } catch(e) {}
     const { data: newP, error: e2 } = await withTimeout(sb.from('user_profiles').insert({
-      id: currentUser.id, display_name: displayName, role: 'clinic_manager',
+      id: currentUser.id, display_name: displayName, role: 'visitor',
       line_user_id: lineId, is_active: true, clinic_id: defaultClinicId
     }).select().single());
     if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }
@@ -984,7 +984,7 @@ function roleLabel(roleStr, roleId) {
     const role = allRoles.find(r => r.id === roleId);
     if (role) return role.display_name;
   }
-  return { owner: '系統管理員', admin: '總管理者', clinic_manager: '診所管理者' }[roleStr] || roleStr;
+  return { owner: '系統管理員', admin: '總管理者', clinic_manager: '診所管理者', visitor: '訪客' }[roleStr] || roleStr;
 }
 
 function canEditOwned(createdBy) { return !!(currentUser && createdBy === currentUser.id); }
@@ -1004,6 +1004,7 @@ function hasPermission(perm) {
   const r = userProfile.role;
   if (r === 'owner') return true;
   if (r === 'admin') return !['manage_users', 'manage_roles'].includes(perm);
+  if (r === 'visitor') return false;
   return ['daily_changes', 'create_orders', 'receive_orders'].includes(perm);
 }
 

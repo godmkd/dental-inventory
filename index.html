@@ -961,9 +961,9 @@ async function enterApp() {
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   applyUserAvatar();
   loadBubbleImages().then(() => applyAllBubbleImages());
-  // Browse mode: show all bubbles but mask content
-  if (hasPermission('browse') && !hasPermission('daily_changes')) {
-    document.body.classList.add('browse-mode');
+  // Browse mode flag (masking applied per-page in applyBrowseMask)
+  if (hasPermission('browse')) {
+    window._hasBrowseMode = true;
   }
   setupLogoBubbleDoubleTap();
   loadColorTheme();
@@ -1131,11 +1131,11 @@ function buildBubbles() {
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
-  const isBrowseMode = hasPermission('browse') && !hasPermission('daily_changes');
+  const hasBrowse = hasPermission('browse');
   bubbleConfig.forEach(b => {
-    if (isBrowseMode) {
-      // Browse mode: hide admin-only and editing bubbles
-      if (['role-mgmt', 'user-list', 'customize'].includes(b.id)) return;
+    if (hasBrowse) {
+      // Browse mode: show all except admin-only
+      if (['role-mgmt', 'user-list'].includes(b.id) && !hasPermission(b.perm)) return;
     } else {
       if (b.perm && !hasPermission(b.perm)) return;
       if (b.perms && !b.perms.some(p => hasPermission(p))) return;
@@ -2095,32 +2095,38 @@ async function loadBubbleImages() {
   } catch(e) { console.log('loadBubbleImages error:', e); }
 }
 
-// Browse mode: mask data content after page render
+// Browse mode: mask data content after page render (only for pages without actual permission)
+const _pagePermMap = {
+  'ordering': 'create_orders', 'daily-change': 'daily_changes', 'receiving': 'receive_orders',
+  'stock-overview': 'view_all_inventory', 'order-summary': 'manage_orders', 'order-list': 'manage_orders',
+  'rush-mgmt': 'manage_orders', 'admin-suppliers': 'manage_orders', 'admin-categories': 'manage_orders',
+  'admin-materials': 'manage_orders', 'notify-settings': 'manage_orders', 'order-stats': 'view_prices',
+  'customize': 'change_background', 'daily-summary': 'daily_changes',
+  'admin-clinics': 'manage_clinics', 'user-list': 'manage_users', 'role-mgmt': 'manage_roles'
+};
+
 function applyBrowseMask() {
-  if (!document.body.classList.contains('browse-mode')) return;
-  // Mask all table bodies, card values, and data sections
-  document.querySelectorAll('.content-section.active table tbody, .content-section.active .card-value, .content-section.active .data-cell').forEach(el => {
-    el.classList.add('browse-mask');
-  });
-  // Mask all td elements with numbers/prices
+  if (!window._hasBrowseMode) return;
+  // Check if user has actual permission for current page
+  const pageId = typeof currentPage !== 'undefined' ? currentPage : '';
+  const requiredPerm = _pagePermMap[pageId];
+  if (requiredPerm && hasPermission(requiredPerm)) {
+    // User has real permission — don't mask, allow full operation
+    document.body.classList.remove('browse-mode');
+    return;
+  }
+  // No real permission — apply browse masking
+  document.body.classList.add('browse-mode');
+  // Mask numbers in table cells
   document.querySelectorAll('.content-section.active td').forEach(td => {
     const text = td.textContent.trim();
-    if (/^\d|^NT\$|^\$|^-?\d/.test(text) && !td.classList.contains('browse-keep')) {
+    if (/^\d|^NT\$|^\$|^-?\d/.test(text) && !td.dataset.masked) {
+      td.dataset.masked = '1';
       td.dataset.origText = td.textContent;
       td.textContent = '***';
       td.style.color = '#666';
     }
   });
-  // Add overlay to forms and action areas
-  document.querySelectorAll('.content-section.active .add-form, .content-section.active form').forEach(el => {
-    el.classList.add('browse-overlay');
-  });
-}
-
-// Hook into page navigation to apply browse mask
-const _origNavigate = window.navigateToBubble;
-if (typeof navigateToBubble === 'function') {
-  window._browseNavWrap = true;
 }
 
 function usageHint(pageId) {

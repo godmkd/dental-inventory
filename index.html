@@ -2250,17 +2250,18 @@ async function aiCallGemini(userMsg, imageBase64) {
     }
     parts.push({ text: userMsg });
 
-    // Build conversation
-    const contents = [
-      { role: 'user', parts: [{ text: ctx }] },
-      { role: 'model', parts: [{ text: '了解，我已連接到庫存資料庫，可以即時查詢庫存量。請問有什麼需要幫忙的？' }] },
-    ];
+    // Build conversation — context as system instruction
+    const contents = [];
     // Add history
     _aiChatHistory.forEach(h => contents.push(h));
     // Add current message
     contents.push({ role: 'user', parts });
 
-    const reqBody = { contents, generationConfig: { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } } };
+    const reqBody = {
+      systemInstruction: { parts: [{ text: ctx }] },
+      contents,
+      generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+    };
     console.log('[AI] Request:', JSON.stringify(reqBody).slice(0, 500));
 
     // Try models in order: 2.5-flash → 2.0-flash → flash-lite

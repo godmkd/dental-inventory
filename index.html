@@ -2652,7 +2652,7 @@ async function renderDailyChange(container) {
       <div class="bcp-body" id="dailyPanelBody"></div>
       <div class="bcp-footer" id="dailyPanelFooter"></div>
     </div>
-    <div class="confirmed-panel" id="dailyConfirmedPanel">
+    <div class="confirmed-panel collapsed" id="dailyConfirmedPanel">
       <div class="cp-header" onclick="toggleDailyConfirmedPanel()">
         <span class="cp-title" id="dailyConfirmedTitle">✅ 已確認變動 (0)</span>
         <span class="cp-arrow">▲</span>
@@ -2910,35 +2910,52 @@ async function loadDailyConfirmedLogs() {
   if (!titleEl || !bodyEl) return;
   if (!dailyClinicId) { bodyEl.innerHTML = '<div class="cp-empty">請選擇診所</div>'; return; }
 
-  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-  const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+  // Load last 7 days of logs
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7); weekAgo.setHours(0,0,0,0);
 
   const { data: logs } = await withTimeout(sb.from('inventory_logs').select('*')
     .eq('clinic_id', dailyClinicId)
-    .gte('created_at', todayStart.toISOString())
-    .lte('created_at', todayEnd.toISOString())
+    .gte('created_at', weekAgo.toISOString())
     .order('created_at', { ascending: false }));
 
   const items = logs || [];
   titleEl.textContent = `✅ 已確認變動 (${items.length})`;
 
   if (!items.length) {
-    bodyEl.innerHTML = '<div class="cp-empty">今天尚無已確認變動</div>';
+    bodyEl.innerHTML = '<div class="cp-empty">近7天無已確認變動</div>';
     return;
   }
-  bodyEl.innerHTML = items.map(log => {
-    const isIn = log.type === 'in';
+
+  // Group by date
+  const groups = {};
+  items.forEach(log => {
     const dt = new Date(log.created_at);
-    const dateStr = dt.toLocaleDateString('zh-TW', { month:'2-digit', day:'2-digit' });
-    const time = dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-    return `<div class="cp-item">
-      <div class="cp-item-left">
-        <span class="cp-item-name">${escHtml(materialName(log.material_id))}</span>
-        <span class="cp-item-qty ${isIn ? 'positive' : 'negative'}">${isIn ? '+' : '-'}${log.quantity}</span>
-        <span style="font-size:.75rem;color:var(--text-lighter)">${escHtml(log.operator_name || '')}</span>
-        <span class="cp-item-time">${dateStr} ${time}</span>
-      </div>
-      <button class="cp-item-cancel" onclick="cancelDailyLog(${log.id})">取消</button>
+    const dateKey = dt.toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' });
+    if (!groups[dateKey]) groups[dateKey] = [];
+    groups[dateKey].push(log);
+  });
+
+  const todayStr = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' });
+
+  bodyEl.innerHTML = Object.entries(groups).map(([date, dateLogs]) => {
+    const isToday = date === todayStr;
+    const label = isToday ? `今天 (${date})` : date;
+    return `<div style="margin-bottom:8px">
+      <div style="font-size:.78rem;font-weight:600;color:var(--accent);padding:4px 0;border-bottom:1px solid var(--border-light)">${label} — ${dateLogs.length}筆</div>
+      ${dateLogs.map(log => {
+        const isIn = log.type === 'in';
+        const dt = new Date(log.created_at);
+        const time = dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+        return `<div class="cp-item">
+          <div class="cp-item-left">
+            <span class="cp-item-name">${escHtml(materialName(log.material_id))}</span>
+            <span class="cp-item-qty ${isIn ? 'positive' : 'negative'}">${isIn ? '+' : '-'}${log.quantity}</span>
+            <span style="font-size:.75rem;color:var(--text-lighter)">${escHtml(log.operator_name || '')}</span>
+            <span class="cp-item-time">${time}</span>
+          </div>
+          ${isToday ? `<button class="cp-item-cancel" onclick="cancelDailyLog(${log.id})">取消</button>` : ''}
+        </div>`;
+      }).join('')}
     </div>`;
   }).join('');
 }
@@ -3021,7 +3038,7 @@ async function renderOrdering(container) {
       <div class="bcp-body" id="orderPanelBody"></div>
       <div class="bcp-footer" id="orderPanelFooter"></div>
     </div>
-    <div class="confirmed-panel" id="orderConfirmedPanel">
+    <div class="confirmed-panel collapsed" id="orderConfirmedPanel">
       <div class="cp-header" onclick="toggleOrderConfirmedPanel()">
         <span class="cp-title" id="orderConfirmedTitle">✅ 已送出叫貨單 (0)</span>
         <span class="cp-arrow">▲</span>

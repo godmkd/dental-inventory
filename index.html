@@ -756,7 +756,6 @@ function handleLogoBubbleClick() {
     clearTimeout(_logoTapTimer);
     _logoTapTimer = null;
     if (hasPermission('arrange_layout')) enterEditMode();
-    else toast('需要「版面調整」權限', 'error');
   } else {
     _logoTapTimer = setTimeout(() => {
       _logoTapTimer = null;
@@ -1134,7 +1133,10 @@ function buildBubbles() {
   let html = '';
   const isBrowseMode = hasPermission('browse') && !hasPermission('daily_changes');
   bubbleConfig.forEach(b => {
-    if (!isBrowseMode) {
+    if (isBrowseMode) {
+      // Browse mode: hide admin-only and editing bubbles
+      if (['role-mgmt', 'user-list', 'customize'].includes(b.id)) return;
+    } else {
       if (b.perm && !hasPermission(b.perm)) return;
       if (b.perms && !b.perms.some(p => hasPermission(p))) return;
     }

@@ -1073,8 +1073,9 @@ function groupMatsByCat(mats) {
   return sorted;
 }
 
-if (!window._collapsedDailyCats) window._collapsedDailyCats = new Set();
-if (!window._collapsedOrderCats) window._collapsedOrderCats = new Set();
+// Track EXPANDED categories (default all collapsed)
+if (!window._expandedDailyCats) window._expandedDailyCats = new Set();
+if (!window._expandedOrderCats) window._expandedOrderCats = new Set();
 if (!window._collapsedAdminMatCats) window._collapsedAdminMatCats = new Set();
 
 // Type tab state
@@ -2625,9 +2626,40 @@ async function renderDailyChange(container) {
     (inv || []).forEach(i => { dailyInvMap[i.material_id] = i; });
   }
 
+  if (!window._dailyTab) window._dailyTab = 'operate';
   mc.innerHTML = `
     <div class="page-title">🔄 日常變動 <span class="help-tip">!<span class="help-text">正數(+)為入庫，負數(-)為消耗。調整後按送出儲存。</span></span></div>
     ${usageHint('daily-change')}
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px">
+      <button onclick="window._dailyTab='operate';renderDailyChange()" style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:.9em;font-weight:600;border-bottom:2px solid ${window._dailyTab==='operate'?'var(--accent)':'transparent'};color:${window._dailyTab==='operate'?'var(--accent)':'var(--text-light)'}">📝 操作</button>
+      <button onclick="window._dailyTab='history';renderDailyChange()" style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:.9em;font-weight:600;border-bottom:2px solid ${window._dailyTab==='history'?'var(--accent)':'transparent'};color:${window._dailyTab==='history'?'var(--accent)':'var(--text-light)'}">📋 歷史查詢</button>
+    </div>`;
+
+  if (window._dailyTab === 'history') {
+    mc.innerHTML += `
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        ${myClinics.length > 1 ? `<select id="dailyHistClinic" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:.88rem">
+          ${myClinics.map(c => `<option value="${c.id}"${c.id===dailyClinicId?' selected':''}>${escHtml(c.name)}</option>`).join('')}
+        </select>` : ''}
+        <input type="date" id="dailyHistStart" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:.88rem">
+        <span style="color:var(--text-light)">～</span>
+        <input type="date" id="dailyHistEnd" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:.88rem">
+        <button class="btn btn-primary btn-sm" onclick="queryDailyHistory()">查詢</button>
+      </div>
+      <div id="dailyHistResult"><div style="text-align:center;color:var(--text-light);padding:20px">選擇日期範圍後按查詢</div></div>`;
+    // Default dates: last 7 days
+    const now = new Date();
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+    setTimeout(() => {
+      const s = document.getElementById('dailyHistStart');
+      const e = document.getElementById('dailyHistEnd');
+      if (s) s.value = weekAgo.toISOString().slice(0,10);
+      if (e) e.value = now.toISOString().slice(0,10);
+    }, 0);
+    return;
+  }
+
+  mc.innerHTML += `
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-sm ${window._dailyViewType==='consumable'?'btn-primary':'btn-ghost'}" onclick="window._dailyViewType='consumable';window._dailyFilterCatId=0;renderDailyChange()">耗材</button>
       <button class="btn btn-sm ${window._dailyViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._dailyViewType='equipment';window._dailyFilterCatId=0;renderDailyChange()">非耗材</button>
@@ -2737,10 +2769,10 @@ function renderDailyContent() {
   if (!window._dailyFilterCatId) {
     const groups = groupMatsByCat(mats);
     container.innerHTML = groups.map(g => {
-      const collapsed = window._collapsedDailyCats.has(String(g.catId));
+      const collapsed = !window._expandedDailyCats.has(String(g.catId));
       const bodyId = 'dailyCatBody_' + g.catId;
       return `<div class="card" style="overflow:hidden;margin-bottom:8px">
-        <div class="card-title" style="cursor:pointer;user-select:none;padding:8px 12px;margin:0" onclick="const b=document.getElementById('${bodyId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._collapsedDailyCats.add('${g.catId}');else window._collapsedDailyCats.delete('${g.catId}')">
+        <div class="card-title" style="cursor:pointer;user-select:none;padding:8px 12px;margin:0" onclick="const b=document.getElementById('${bodyId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._expandedDailyCats.delete('${g.catId}');else window._expandedDailyCats.add('${g.catId}')">
           ${escHtml(g.catName)} <span style="font-size:.78rem;color:var(--text-light)">(${g.mats.length})</span> <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">${collapsed?'▶':'▼'}</span>
         </div>
         <div id="${bodyId}" style="display:${collapsed?'none':'block'}">
@@ -2903,6 +2935,63 @@ window.toggleDailyConfirmedPanel = function() {
   const panel = document.getElementById('dailyConfirmedPanel');
   if (panel) panel.classList.toggle('collapsed');
 };
+
+async function queryDailyHistory() {
+  const el = document.getElementById('dailyHistResult');
+  if (!el) return;
+  const clinicId = document.getElementById('dailyHistClinic')?.value || dailyClinicId;
+  const startDate = document.getElementById('dailyHistStart')?.value;
+  const endDate = document.getElementById('dailyHistEnd')?.value;
+  if (!startDate || !endDate) { el.innerHTML = '<div style="text-align:center;color:var(--text-light);padding:20px">請選擇日期</div>'; return; }
+
+  el.innerHTML = '<div style="text-align:center;color:var(--text-light);padding:20px">載入中...</div>';
+
+  const startISO = new Date(startDate + 'T00:00:00').toISOString();
+  const endISO = new Date(endDate + 'T23:59:59').toISOString();
+
+  const { data: logs, error } = await withTimeout(sb.from('inventory_logs').select('*')
+    .eq('clinic_id', clinicId)
+    .gte('created_at', startISO)
+    .lte('created_at', endISO)
+    .order('created_at', { ascending: false }));
+
+  if (error) { el.innerHTML = `<div style="color:var(--danger);padding:20px">查詢失敗: ${error.message}</div>`; return; }
+  const items = logs || [];
+  if (!items.length) { el.innerHTML = '<div style="text-align:center;color:var(--text-light);padding:20px">該期間無變動紀錄</div>'; return; }
+
+  // Group by date
+  const groups = {};
+  items.forEach(log => {
+    const dt = new Date(log.created_at);
+    const dateKey = dt.toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' });
+    if (!groups[dateKey]) groups[dateKey] = [];
+    groups[dateKey].push(log);
+  });
+
+  el.innerHTML = `<div style="font-size:.85rem;color:var(--text-light);margin-bottom:8px">共 ${items.length} 筆紀錄</div>` +
+    Object.entries(groups).map(([date, dateLogs]) => {
+      const inCount = dateLogs.filter(l => l.type === 'in').reduce((s, l) => s + l.quantity, 0);
+      const outCount = dateLogs.filter(l => l.type === 'out').reduce((s, l) => s + l.quantity, 0);
+      return `<div class="card" style="margin-bottom:8px;overflow:hidden">
+        <div class="card-title" style="cursor:pointer;padding:8px 12px;margin:0" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('.dh-arrow').textContent=this.nextElementSibling.style.display==='none'?'▶':'▼'">
+          ${date} <span style="font-size:.78rem;color:var(--text-light)">(${dateLogs.length}筆 入+${inCount} 出-${outCount})</span> <span class="dh-arrow" style="font-size:.8rem;margin-left:6px">▶</span>
+        </div>
+        <div style="display:none">
+          <table style="width:100%;font-size:.82rem"><thead><tr><th>品項</th><th>數量</th><th>操作者</th><th>時間</th></tr></thead>
+          <tbody>${dateLogs.map(log => {
+            const isIn = log.type === 'in';
+            const time = new Date(log.created_at).toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
+            return `<tr>
+              <td>${escHtml(materialName(log.material_id))}</td>
+              <td style="color:${isIn ? 'var(--success)' : 'var(--danger)'};font-weight:600">${isIn ? '+' : '-'}${log.quantity}</td>
+              <td style="font-size:.8rem;color:var(--text-light)">${escHtml(log.operator_name || '')}</td>
+              <td style="font-size:.8rem;color:var(--text-light)">${time}</td>
+            </tr>`;
+          }).join('')}</tbody></table>
+        </div>
+      </div>`;
+    }).join('');
+}
 
 async function loadDailyConfirmedLogs() {
   const titleEl = document.getElementById('dailyConfirmedTitle');
@@ -3125,10 +3214,10 @@ function renderOrderContent() {
   if (!window._orderFilterCatId) {
     const groups = groupMatsByCat(mats);
     container.innerHTML = groups.map(g => {
-      const collapsed = window._collapsedOrderCats.has(String(g.catId));
+      const collapsed = !window._expandedOrderCats.has(String(g.catId));
       const bodyId = 'orderCatBody_' + g.catId;
       return `<div class="card" style="overflow:hidden;margin-bottom:8px">
-        <div class="card-title" style="cursor:pointer;user-select:none;padding:8px 12px;margin:0" onclick="const b=document.getElementById('${bodyId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._collapsedOrderCats.add('${g.catId}');else window._collapsedOrderCats.delete('${g.catId}')">
+        <div class="card-title" style="cursor:pointer;user-select:none;padding:8px 12px;margin:0" onclick="const b=document.getElementById('${bodyId}');const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sc-arrow').textContent=open?'▶':'▼';if(open)window._expandedOrderCats.delete('${g.catId}');else window._expandedOrderCats.add('${g.catId}')">
           ${escHtml(g.catName)} <span style="font-size:.78rem;color:var(--text-light)">(${g.mats.length})</span> <span class="sc-arrow" style="font-size:.8rem;margin-left:6px">${collapsed?'▶':'▼'}</span>
         </div>
         <div id="${bodyId}" style="display:${collapsed?'none':'block'}">

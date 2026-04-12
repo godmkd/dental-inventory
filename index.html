@@ -1329,6 +1329,11 @@ function openBgSettingModal() {
   ).join('');
 
   openModal('🎨 客製化管理', `
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px">
+      <button onclick="document.getElementById('customTabAppearance').style.display='block';document.getElementById('customTabBubble').style.display='none';this.style.borderBottomColor='var(--accent)';this.style.color='var(--accent)';this.nextElementSibling.style.borderBottomColor='transparent';this.nextElementSibling.style.color='var(--text-light)'" style="padding:8px 16px;border:none;background:transparent;color:var(--accent);cursor:pointer;font-size:.9em;font-weight:600;border-bottom:2px solid var(--accent)">🎨 外觀</button>
+      <button onclick="document.getElementById('customTabBubble').style.display='block';document.getElementById('customTabAppearance').style.display='none';this.style.borderBottomColor='var(--accent)';this.style.color='var(--accent)';this.previousElementSibling.style.borderBottomColor='transparent';this.previousElementSibling.style.color='var(--text-light)'" style="padding:8px 16px;border:none;background:transparent;color:var(--text-light);cursor:pointer;font-size:.9em;font-weight:600;border-bottom:2px solid transparent">🫧 泡泡圖片</button>
+    </div>
+    <div id="customTabAppearance">
     <div class="bg-section">
       <h4>🎨 顏色主題</h4>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px">${themeSwatches}</div>
@@ -1376,37 +1381,6 @@ function openBgSettingModal() {
     </div>
 
     <div class="bg-section">
-      <h4>🫧 泡泡圖片</h4>
-      <div style="font-size:.75rem;color:var(--text-lighter);margin-bottom:8px">為每個泡泡設定自訂照片（圓形遮罩裁切），名稱顯示在泡泡下方</div>
-      <div id="bubbleImgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px">
-        ${(() => {
-          const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
-          const config = [
-            { id:'ordering', icon:'📦', label:'叫貨' },{ id:'daily-change', icon:'🔄', label:'日常變動' },
-            { id:'receiving', icon:'✅', label:'收貨' },{ id:'stock-overview', icon:'🗂️', label:'庫存總覽' },
-            { id:'order-summary', icon:'📊', label:'叫貨總覽' },{ id:'order-list', icon:'📋', label:'貨單管理' },
-            { id:'rush-mgmt', icon:'🚨', label:'催貨管理' },{ id:'tutorials', icon:'📖', label:'教學' },
-            { id:'admin-suppliers', icon:'🏭', label:'廠商管理' },{ id:'admin-categories', icon:'📁', label:'類別管理' },
-            { id:'notify-settings', icon:'🔔', label:'通知設定' },{ id:'admin-materials', icon:'📦', label:'品項管理' },
-            { id:'order-stats', icon:'📈', label:'叫貨統計' },{ id:'customize', icon:'🎨', label:'客製化' },
-            { id:'daily-summary', icon:'📊', label:'變動總覽' },{ id:'admin-clinics', icon:'🏥', label:'診所管理' },
-            { id:'user-list', icon:'👤', label:'人員管理' },{ id:'role-mgmt', icon:'🔐', label:'角色管理' },
-          ];
-          return config.map(c => {
-            const hasImg = imgs[c.id];
-            return '<div style="text-align:center">' +
-              '<div style="width:56px;height:56px;border-radius:50%;margin:0 auto 4px;overflow:hidden;border:2px solid ' + (hasImg ? 'var(--accent)' : 'var(--border)') + ';background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative" onclick="pickBubbleImg(\'' + c.id + '\')">' +
-              (hasImg ? '<img src="' + hasImg + '" style="width:100%;height:100%;object-fit:cover">' : '<span style="font-size:1.3rem">' + c.icon + '</span>') +
-              '</div>' +
-              '<div style="font-size:.68rem;color:var(--text-light)">' + c.label + '</div>' +
-              (hasImg ? '<button class="btn btn-danger" style="font-size:.6rem;padding:1px 4px;margin-top:2px" onclick="event.stopPropagation();removeBubbleImg(\'' + c.id + '\')">移除</button>' : '') +
-            '</div>';
-          }).join('');
-        })()}
-      </div>
-    </div>
-
-    <div class="bg-section">
       <h4>🔤 字體設定</h4>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
         <div>
@@ -1438,6 +1412,42 @@ function openBgSettingModal() {
         </div>
       </div>
     </div>
+    </div><!-- /customTabAppearance -->
+
+    <div id="customTabBubble" style="display:none">
+      <div style="font-size:.75rem;color:var(--text-lighter);margin-bottom:12px">點擊泡泡上傳照片（圓形遮罩裁切）。可為每顆泡泡獨立設定文字顏色。</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:12px">
+        ${(() => {
+          const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
+          const colors = JSON.parse(localStorage.getItem('bubble_label_colors') || '{}');
+          const config = [
+            { id:'ordering', icon:'📦', label:'叫貨' },{ id:'daily-change', icon:'🔄', label:'日常變動' },
+            { id:'receiving', icon:'✅', label:'收貨' },{ id:'stock-overview', icon:'🗂️', label:'庫存總覽' },
+            { id:'order-summary', icon:'📊', label:'叫貨總覽' },{ id:'order-list', icon:'📋', label:'貨單管理' },
+            { id:'rush-mgmt', icon:'🚨', label:'催貨管理' },{ id:'tutorials', icon:'📖', label:'教學' },
+            { id:'admin-suppliers', icon:'🏭', label:'廠商管理' },{ id:'admin-categories', icon:'📁', label:'類別管理' },
+            { id:'notify-settings', icon:'🔔', label:'通知設定' },{ id:'admin-materials', icon:'📦', label:'品項管理' },
+            { id:'order-stats', icon:'📈', label:'叫貨統計' },{ id:'customize', icon:'🎨', label:'客製化' },
+            { id:'daily-summary', icon:'📊', label:'變動總覽' },{ id:'admin-clinics', icon:'🏥', label:'診所管理' },
+            { id:'user-list', icon:'👤', label:'人員管理' },{ id:'role-mgmt', icon:'🔐', label:'角色管理' },
+          ];
+          return config.map(c => {
+            const hasImg = imgs[c.id];
+            const labelColor = colors[c.id] || '#ffffff';
+            return '<div style="text-align:center">' +
+              '<div style="width:64px;height:64px;border-radius:50%;margin:0 auto 4px;overflow:hidden;border:2px solid ' + (hasImg ? 'var(--accent)' : 'var(--border)') + ';background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="pickBubbleImg(\'' + c.id + '\')">' +
+              (hasImg ? '<img src="' + hasImg + '" style="width:100%;height:100%;object-fit:cover">' : '<span style="font-size:1.5rem">' + c.icon + '</span>') +
+              '</div>' +
+              '<div style="font-size:.72rem;color:var(--text-light);margin-bottom:3px">' + c.label + '</div>' +
+              (hasImg ? '<div style="display:flex;gap:3px;justify-content:center;align-items:center;flex-wrap:wrap">' +
+                '<input type="color" value="' + labelColor + '" onchange="setBubbleLabelColor(\'' + c.id + '\',this.value)" style="width:22px;height:22px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer;padding:0">' +
+                '<button class="btn btn-danger" style="font-size:.55rem;padding:1px 4px" onclick="event.stopPropagation();removeBubbleImg(\'' + c.id + '\')">✕</button>' +
+              '</div>' : '') +
+            '</div>';
+          }).join('');
+        })()}
+      </div>
+    </div><!-- /customTabBubble -->
   `, '<button class="btn btn-ghost" onclick="closeModal()">關閉</button>');
 
   // set select values from localStorage
@@ -2003,21 +2013,33 @@ function removeBubbleImg(bubbleId) {
   openBgSettingModal(); // Refresh
 }
 
+function setBubbleLabelColor(bubbleId, color) {
+  const colors = JSON.parse(localStorage.getItem('bubble_label_colors') || '{}');
+  colors[bubbleId] = color;
+  localStorage.setItem('bubble_label_colors', JSON.stringify(colors));
+  // Save to Supabase
+  if (currentUser) {
+    const userKey = 'bubble_label_colors_' + currentUser.id;
+    sb.from('app_settings').upsert({ key: userKey, value: colors, updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(() => {});
+  }
+  applyAllBubbleImages();
+}
+
 function applyAllBubbleImages() {
   const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
+  const colors = JSON.parse(localStorage.getItem('bubble_label_colors') || '{}');
   for (const [pageId, dataUrl] of Object.entries(imgs)) {
     const bubble = document.querySelector(`.bubble[data-page="${pageId}"]`);
     if (!bubble) continue;
     const iconEl = bubble.querySelector('.bubble-icon');
     const labelEl = bubble.querySelector('.bubble-label');
     if (iconEl && dataUrl) {
-      // Cover entire bubble with image, keep bubble layout intact
       bubble.style.backgroundImage = `url(${dataUrl})`;
       bubble.style.backgroundSize = 'cover';
       bubble.style.backgroundPosition = 'center';
-      // Hide icon, keep label visible below
       iconEl.style.cssText = 'display:none';
-      if (labelEl) labelEl.style.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:.75rem;font-weight:600;z-index:2;text-shadow:0 1px 4px rgba(0,0,0,.7);color:#fff;pointer-events:none';
+      const labelColor = colors[pageId] || '#ffffff';
+      if (labelEl) labelEl.style.cssText = `position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:.75rem;font-weight:600;z-index:2;text-shadow:0 1px 4px rgba(0,0,0,.7);color:${labelColor};pointer-events:none`;
     }
   }
 }
@@ -2025,11 +2047,14 @@ function applyAllBubbleImages() {
 async function loadBubbleImages() {
   try {
     if (!currentUser) return;
-    const userKey = 'bubble_images_' + currentUser.id;
-    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', userKey).maybeSingle());
-    if (data && data.value) {
-      localStorage.setItem('bubble_images', JSON.stringify(data.value));
-    }
+    const imgKey = 'bubble_images_' + currentUser.id;
+    const colorKey = 'bubble_label_colors_' + currentUser.id;
+    const [imgRes, colorRes] = await Promise.all([
+      withTimeout(sb.from('app_settings').select('value').eq('key', imgKey).maybeSingle()),
+      withTimeout(sb.from('app_settings').select('value').eq('key', colorKey).maybeSingle())
+    ]);
+    if (imgRes.data?.value) localStorage.setItem('bubble_images', JSON.stringify(imgRes.data.value));
+    if (colorRes.data?.value) localStorage.setItem('bubble_label_colors', JSON.stringify(colorRes.data.value));
   } catch(e) { console.log('loadBubbleImages error:', e); }
 }
 

@@ -2210,27 +2210,21 @@ async function aiGetContext() {
   ctx += `使用者權限：${ALL_PERMISSIONS.filter(p => hasPermission(p.key)).map(p => p.label).join('、') || '無'}。\n`;
   ctx += `只能協助使用者有權限的操作。如果使用者沒有某個權限，告訴他需要向管理員申請。\n`;
 
-  // Load inventory data
+  // Load inventory data with quantities
   if (hasPermission('daily_changes') || hasPermission('view_all_inventory')) {
     try {
       const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('material_id,quantity,safe_stock').eq('clinic_id', dailyClinicId));
       if (inv && inv.length > 0) {
-        const lowStock = inv.filter(i => i.quantity <= (i.safe_stock || 0));
-        ctx += `\n目前庫存概況：共 ${inv.length} 項品項。`;
-        if (lowStock.length > 0) {
-          ctx += `\n⚠️ 低庫存品項（${lowStock.length}項）：`;
-          lowStock.slice(0, 10).forEach(i => {
-            const name = materialName(i.material_id);
-            ctx += `\n- ${name}：剩 ${i.quantity}（安全量 ${i.safe_stock || 0}）`;
-          });
-        }
+        ctx += `\n\n目前庫存（共${inv.length}項）：`;
+        inv.forEach(i => {
+          const name = materialName(i.material_id);
+          const low = i.quantity <= (i.safe_stock || 0) ? ' ⚠️低庫存' : '';
+          ctx += `\n- ${name}：${i.quantity}個（安全量${i.safe_stock || 0}）${low}`;
+        });
       }
     } catch(e) {}
-  }
-
-  // Load materials list
-  if (allMaterials.length > 0) {
-    ctx += `\n\n系統品項（前30個）：${allMaterials.slice(0, 30).map(m => m.name).join('、')}`;
+  } else if (allMaterials.length > 0) {
+    ctx += `\n系統品項：${allMaterials.slice(0, 30).map(m => m.name).join('、')}`;
   }
 
   ctx += `\n\n回答時使用繁體中文。如果使用者拍照，請辨識照片中的牙科耗材並建議操作。`;
@@ -2261,7 +2255,7 @@ async function aiCallGemini(userMsg, imageBase64) {
     // Add current message
     contents.push({ role: 'user', parts });
 
-    const reqBody = { contents, generationConfig: { temperature: 0.7, maxOutputTokens: 2048 } };
+    const reqBody = { contents, generationConfig: { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } } };
     console.log('[AI] Request:', JSON.stringify(reqBody).slice(0, 500));
 
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`, {
@@ -2280,7 +2274,10 @@ async function aiCallGemini(userMsg, imageBase64) {
       return;
     }
 
-    const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '抱歉，無法處理你的請求。（無回應內容）';
+    // Extract text from all parts (Gemini 2.5 may have thinking + text parts)
+    const allParts = data?.candidates?.[0]?.content?.parts || [];
+    const textParts = allParts.filter(p => p.text).map(p => p.text);
+    const aiText = textParts.join('\n').trim() || '抱歉，無法處理你的請求。（無回應內容）';
 
     // Remove "thinking" message
     const box = document.getElementById('aiChatBox');

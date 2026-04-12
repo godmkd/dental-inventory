@@ -2269,31 +2269,28 @@ async function aiCallGemini(userMsg, imageBase64) {
     };
     console.log('[AI] Request:', JSON.stringify(reqBody).slice(0, 500));
 
-    // Try models with retry
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+    // Single model call with retry
+    const model = 'gemini-2.0-flash';
     let data = null;
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 3000));
-      for (const model of models) {
-        try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reqBody)
-          });
-          data = await res.json();
-          console.log(`[AI] ${model} Response:`, JSON.stringify(data).slice(0, 500));
-          if (!data.error) break;
-          console.warn(`[AI] ${model} failed:`, data.error.message);
-        } catch(e) { console.warn(`[AI] ${model} fetch error:`, e); }
-      }
-      if (data && !data.error) break;
+      if (attempt > 0) await new Promise(r => setTimeout(r, 5000));
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(reqBody)
+        });
+        data = await res.json();
+        console.log(`[AI] ${model} Response:`, JSON.stringify(data).slice(0, 500));
+        if (!data.error) break;
+        console.warn(`[AI] attempt ${attempt+1} failed:`, data.error.message);
+      } catch(e) { console.warn(`[AI] fetch error:`, e); }
     }
 
     if (!data || data.error) {
       const box = document.getElementById('aiChatBox');
       if (box && box.lastChild) box.removeChild(box.lastChild);
-      aiAppendMsg('ai', `❌ AI 暫時忙碌，請等幾秒再試一次`);
+      aiAppendMsg('ai', `❌ AI 忙碌中，請等 10 秒再試`);
       return;
     }
 

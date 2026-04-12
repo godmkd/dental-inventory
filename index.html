@@ -2204,41 +2204,65 @@ function aiToggleVoice() {
   window._aiRecognition = recognition;
 }
 
-async function aiGetContext() {
-  // Build context from user's data based on permissions
-  let ctx = `你是牙材採購系統內建的 AI 助手。你已經連接到資料庫，以下是從資料庫讀取的即時真實資料。\n`;
-  ctx += `使用者：${userProfile?.display_name || ''}，診所：${clinicName(dailyClinicId)}。\n`;
-  ctx += `使用者權限：${ALL_PERMISSIONS.filter(p => hasPermission(p.key)).map(p => p.label).join('、') || '無'}。\n`;
-  ctx += `重要：以下庫存資料是從資料庫即時讀取的真實資料，請直接引用回答，不要說你無法查詢。\n`;
+// Cache inventory data — only load once per session, refresh on demand
+let _aiInventoryCache = null;
+async function aiLoadInventory() {
+  if (_aiInventoryCache) return _aiInventoryCache;
+  const result = {};
+  try {
+    const clinicIds = window._userClinicIds || [dailyClinicId];
+    for (const cid of clinicIds) {
+      const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('material_id,quantity,safe_stock').eq('clinic_id', cid));
+      if (inv) result[cid] = inv;
+    }
+  } catch(e) {}
+  _aiInventoryCache = result;
+  return result;
+}
 
-  // Load inventory data for ALL user's clinics
-  if (hasPermission('daily_changes') || hasPermission('view_all_inventory')) {
-    try {
-      const clinicIds = window._userClinicIds || [dailyClinicId];
+function aiGetContext(query) {
+  // Lightweight context — only include relevant data
+  let ctx = `你是牙材採購系統 AI 助手。已連接資料庫，資料是真實即時的。\n`;
+  ctx += `使用者：${userProfile?.display_name || ''}。\n`;
+  ctx += `診所：${(window._userClinicIds||[dailyClinicId]).map(c=>clinicName(c)).join('、')}。\n`;
+  ctx += `品項清單：${allMaterials.slice(0,50).map(m=>m.name).join('、')}。\n`;
+
+  // Only include inventory if we have cached data
+  if (_aiInventoryCache) {
+    // Find items matching the query keywords
+    const q = (query || '').toLowerCase();
+    const clinicIds = Object.keys(_aiInventoryCache);
+    let matched = false;
+    for (const cid of clinicIds) {
+      const inv = _aiInventoryCache[cid] || [];
+      // If query mentions specific item, only send that; otherwise send low stock summary
+      const relevant = q ? inv.filter(i => {
+        const name = materialName(i.material_id).toLowerCase();
+        return q.split('').some(ch => name.includes(ch)) || name.includes(q);
+      }) : inv.filter(i => i.quantity <= (i.safe_stock || 0) && i.safe_stock > 0);
+
+      if (relevant.length > 0) {
+        ctx += `\n【${clinicName(parseInt(cid))}】`;
+        relevant.slice(0, 20).forEach(i => {
+          ctx += `\n${materialName(i.material_id)}:${i.quantity}(安全量${i.safe_stock||0})`;
+        });
+        matched = true;
+      }
+    }
+    if (!matched && q) {
+      // No match — send all items briefly
       for (const cid of clinicIds) {
-        const cName = clinicName(cid);
-        const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('material_id,quantity,safe_stock').eq('clinic_id', cid));
-        if (inv && inv.length > 0) {
-          const withStock = inv.filter(i => i.quantity > 0 || i.quantity <= (i.safe_stock || 0));
-          ctx += `\n\n【${cName}】庫存（${withStock.length}項）：`;
-          withStock.slice(0, 50).forEach(i => {
-            const name = materialName(i.material_id);
-            const low = i.quantity <= (i.safe_stock || 0) ? ' ⚠️' : '';
-            ctx += `\n${name}:${i.quantity}(安全${i.safe_stock||0})${low}`;
-          });
+        const inv = _aiInventoryCache[cid] || [];
+        if (inv.length > 0) {
+          ctx += `\n【${clinicName(parseInt(cid))}】共${inv.length}項，`;
+          ctx += inv.slice(0,15).map(i => `${materialName(i.material_id)}:${i.quantity}`).join('、');
         }
       }
-    } catch(e) {}
-  } else if (allMaterials.length > 0) {
-    ctx += `\n系統品項：${allMaterials.slice(0, 30).map(m => m.name).join('、')}`;
+    }
   }
 
-  ctx += `\n\n規則：`;
-  ctx += `\n1. 使用繁體中文回答`;
-  ctx += `\n2. 上面的庫存資料是真實即時的，直接引用回答，不要說無法查詢`;
-  ctx += `\n3. 如果使用者拍照，辨識照片中的牙科耗材並建議操作`;
-  ctx += `\n4. 如果使用者要求更新庫存，在回覆中加入：[ACTION:UPDATE_INVENTORY|品項名|數量變動(正數入庫負數消耗)]`;
-  ctx += `\n5. 回答簡潔明瞭`;
+  ctx += `\n\n規則：繁體中文回答。庫存是真實資料請直接引用。`;
+  ctx += `如需更新庫存回覆：[ACTION:UPDATE_INVENTORY|品項名|數量變動]。簡潔回答。`;
   return ctx;
 }
 
@@ -2246,7 +2270,8 @@ async function aiCallGemini(userMsg, imageBase64) {
   aiAppendMsg('ai', '思考中...');
 
   try {
-    const ctx = await aiGetContext();
+    await aiLoadInventory();
+    const ctx = aiGetContext(userMsg);
 
     // Build message parts
     const parts = [];

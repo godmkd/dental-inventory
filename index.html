@@ -993,7 +993,8 @@ const ALL_PERMISSIONS = [
   { key: 'manage_roles', label: '管理角色' },
   { key: 'change_background', label: '更換頁面背景' },
   { key: 'arrange_layout', label: '版面調整' },
-  { key: 'browse', label: '瀏覽模式（只看不操作）' }
+  { key: 'browse', label: '瀏覽模式（只看不操作）' },
+  { key: 'use_ai', label: 'AI 助手' }
 ];
 
 function roleLabel(roleStr, roleId) {
@@ -1129,6 +1130,7 @@ function buildBubbles() {
     { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '76%', pt: '56%', pl: '12%', lt: '68%', ll: '65%',  delay: '3.7s', duration: '5.2s', anim: 'float' },
     { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '84%', pt: '57%', pl: '37%', lt: '70%', ll: '73%',  delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
     { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '68%', ll: '82%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
+    { id: 'ai-assistant',     icon: '🤖', label: 'AI 助手', size: 'large',  top: '55%', left: '50%', pt: '45%', pl: '50%', lt: '55%', ll: '45%',  delay: '1.5s', duration: '7s',   anim: 'float2', perm: 'use_ai' },
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
@@ -1260,6 +1262,7 @@ async function navigateTo(pageId) {
     'daily-summary':    renderDailySummary,
     'account-settings': renderAccountSettings,
     'notify-settings':  renderNotifySettings,
+    'ai-assistant':     renderAIAssistant,
     'tutorials':        () => renderTutorials(mc),
     // 保留舊路由（內部呼叫用）
     'material-mgmt': renderMaterialMgmt,
@@ -1466,6 +1469,7 @@ function openBgSettingModal() {
             { id:'admin-clinics', icon:'🏥', label:'診所管理', perm:'manage_clinics' },
             { id:'user-list', icon:'👤', label:'人員管理', perm:'manage_users' },
             { id:'role-mgmt', icon:'🔐', label:'角色管理', perm:'manage_roles' },
+            { id:'ai-assistant', icon:'🤖', label:'AI 助手', perm:'use_ai' },
           ];
           return config.filter(c => !c.perm || hasPermission(c.perm)).map(c => {
             const hasImg = imgs[c.id];
@@ -2105,6 +2109,233 @@ async function loadBubbleImages() {
   } catch(e) { console.log('loadBubbleImages error:', e); }
 }
 
+// ===== AI Assistant =====
+const GEMINI_KEY = 'AIzaSyAvClLYUoFGnke9T41ASXeN8vPAppui_2w';
+let _aiChatHistory = [];
+let _aiRecording = false;
+
+function renderAIAssistant() {
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+    <div class="page-title">🤖 AI 助手</div>
+    <div id="aiChatBox" style="background:var(--card);border:1px solid var(--border);border-radius:12px;height:55vh;overflow-y:auto;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="text-align:center;color:var(--text-light);padding:20px;font-size:.88rem">
+        你好！我是牙材 AI 助手。<br>可以問我庫存、叫貨、品項相關問題。<br>也可以拍照讓我辨識品項。
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <label style="cursor:pointer;padding:8px;border-radius:8px;background:var(--card);border:1px solid var(--border);font-size:1.2rem" title="拍照/上傳圖片">
+        📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="aiSendPhoto(this)">
+      </label>
+      <button id="aiVoiceBtn" onclick="aiToggleVoice()" style="padding:8px;border-radius:8px;background:var(--card);border:1px solid var(--border);font-size:1.2rem;cursor:pointer" title="語音輸入">🎤</button>
+      <input id="aiInput" type="text" placeholder="輸入訊息..." style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:.92rem" onkeydown="if(event.key==='Enter')aiSend()">
+      <button class="btn btn-primary" onclick="aiSend()" style="padding:8px 16px;border-radius:8px">送出</button>
+    </div>`;
+}
+
+function aiAppendMsg(role, text, imgSrc) {
+  const box = document.getElementById('aiChatBox');
+  if (!box) return;
+  const isUser = role === 'user';
+  const div = document.createElement('div');
+  div.style.cssText = `max-width:80%;padding:10px 14px;border-radius:12px;font-size:.88rem;line-height:1.5;word-break:break-word;${isUser ? 'align-self:flex-end;background:var(--accent);color:#fff' : 'align-self:flex-start;background:rgba(255,255,255,.08);color:var(--text)'}`;
+  if (imgSrc) div.innerHTML = `<img src="${imgSrc}" style="max-width:200px;border-radius:8px;margin-bottom:6px;display:block">`;
+  div.innerHTML += text.replace(/\n/g, '<br>');
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function aiSend() {
+  const input = document.getElementById('aiInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  aiAppendMsg('user', text);
+  await aiCallGemini(text);
+}
+
+async function aiSendPhoto(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  inputEl.value = '';
+
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const dataUrl = reader.result;
+    const base64 = dataUrl.split(',')[1];
+    aiAppendMsg('user', '📷 已上傳照片', dataUrl);
+    await aiCallGemini('請辨識這張照片中的牙科耗材品項，告訴我品項名稱和建議的庫存操作', base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+function aiToggleVoice() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    toast('此瀏覽器不支援語音辨識', 'error'); return;
+  }
+  const btn = document.getElementById('aiVoiceBtn');
+  if (_aiRecording) {
+    window._aiRecognition?.stop();
+    _aiRecording = false;
+    btn.style.background = 'var(--card)';
+    btn.textContent = '🎤';
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SR();
+  recognition.lang = 'zh-TW';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    document.getElementById('aiInput').value = text;
+    _aiRecording = false;
+    btn.style.background = 'var(--card)';
+    btn.textContent = '🎤';
+    aiSend();
+  };
+  recognition.onerror = () => { _aiRecording = false; btn.style.background = 'var(--card)'; btn.textContent = '🎤'; };
+  recognition.onend = () => { _aiRecording = false; btn.style.background = 'var(--card)'; btn.textContent = '🎤'; };
+  recognition.start();
+  _aiRecording = true;
+  btn.style.background = 'var(--danger)';
+  btn.textContent = '⏹️';
+  window._aiRecognition = recognition;
+}
+
+async function aiGetContext() {
+  // Build context from user's data based on permissions
+  let ctx = `你是牙材採購系統的 AI 助手。使用者：${userProfile?.display_name || ''}，診所：${clinicName(dailyClinicId)}。\n`;
+  ctx += `使用者權限：${ALL_PERMISSIONS.filter(p => hasPermission(p.key)).map(p => p.label).join('、') || '無'}。\n`;
+  ctx += `只能協助使用者有權限的操作。如果使用者沒有某個權限，告訴他需要向管理員申請。\n`;
+
+  // Load inventory data
+  if (hasPermission('daily_changes') || hasPermission('view_all_inventory')) {
+    try {
+      const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('material_id,quantity,safe_stock').eq('clinic_id', dailyClinicId));
+      if (inv && inv.length > 0) {
+        const lowStock = inv.filter(i => i.quantity <= (i.safe_stock || 0));
+        ctx += `\n目前庫存概況：共 ${inv.length} 項品項。`;
+        if (lowStock.length > 0) {
+          ctx += `\n⚠️ 低庫存品項（${lowStock.length}項）：`;
+          lowStock.slice(0, 10).forEach(i => {
+            const name = materialName(i.material_id);
+            ctx += `\n- ${name}：剩 ${i.quantity}（安全量 ${i.safe_stock || 0}）`;
+          });
+        }
+      }
+    } catch(e) {}
+  }
+
+  // Load materials list
+  if (allMaterials.length > 0) {
+    ctx += `\n\n系統品項（前30個）：${allMaterials.slice(0, 30).map(m => m.name).join('、')}`;
+  }
+
+  ctx += `\n\n回答時使用繁體中文。如果使用者拍照，請辨識照片中的牙科耗材並建議操作。`;
+  ctx += `\n如果使用者要求更新庫存，回覆格式：[ACTION:UPDATE_INVENTORY|品項名|數量變動(正數入庫負數消耗)]`;
+  return ctx;
+}
+
+async function aiCallGemini(userMsg, imageBase64) {
+  aiAppendMsg('ai', '思考中...');
+
+  try {
+    const ctx = await aiGetContext();
+
+    // Build message parts
+    const parts = [];
+    if (imageBase64) {
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
+    }
+    parts.push({ text: userMsg });
+
+    // Build conversation
+    const contents = [
+      { role: 'user', parts: [{ text: ctx }] },
+      { role: 'model', parts: [{ text: '了解，我是牙材 AI 助手，會根據你的權限協助你。有什麼需要幫忙的？' }] },
+    ];
+    // Add history
+    _aiChatHistory.forEach(h => contents.push(h));
+    // Add current message
+    contents.push({ role: 'user', parts });
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents })
+    });
+
+    const data = await res.json();
+    const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '抱歉，無法處理你的請求。';
+
+    // Remove "thinking" message
+    const box = document.getElementById('aiChatBox');
+    if (box && box.lastChild) box.removeChild(box.lastChild);
+
+    // Check for action commands
+    const actionMatch = aiText.match(/\[ACTION:UPDATE_INVENTORY\|(.+?)\|(.+?)\]/);
+    if (actionMatch) {
+      const matName = actionMatch[1];
+      const qty = parseInt(actionMatch[2]);
+      const cleanText = aiText.replace(/\[ACTION:.*?\]/g, '').trim();
+      aiAppendMsg('ai', cleanText + `\n\n📦 偵測到庫存操作：${matName} ${qty > 0 ? '+' : ''}${qty}`);
+
+      if (hasPermission('daily_changes')) {
+        aiAppendMsg('ai', `<button class="btn btn-primary btn-sm" onclick="aiExecuteInventory('${escHtml(matName)}',${qty})">✅ 確認執行</button>  <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">取消</button>`);
+      } else {
+        aiAppendMsg('ai', '⚠️ 你沒有日常變動權限，無法執行此操作。');
+      }
+    } else {
+      aiAppendMsg('ai', aiText);
+    }
+
+    // Save to history
+    _aiChatHistory.push({ role: 'user', parts });
+    _aiChatHistory.push({ role: 'model', parts: [{ text: aiText }] });
+    if (_aiChatHistory.length > 20) _aiChatHistory = _aiChatHistory.slice(-20);
+
+  } catch(e) {
+    const box = document.getElementById('aiChatBox');
+    if (box && box.lastChild) box.removeChild(box.lastChild);
+    aiAppendMsg('ai', '❌ 發生錯誤：' + e.message);
+  }
+}
+
+window.aiExecuteInventory = async function(matName, qty) {
+  if (!hasPermission('daily_changes')) { toast('無權限', 'error'); return; }
+
+  // Find material
+  const mat = allMaterials.find(m => m.name === matName || m.name.includes(matName));
+  if (!mat) { aiAppendMsg('ai', `❌ 找不到品項「${matName}」`); return; }
+
+  try {
+    // Update inventory
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId).eq('material_id', mat.id).maybeSingle());
+    const currentQty = inv ? inv.quantity : 0;
+    const newQty = Math.max(0, currentQty + qty);
+
+    if (inv) {
+      await withTimeout(sb.from('clinic_inventory').update({ quantity: newQty }).eq('id', inv.id));
+    } else {
+      await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: dailyClinicId, material_id: mat.id, quantity: newQty }));
+    }
+
+    // Log
+    await withTimeout(sb.from('inventory_logs').insert({
+      clinic_id: dailyClinicId, material_id: mat.id,
+      type: qty > 0 ? 'in' : 'out', quantity: Math.abs(qty),
+      operator_id: currentUser.id, operator_name: userProfile.display_name,
+      notes: 'AI 助手操作'
+    }));
+
+    aiAppendMsg('ai', `✅ 已更新：${mat.name} ${qty > 0 ? '+' : ''}${qty}（${currentQty} → ${newQty}）`);
+  } catch(e) {
+    aiAppendMsg('ai', '❌ 更新失敗：' + e.message);
+  }
+};
+
 // Browse mode: mask data content after page render (only for pages without actual permission)
 const _pagePermMap = {
   'ordering': 'create_orders', 'daily-change': 'daily_changes', 'receiving': 'receive_orders',
@@ -2112,7 +2343,8 @@ const _pagePermMap = {
   'rush-mgmt': 'manage_orders', 'admin-suppliers': 'manage_orders', 'admin-categories': 'manage_orders',
   'admin-materials': 'manage_orders', 'notify-settings': 'manage_orders', 'order-stats': 'view_prices',
   'customize': 'change_background', 'daily-summary': 'daily_changes',
-  'admin-clinics': 'manage_clinics', 'user-list': 'manage_users', 'role-mgmt': 'manage_roles'
+  'admin-clinics': 'manage_clinics', 'user-list': 'manage_users', 'role-mgmt': 'manage_roles',
+  'ai-assistant': 'use_ai'
 };
 
 function applyBrowseMask() {

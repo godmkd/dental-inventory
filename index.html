@@ -2211,17 +2211,21 @@ async function aiGetContext() {
   ctx += `使用者權限：${ALL_PERMISSIONS.filter(p => hasPermission(p.key)).map(p => p.label).join('、') || '無'}。\n`;
   ctx += `重要：以下庫存資料是從資料庫即時讀取的真實資料，請直接引用回答，不要說你無法查詢。\n`;
 
-  // Load inventory data with quantities
+  // Load inventory data for ALL user's clinics
   if (hasPermission('daily_changes') || hasPermission('view_all_inventory')) {
     try {
-      const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('material_id,quantity,safe_stock').eq('clinic_id', dailyClinicId));
-      if (inv && inv.length > 0) {
-        ctx += `\n\n目前庫存（共${inv.length}項）：`;
-        inv.forEach(i => {
-          const name = materialName(i.material_id);
-          const low = i.quantity <= (i.safe_stock || 0) ? ' ⚠️低庫存' : '';
-          ctx += `\n- ${name}：${i.quantity}個（安全量${i.safe_stock || 0}）${low}`;
-        });
+      const clinicIds = window._userClinicIds || [dailyClinicId];
+      for (const cid of clinicIds) {
+        const cName = clinicName(cid);
+        const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('material_id,quantity,safe_stock').eq('clinic_id', cid));
+        if (inv && inv.length > 0) {
+          ctx += `\n\n【${cName}】庫存（${inv.length}項）：`;
+          inv.forEach(i => {
+            const name = materialName(i.material_id);
+            const low = i.quantity <= (i.safe_stock || 0) ? ' ⚠️低庫存' : '';
+            ctx += `\n- ${name}：${i.quantity}個（安全量${i.safe_stock || 0}）${low}`;
+          });
+        }
       }
     } catch(e) {}
   } else if (allMaterials.length > 0) {

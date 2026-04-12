@@ -2206,9 +2206,10 @@ function aiToggleVoice() {
 
 async function aiGetContext() {
   // Build context from user's data based on permissions
-  let ctx = `你是牙材採購系統的 AI 助手。使用者：${userProfile?.display_name || ''}，診所：${clinicName(dailyClinicId)}。\n`;
+  let ctx = `你是牙材採購系統內建的 AI 助手。你已經連接到資料庫，以下是從資料庫讀取的即時真實資料。\n`;
+  ctx += `使用者：${userProfile?.display_name || ''}，診所：${clinicName(dailyClinicId)}。\n`;
   ctx += `使用者權限：${ALL_PERMISSIONS.filter(p => hasPermission(p.key)).map(p => p.label).join('、') || '無'}。\n`;
-  ctx += `只能協助使用者有權限的操作。如果使用者沒有某個權限，告訴他需要向管理員申請。\n`;
+  ctx += `重要：以下庫存資料是從資料庫即時讀取的真實資料，請直接引用回答，不要說你無法查詢。\n`;
 
   // Load inventory data with quantities
   if (hasPermission('daily_changes') || hasPermission('view_all_inventory')) {
@@ -2227,8 +2228,12 @@ async function aiGetContext() {
     ctx += `\n系統品項：${allMaterials.slice(0, 30).map(m => m.name).join('、')}`;
   }
 
-  ctx += `\n\n回答時使用繁體中文。如果使用者拍照，請辨識照片中的牙科耗材並建議操作。`;
-  ctx += `\n如果使用者要求更新庫存，回覆格式：[ACTION:UPDATE_INVENTORY|品項名|數量變動(正數入庫負數消耗)]`;
+  ctx += `\n\n規則：`;
+  ctx += `\n1. 使用繁體中文回答`;
+  ctx += `\n2. 上面的庫存資料是真實即時的，直接引用回答，不要說無法查詢`;
+  ctx += `\n3. 如果使用者拍照，辨識照片中的牙科耗材並建議操作`;
+  ctx += `\n4. 如果使用者要求更新庫存，在回覆中加入：[ACTION:UPDATE_INVENTORY|品項名|數量變動(正數入庫負數消耗)]`;
+  ctx += `\n5. 回答簡潔明瞭`;
   return ctx;
 }
 
@@ -2248,7 +2253,7 @@ async function aiCallGemini(userMsg, imageBase64) {
     // Build conversation
     const contents = [
       { role: 'user', parts: [{ text: ctx }] },
-      { role: 'model', parts: [{ text: '了解，我是牙材 AI 助手，會根據你的權限協助你。有什麼需要幫忙的？' }] },
+      { role: 'model', parts: [{ text: '了解，我已連接到庫存資料庫，可以即時查詢庫存量。請問有什麼需要幫忙的？' }] },
     ];
     // Add history
     _aiChatHistory.forEach(h => contents.push(h));

@@ -1987,6 +1987,12 @@ async function saveBubbleImgFromEditor() {
   closeAvatarEditor();
   applyAllBubbleImages();
   openBgSettingModal(); // Refresh the customize modal
+  // Switch to bubble tab after refresh
+  setTimeout(() => {
+    const a = document.getElementById('customTabAppearance');
+    const b = document.getElementById('customTabBubble');
+    if (a && b) { a.style.display = 'none'; b.style.display = 'block'; }
+  }, 50);
 }
 
 function removeBubbleImg(bubbleId) {
@@ -2010,7 +2016,12 @@ function removeBubbleImg(bubbleId) {
     sb.from('app_settings').upsert({ key: userKey, value: imgs, updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(() => {});
   }
   applyAllBubbleImages();
-  openBgSettingModal(); // Refresh
+  openBgSettingModal();
+  setTimeout(() => {
+    const a = document.getElementById('customTabAppearance');
+    const b = document.getElementById('customTabBubble');
+    if (a && b) { a.style.display = 'none'; b.style.display = 'block'; }
+  }, 50);
 }
 
 function setBubbleLabelColor(bubbleId, color) {

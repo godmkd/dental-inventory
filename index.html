@@ -2110,17 +2110,70 @@ async function loadBubbleImages() {
 }
 
 // ===== AI Assistant =====
-const GEMINI_KEY = 'AIzaSyAg9e3FoG6ya_RU1aLqI_qSA7F9FzS8SkU';
+let GEMINI_KEY = localStorage.getItem('gemini_api_key') || '';
 let _aiChatHistory = [];
 let _aiRecording = false;
 
+async function loadGeminiKey() {
+  if (GEMINI_KEY) return;
+  try {
+    if (currentUser) {
+      // Try user's own key first
+      const userKey = 'gemini_key_' + currentUser.id;
+      const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', userKey).maybeSingle());
+      if (data?.value) { GEMINI_KEY = data.value; localStorage.setItem('gemini_api_key', GEMINI_KEY); return; }
+      // Fallback: try shared system key (set by admin)
+      const { data: shared } = await withTimeout(sb.from('app_settings').select('value').eq('key', 'gemini_key_shared').maybeSingle());
+      if (shared?.value) { GEMINI_KEY = shared.value; localStorage.setItem('gemini_api_key', GEMINI_KEY); }
+    }
+  } catch(e) {}
+}
+
+async function saveGeminiKey() {
+  const input = document.getElementById('geminiKeyInput');
+  if (!input) return;
+  const key = input.value.trim();
+  if (!key) { toast('請輸入 API Key', 'error'); return; }
+  GEMINI_KEY = key;
+  localStorage.setItem('gemini_api_key', key);
+  if (currentUser) {
+    const userKey = 'gemini_key_' + currentUser.id;
+    await withTimeout(sb.from('app_settings').upsert({ key: userKey, value: key, updated_at: new Date().toISOString() }, { onConflict: 'key' }));
+    // Admin: also save as shared key for all users
+    if (isSystemAdmin()) {
+      await withTimeout(sb.from('app_settings').upsert({ key: 'gemini_key_shared', value: key, updated_at: new Date().toISOString() }, { onConflict: 'key' }));
+      toast('API Key 已儲存（管理員：同時設為共用 Key）');
+    } else {
+      toast('API Key 已儲存');
+    }
+  }
+  renderAIAssistant();
+}
+
 function renderAIAssistant() {
   const mc = document.getElementById('mainContent');
+  loadGeminiKey();
   mc.innerHTML = `
     <div class="page-title">🤖 AI 助手</div>
+    ${!GEMINI_KEY ? `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:.9rem;margin-bottom:8px">⚙️ 請先設定 Gemini API Key（免費）</div>
+      <div style="font-size:.78rem;color:var(--text-light);margin-bottom:8px">
+        1. 到 <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a> 登入 Google<br>
+        2. 點 Create API key → 選 in new project<br>
+        3. 複製 key 貼到下方
+      </div>
+      <div style="display:flex;gap:8px">
+        <input id="geminiKeyInput" type="password" placeholder="貼上 API Key..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:.88rem">
+        <button class="btn btn-primary" onclick="saveGeminiKey()">💾 儲存</button>
+      </div>
+    </div>` : `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+      <button class="btn btn-ghost" style="font-size:.72rem;padding:2px 8px" onclick="GEMINI_KEY='';localStorage.removeItem('gemini_api_key');renderAIAssistant()">🔑 重設 Key</button>
+    </div>`}
     <div id="aiChatBox" style="background:var(--card);border:1px solid var(--border);border-radius:12px;height:55vh;overflow-y:auto;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px">
       <div style="text-align:center;color:var(--text-light);padding:20px;font-size:.88rem">
-        你好！我是牙材 AI 助手。<br>可以問我庫存、叫貨、品項相關問題。<br>也可以拍照讓我辨識品項。
+        ${GEMINI_KEY ? '你好！我是牙材 AI 助手。<br>可以問我庫存、叫貨、品項相關問題。<br>也可以拍照讓我辨識品項。' : '請先設定 API Key 才能使用'}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -2146,6 +2199,7 @@ function aiAppendMsg(role, text, imgSrc) {
 }
 
 async function aiSend() {
+  if (!GEMINI_KEY) { toast('請先設定 Gemini API Key', 'error'); return; }
   const input = document.getElementById('aiInput');
   if (!input) return;
   const text = input.value.trim();

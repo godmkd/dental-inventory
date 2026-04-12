@@ -897,8 +897,16 @@ async function loadProfile() {
       const testClinic = (clinics || []).find(c => c.name === '測試');
       if (testClinic) defaultClinicId = testClinic.id;
     } catch(e) {}
+    // Find '訪客' role for new users
+    let visitorRoleId = null;
+    try {
+      const { data: roles } = await withTimeout(sb.from('roles').select('id,name'));
+      const visitorRole = (roles || []).find(r => r.name === '訪客');
+      if (visitorRole) visitorRoleId = visitorRole.id;
+    } catch(e) {}
     const { data: newP, error: e2 } = await withTimeout(sb.from('user_profiles').insert({
       id: currentUser.id, display_name: displayName, role: 'visitor',
+      role_id: visitorRoleId,
       line_user_id: lineId, is_active: true, clinic_id: defaultClinicId
     }).select().single());
     if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }

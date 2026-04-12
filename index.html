@@ -1447,17 +1447,26 @@ function openBgSettingModal() {
           const imgs = JSON.parse(localStorage.getItem('bubble_images') || '{}');
           const colors = JSON.parse(localStorage.getItem('bubble_label_colors') || '{}');
           const config = [
-            { id:'ordering', icon:'📦', label:'叫貨' },{ id:'daily-change', icon:'🔄', label:'日常變動' },
-            { id:'receiving', icon:'✅', label:'收貨' },{ id:'stock-overview', icon:'🗂️', label:'庫存總覽' },
-            { id:'order-summary', icon:'📊', label:'叫貨總覽' },{ id:'order-list', icon:'📋', label:'貨單管理' },
-            { id:'rush-mgmt', icon:'🚨', label:'催貨管理' },{ id:'tutorials', icon:'📖', label:'教學' },
-            { id:'admin-suppliers', icon:'🏭', label:'廠商管理' },{ id:'admin-categories', icon:'📁', label:'類別管理' },
-            { id:'notify-settings', icon:'🔔', label:'通知設定' },{ id:'admin-materials', icon:'📦', label:'品項管理' },
-            { id:'order-stats', icon:'📈', label:'叫貨統計' },{ id:'customize', icon:'🎨', label:'客製化' },
-            { id:'daily-summary', icon:'📊', label:'變動總覽' },{ id:'admin-clinics', icon:'🏥', label:'診所管理' },
-            { id:'user-list', icon:'👤', label:'人員管理' },{ id:'role-mgmt', icon:'🔐', label:'角色管理' },
+            { id:'ordering', icon:'📦', label:'叫貨', perm:'create_orders' },
+            { id:'daily-change', icon:'🔄', label:'日常變動', perm:'daily_changes' },
+            { id:'receiving', icon:'✅', label:'收貨', perm:'receive_orders' },
+            { id:'stock-overview', icon:'🗂️', label:'庫存總覽', perm:'view_all_inventory' },
+            { id:'order-summary', icon:'📊', label:'叫貨總覽', perm:'manage_orders' },
+            { id:'order-list', icon:'📋', label:'貨單管理', perm:'manage_orders' },
+            { id:'rush-mgmt', icon:'🚨', label:'催貨管理', perm:'manage_orders' },
+            { id:'tutorials', icon:'📖', label:'教學' },
+            { id:'admin-suppliers', icon:'🏭', label:'廠商管理', perm:'manage_orders' },
+            { id:'admin-categories', icon:'📁', label:'類別管理', perm:'manage_orders' },
+            { id:'notify-settings', icon:'🔔', label:'通知設定', perm:'manage_orders' },
+            { id:'admin-materials', icon:'📦', label:'品項管理', perm:'manage_orders' },
+            { id:'order-stats', icon:'📈', label:'叫貨統計', perm:'view_prices' },
+            { id:'customize', icon:'🎨', label:'客製化', perm:'change_background' },
+            { id:'daily-summary', icon:'📊', label:'變動總覽', perm:'daily_changes' },
+            { id:'admin-clinics', icon:'🏥', label:'診所管理', perm:'manage_clinics' },
+            { id:'user-list', icon:'👤', label:'人員管理', perm:'manage_users' },
+            { id:'role-mgmt', icon:'🔐', label:'角色管理', perm:'manage_roles' },
           ];
-          return config.map(c => {
+          return config.filter(c => !c.perm || hasPermission(c.perm)).map(c => {
             const hasImg = imgs[c.id];
             const labelColor = colors[c.id] || '#ffffff';
             return '<div style="text-align:center">' +

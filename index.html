@@ -7072,7 +7072,13 @@ let _notifyConfig = null;
 
 async function loadNotifyConfig() {
   if (_notifyConfig) return _notifyConfig;
-  const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', 'notification_config').single());
+  const ncKey = window._currentOrgId ? `notification_config_${window._currentOrgId}` : 'notification_config';
+  const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', ncKey).maybeSingle());
+  // Fallback to global config if org-specific not found
+  if (!data?.value && window._currentOrgId) {
+    const { data: globalData } = await withTimeout(sb.from('app_settings').select('value').eq('key', 'notification_config').maybeSingle());
+    if (globalData?.value) { _notifyConfig = globalData.value; return _notifyConfig; }
+  }
   _notifyConfig = data?.value || {
     low_stock:  { clinic_users: {}, enable_low: true, enable_half: true },
     rush_order: { user_ids: [], extra_line_ids: [], enabled: true }
@@ -7232,9 +7238,10 @@ async function saveNotifyConfig() {
   if (ta) {
     _notifyConfig.rush_order.extra_line_ids = ta.value.split('\n').map(s => s.trim()).filter(s => s.startsWith('U'));
   }
+  const ncKey = window._currentOrgId ? `notification_config_${window._currentOrgId}` : 'notification_config';
   const { error } = await withTimeout(sb.from('app_settings').upsert({
-    key: 'notification_config', value: _notifyConfig, updated_at: new Date().toISOString()
-  }));
+    key: ncKey, value: _notifyConfig, updated_at: new Date().toISOString()
+  }, { onConflict: 'key' }));
   if (error) { toast('儲存失敗：' + error.message, 'error'); return; }
   toast('通知設定已儲存');
 }

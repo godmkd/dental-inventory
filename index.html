@@ -4320,7 +4320,9 @@ async function renderOrderMgmt() {
 
   // === 貨單管理 ===
   const tabContent = document.getElementById('orderMgmtTabContent');
-  const { data: orders } = await withTimeout(sb.from('orders').select('*').order('created_at', { ascending: false }));
+  let ordQ = sb.from('orders').select('*').order('created_at', { ascending: false });
+  if (window._currentOrgId && !isSystemAdmin()) ordQ = ordQ.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  const { data: orders } = await withTimeout(ordQ);
 
   tabContent.innerHTML = `
     <div class="sub-tabs">
@@ -6924,9 +6926,9 @@ async function renderTutorials(container) {
   const mc = container || document.getElementById('mainContent');
   mc.innerHTML = '<div class="loading" style="padding:40px;text-align:center">載入中...</div>';
 
-  const { data: tutorials, error } = await withTimeout(
-    sb.from('tutorials').select('*').order('created_at', { ascending: false })
-  );
+  let tutQ = sb.from('tutorials').select('*').order('created_at', { ascending: false });
+  if (window._currentOrgId && !isSystemAdmin()) tutQ = tutQ.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  const { data: tutorials, error } = await withTimeout(tutQ);
   if (error) { mc.innerHTML = '<div class="empty-state">載入失敗：' + escHtml(error.message) + '</div>'; return; }
 
   const canManageAll = hasPermission('manage_materials') || hasPermission('all');
@@ -7046,7 +7048,7 @@ async function saveTutorial(editId) {
 
   const record = editId
     ? { id: editId, title, content, images, clinic_id, author: userProfile.display_name || '-' }
-    : { id: Date.now().toString(), title, content, images, clinic_id, created_at: new Date().toISOString(), author: userProfile.display_name || '-', created_by: currentUser?.id };
+    : { id: Date.now().toString(), title, content, images, clinic_id, created_at: new Date().toISOString(), author: userProfile.display_name || '-', created_by: currentUser?.id, org_id: window._currentOrgId || null };
 
   const { error } = await withTimeout(sb.from('tutorials').upsert(record));
   if (error) { toast('儲存失敗：' + error.message, 'error'); return; }

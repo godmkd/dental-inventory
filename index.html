@@ -907,13 +907,20 @@ async function loadProfile() {
       const visitorRole = (roles || []).find(r => r.name === '訪客');
       if (visitorRole) visitorRoleId = visitorRole.id;
     } catch(e) {}
-    // Determine org from URL param
+    // Determine org from URL param, or fallback to '測試' org
     let newUserOrgId = null;
     const urlOrg = new URLSearchParams(location.search).get('org');
     if (urlOrg) {
       try {
         const { data: orgs } = await withTimeout(sb.from('organizations').select('id').or(`code.eq.${urlOrg},id.eq.${parseInt(urlOrg)||0}`));
         if (orgs && orgs.length > 0) newUserOrgId = orgs[0].id;
+      } catch(e) {}
+    }
+    // No invite link → assign to '測試' org
+    if (!newUserOrgId) {
+      try {
+        const { data: testOrgs } = await withTimeout(sb.from('organizations').select('id').eq('name', '測試'));
+        if (testOrgs && testOrgs.length > 0) newUserOrgId = testOrgs[0].id;
       } catch(e) {}
     }
 
@@ -960,6 +967,41 @@ async function loadProfile() {
   if (!window._userClinicIds.length && userProfile.clinic_id) {
     window._userClinicIds = [userProfile.clinic_id];
   }
+
+  // Handle org invite link for existing users
+  const urlOrgParam = new URLSearchParams(location.search).get('org');
+  if (urlOrgParam) {
+    try {
+      const { data: orgs } = await withTimeout(sb.from('organizations').select('id').or(`code.eq.${urlOrgParam},id.eq.${parseInt(urlOrgParam)||0}`));
+      if (orgs && orgs.length > 0) {
+        const targetOrgId = orgs[0].id;
+        // Check if already in this org
+        const { data: existing } = await sb.from('user_organizations').select('id').eq('user_id', currentUser.id).eq('org_id', targetOrgId).maybeSingle();
+        if (!existing) {
+          // Add to new org
+          await sb.from('user_organizations').insert({ user_id: currentUser.id, org_id: targetOrgId, role: 'member' });
+          // Remove from '測試' org
+          const { data: testOrgs } = await sb.from('organizations').select('id').eq('name', '測試');
+          if (testOrgs && testOrgs.length > 0) {
+            await sb.from('user_organizations').delete().eq('user_id', currentUser.id).eq('org_id', testOrgs[0].id);
+            // Also remove from test clinic
+            const { data: testClinics } = await sb.from('clinics').select('id').eq('org_id', testOrgs[0].id);
+            if (testClinics) {
+              for (const tc of testClinics) {
+                await sb.from('user_clinics').delete().eq('user_id', currentUser.id).eq('clinic_id', tc.id);
+              }
+            }
+          }
+          // Update profile org_id
+          await sb.from('user_profiles').update({ org_id: targetOrgId }).eq('id', currentUser.id);
+          toast('已加入組織！');
+          // Clean URL
+          history.replaceState(null, '', location.pathname);
+        }
+      }
+    } catch(e) { console.warn('Org invite handling error:', e); }
+  }
+
   await enterApp();
 }
 
@@ -6456,11 +6498,20 @@ async function renderUserMgmt() {
 }
 
 async function renderUsersList(el) {
-  await loadUsers();
+  await Promise.all([loadUsers(), loadOrganizations()]);
+  // Filter users by organization
+  let visibleUsers = allUsers;
+  if (!isSystemAdmin()) {
+    // Load all user_organizations to filter
+    const { data: allUserOrgs } = await withTimeout(sb.from('user_organizations').select('user_id,org_id'));
+    const myOrgIds = getVisibleOrgIds();
+    const usersInMyOrgs = new Set((allUserOrgs || []).filter(uo => myOrgIds.includes(uo.org_id)).map(uo => uo.user_id));
+    visibleUsers = allUsers.filter(u => usersInMyOrgs.has(u.id));
+  }
   el.innerHTML = `
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>姓名</th><th>角色</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
-      <tbody>${allUsers.map(u => `<tr>
+      <tbody>${visibleUsers.map(u => `<tr>
         <td>${escHtml(u.display_name)}</td>
         <td>${roleLabel(u.role, u.role_id)}</td>
         <td>${u.clinic_id ? escHtml(allClinics.filter(c => c.id === u.clinic_id).map(c => c.name).join(', ') || clinicName(u.clinic_id)) : '<span class="text-muted">未指派</span>'}</td>

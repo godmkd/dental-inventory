@@ -1064,6 +1064,8 @@ function canEditOwned(createdBy) { return !!(currentUser && createdBy === curren
 
 function hasPermission(perm) {
   if (!userProfile) return false;
+  // org_admin gets all permissions within their org
+  if (isOrgAdmin()) return true;
   if (userProfile.role_id) {
     const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
     if (role && role.permissions) {
@@ -2210,7 +2212,10 @@ async function loadBubbleImages() {
 // ===== Organization Management =====
 async function renderOrgMgmt() {
   const mc = document.getElementById('mainContent');
-  await loadOrganizations();
+  await Promise.all([loadOrganizations(), loadUsers()]);
+  // Load all user-org memberships
+  const { data: allUserOrgs } = await withTimeout(sb.from('user_organizations').select('*'));
+  window._allUserOrgs = allUserOrgs || [];
   const visibleOrgs = isSystemAdmin() ? allOrganizations : allOrganizations.filter(o => window._userOrgIds.includes(o.id));
 
   mc.innerHTML = `
@@ -2246,6 +2251,23 @@ async function renderOrgMgmt() {
         </div>
         <div style="font-size:.85rem;margin-bottom:4px">📋 診所（${orgClinics.length}）：</div>
         ${orgClinics.length > 0 ? orgClinics.map(c => `<div style="padding:4px 8px;font-size:.82rem;color:var(--text-light)">• ${escHtml(c.name)}</div>`).join('') : '<div style="padding:4px 8px;font-size:.82rem;color:var(--text-lighter)">尚無診所</div>'}
+
+        ${(() => {
+          const members = (window._allUserOrgs || []).filter(uo => uo.org_id === org.id);
+          return `<div style="font-size:.85rem;margin:8px 0 4px">👥 成員（${members.length}）：</div>` +
+            members.map(m => {
+              const u = allUsers.find(x => x.id === m.user_id);
+              if (!u) return '';
+              const isOA = m.role === 'org_admin';
+              return `<div style="padding:4px 8px;font-size:.82rem;display:flex;align-items:center;gap:6px">
+                <span style="color:var(--text-light)">• ${escHtml(u.display_name)}</span>
+                ${isOA ? '<span style="font-size:.7rem;background:var(--accent);color:#fff;padding:1px 6px;border-radius:4px">主管</span>' : ''}
+                ${isAdmin && !isOA ? `<button class="btn btn-ghost" style="font-size:.65rem;padding:1px 4px" onclick="setOrgAdmin(${org.id},'${u.id}')">👑 設為主管</button>` : ''}
+                ${isAdmin && isOA && u.id !== currentUser.id ? `<button class="btn btn-ghost" style="font-size:.65rem;padding:1px 4px" onclick="removeOrgAdmin(${org.id},'${u.id}')">取消主管</button>` : ''}
+                ${isAdmin ? `<button class="btn btn-danger" style="font-size:.6rem;padding:1px 4px" onclick="removeOrgMember(${org.id},'${u.id}')">移除</button>` : ''}
+              </div>`;
+            }).join('');
+        })()}
       </div>`;
     }).join('')}
 
@@ -2288,6 +2310,25 @@ window.deleteOrg = async function(orgId) {
   await withTimeout(sb.from('organizations').delete().eq('id', orgId));
   toast('已刪除');
   await loadOrganizations();
+  renderOrgMgmt();
+};
+
+window.setOrgAdmin = async function(orgId, userId) {
+  await withTimeout(sb.from('user_organizations').update({ role: 'org_admin' }).eq('org_id', orgId).eq('user_id', userId));
+  toast('已設為主管');
+  renderOrgMgmt();
+};
+
+window.removeOrgAdmin = async function(orgId, userId) {
+  await withTimeout(sb.from('user_organizations').update({ role: 'member' }).eq('org_id', orgId).eq('user_id', userId));
+  toast('已取消主管');
+  renderOrgMgmt();
+};
+
+window.removeOrgMember = async function(orgId, userId) {
+  if (!await showConfirm('移除成員', '確定要將此成員從組織中移除？')) return;
+  await withTimeout(sb.from('user_organizations').delete().eq('org_id', orgId).eq('user_id', userId));
+  toast('已移除');
   renderOrgMgmt();
 };
 

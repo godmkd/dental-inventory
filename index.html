@@ -618,8 +618,13 @@ let allSuppliers = [];
 let allMaterials = [];
 let allUsers = [];
 let allRoles = [];
+let allOrganizations = [];
 let currentPage = '';
 let confirmResolve = null;
+
+// Organization context
+window._userOrgIds = []; // user's organization IDs
+window._currentOrgId = null; // currently active organization
 
 // Floating panel state
 let floatPanelItems = []; // [{material_id, name, quantity, type, ...}]
@@ -902,9 +907,19 @@ async function loadProfile() {
       const visitorRole = (roles || []).find(r => r.name === '訪客');
       if (visitorRole) visitorRoleId = visitorRole.id;
     } catch(e) {}
+    // Determine org from URL param
+    let newUserOrgId = null;
+    const urlOrg = new URLSearchParams(location.search).get('org');
+    if (urlOrg) {
+      try {
+        const { data: orgs } = await withTimeout(sb.from('organizations').select('id').or(`code.eq.${urlOrg},id.eq.${parseInt(urlOrg)||0}`));
+        if (orgs && orgs.length > 0) newUserOrgId = orgs[0].id;
+      } catch(e) {}
+    }
+
     const { data: newP, error: e2 } = await withTimeout(sb.from('user_profiles').insert({
       id: currentUser.id, display_name: displayName, role: 'visitor',
-      role_id: visitorRoleId,
+      role_id: visitorRoleId, org_id: newUserOrgId,
       line_user_id: lineId, is_active: true, clinic_id: defaultClinicId
     }).select().single());
     if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }
@@ -912,6 +927,10 @@ async function loadProfile() {
     // Insert into user_clinics for multi-clinic support
     if (defaultClinicId) {
       await sb.from('user_clinics').insert({ user_id: currentUser.id, clinic_id: defaultClinicId });
+    }
+    // Insert into user_organizations
+    if (newUserOrgId) {
+      await sb.from('user_organizations').insert({ user_id: currentUser.id, org_id: newUserOrgId, role: 'member' });
     }
     window._userClinicIds = defaultClinicId ? [defaultClinicId] : [];
     // 直接進入系統，不需審核
@@ -950,7 +969,7 @@ async function enterApp() {
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('userMenuName').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
-  await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
+  await Promise.all([loadOrganizations(), loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
   buildBubbles(); // logo+user bubbles now rendered inside container
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   applyUserAvatar();
@@ -1036,6 +1055,47 @@ function canSeeAdmin() { return hasPermission('view_all_inventory'); }
 function canSeePrice() { return hasPermission('view_prices'); }
 
 // ===================== DATA =====================
+async function loadOrganizations() {
+  const { data } = await withTimeout(sb.from('organizations').select('*').order('id'));
+  allOrganizations = data || [];
+  // Load user's orgs
+  if (currentUser) {
+    const { data: userOrgs } = await withTimeout(sb.from('user_organizations').select('org_id,role').eq('user_id', currentUser.id));
+    window._userOrgIds = (userOrgs || []).map(uo => uo.org_id);
+    window._userOrgRoles = {};
+    (userOrgs || []).forEach(uo => { window._userOrgRoles[uo.org_id] = uo.role; });
+    // Set current org from URL param, localStorage, or first org
+    const urlOrg = new URLSearchParams(location.search).get('org');
+    if (urlOrg) {
+      const org = allOrganizations.find(o => o.code === urlOrg || String(o.id) === urlOrg);
+      if (org) window._currentOrgId = org.id;
+    }
+    if (!window._currentOrgId) window._currentOrgId = parseInt(localStorage.getItem('current_org_id')) || window._userOrgIds[0] || null;
+    if (window._currentOrgId) localStorage.setItem('current_org_id', window._currentOrgId);
+  }
+}
+
+function isOrgAdmin(orgId) {
+  if (isSystemAdmin()) return true;
+  return window._userOrgRoles?.[orgId || window._currentOrgId] === 'org_admin';
+}
+
+function getVisibleOrgIds() {
+  if (isSystemAdmin()) return allOrganizations.map(o => o.id);
+  return window._userOrgIds || [];
+}
+
+function getVisibleClinics() {
+  if (isSystemAdmin()) return allClinics;
+  const orgIds = getVisibleOrgIds();
+  // Show clinics in user's orgs + clinics user is directly assigned to
+  return allClinics.filter(c =>
+    (c.org_id && orgIds.includes(c.org_id)) ||
+    window._userClinicIds.includes(c.id) ||
+    !c.org_id // legacy clinics without org
+  );
+}
+
 async function loadClinics() { const { data } = await withTimeout(sb.from('clinics').select('*').order('sort_order').order('id')); allClinics = data || []; }
 async function loadCategories() { const { data } = await withTimeout(sb.from('categories').select('*').order('sort_order')); allCategories = data || []; }
 async function loadSuppliers() { const { data } = await withTimeout(sb.from('suppliers').select('*').order('name')); allSuppliers = data || []; }
@@ -1125,6 +1185,7 @@ function buildBubbles() {
     { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '84%', pt: '57%', pl: '37%', lt: '70%', ll: '73%',  delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
     { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '68%', ll: '82%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
     { id: 'ai-assistant',     icon: '🤖', label: 'AI 助手', size: 'large',  top: '55%', left: '50%', pt: '45%', pl: '50%', lt: '55%', ll: '45%',  delay: '1.5s', duration: '7s',   anim: 'float2', perm: 'use_ai' },
+    { id: 'org-mgmt',         icon: '🏢', label: '組織管理', size: 'small', top: '70%', left: '50%', pt: '58%', pl: '85%', lt: '72%', ll: '50%',  delay: '4s',   duration: '6.5s', anim: 'float3', perm: 'manage_roles' },
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
@@ -1257,6 +1318,7 @@ async function navigateTo(pageId) {
     'account-settings': renderAccountSettings,
     'notify-settings':  renderNotifySettings,
     'ai-assistant':     renderAIAssistant,
+    'org-mgmt':         renderOrgMgmt,
     'tutorials':        () => renderTutorials(mc),
     // 保留舊路由（內部呼叫用）
     'material-mgmt': renderMaterialMgmt,
@@ -2103,6 +2165,97 @@ async function loadBubbleImages() {
   } catch(e) { console.log('loadBubbleImages error:', e); }
 }
 
+// ===== Organization Management =====
+async function renderOrgMgmt() {
+  const mc = document.getElementById('mainContent');
+  await loadOrganizations();
+  const visibleOrgs = isSystemAdmin() ? allOrganizations : allOrganizations.filter(o => window._userOrgIds.includes(o.id));
+
+  mc.innerHTML = `
+    <div class="page-title">🏢 組織管理</div>
+    ${isSystemAdmin() ? `
+    <div class="card" style="margin-bottom:16px;padding:12px">
+      <h3 style="margin-bottom:8px;font-size:.95rem">➕ 新增組織</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="newOrgName" placeholder="組織名稱" style="flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:.88rem">
+        <input id="newOrgCode" placeholder="邀請代碼（選填）" style="flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:.88rem">
+        <button class="btn btn-primary btn-sm" onclick="createOrg()">建立</button>
+      </div>
+    </div>` : ''}
+
+    ${visibleOrgs.length === 0 ? '<div style="text-align:center;color:var(--text-light);padding:30px">尚無組織</div>' : ''}
+
+    ${visibleOrgs.map(org => {
+      const orgClinics = allClinics.filter(c => c.org_id === org.id);
+      const isAdmin = isOrgAdmin(org.id);
+      const inviteLink = location.origin + location.pathname + '?org=' + (org.code || org.id);
+      return `
+      <div class="card" style="margin-bottom:12px;padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h3 style="font-size:1rem;color:var(--accent)">${escHtml(org.name)}</h3>
+          <div style="display:flex;gap:4px">
+            ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="font-size:.75rem" onclick="editOrg(${org.id},'${escHtml(org.name)}','${escHtml(org.code||'')}')">✏️</button>` : ''}
+            ${isSystemAdmin() ? `<button class="btn btn-danger" style="font-size:.65rem;padding:2px 6px" onclick="deleteOrg(${org.id})">刪除</button>` : ''}
+          </div>
+        </div>
+        <div style="font-size:.78rem;color:var(--text-light);margin-bottom:8px">
+          代碼：<strong>${escHtml(org.code || '未設定')}</strong>
+          ${isAdmin ? `<br>邀請連結：<input value="${inviteLink}" readonly style="width:100%;margin-top:4px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:.75rem" onclick="this.select();document.execCommand('copy');toast('已複製')">` : ''}
+        </div>
+        <div style="font-size:.85rem;margin-bottom:4px">📋 診所（${orgClinics.length}）：</div>
+        ${orgClinics.length > 0 ? orgClinics.map(c => `<div style="padding:4px 8px;font-size:.82rem;color:var(--text-light)">• ${escHtml(c.name)}</div>`).join('') : '<div style="padding:4px 8px;font-size:.82rem;color:var(--text-lighter)">尚無診所</div>'}
+      </div>`;
+    }).join('')}
+
+    ${window._currentOrgId ? `<div style="margin-top:16px;padding:8px 12px;background:var(--card);border-radius:8px;font-size:.82rem;color:var(--text-light)">
+      目前使用組織：<strong>${allOrganizations.find(o=>o.id===window._currentOrgId)?.name || '-'}</strong>
+      ${window._userOrgIds.length > 1 ? window._userOrgIds.map(oid => {
+        const o = allOrganizations.find(x=>x.id===oid);
+        return o ? `<button class="btn btn-ghost btn-sm" style="font-size:.75rem;margin-left:4px;${oid===window._currentOrgId?'border-color:var(--accent)':''}" onclick="switchOrg(${oid})">${escHtml(o.name)}</button>` : '';
+      }).join('') : ''}
+    </div>` : ''}
+  `;
+}
+
+window.createOrg = async function() {
+  const name = document.getElementById('newOrgName')?.value.trim();
+  const code = document.getElementById('newOrgCode')?.value.trim() || null;
+  if (!name) { toast('請輸入名稱', 'error'); return; }
+  const { data, error } = await withTimeout(sb.from('organizations').insert({ name, code, owner_id: currentUser.id }).select().single());
+  if (error) { toast('建立失敗：' + error.message, 'error'); return; }
+  // Add creator as org_admin
+  await sb.from('user_organizations').insert({ user_id: currentUser.id, org_id: data.id, role: 'org_admin' });
+  toast('組織已建立');
+  renderOrgMgmt();
+};
+
+window.editOrg = async function(orgId, oldName, oldCode) {
+  const name = prompt('組織名稱：', oldName);
+  if (!name) return;
+  const code = prompt('邀請代碼：', oldCode);
+  await withTimeout(sb.from('organizations').update({ name, code: code || null }).eq('id', orgId));
+  toast('已更新');
+  await loadOrganizations();
+  renderOrgMgmt();
+};
+
+window.deleteOrg = async function(orgId) {
+  if (!await showConfirm('刪除組織', '確定刪除？底下的診所不會被刪除，但會解除關聯。')) return;
+  await withTimeout(sb.from('user_organizations').delete().eq('org_id', orgId));
+  await withTimeout(sb.from('clinics').update({ org_id: null }).eq('org_id', orgId));
+  await withTimeout(sb.from('organizations').delete().eq('id', orgId));
+  toast('已刪除');
+  await loadOrganizations();
+  renderOrgMgmt();
+};
+
+window.switchOrg = function(orgId) {
+  window._currentOrgId = orgId;
+  localStorage.setItem('current_org_id', orgId);
+  toast('已切換到：' + (allOrganizations.find(o=>o.id===orgId)?.name || ''));
+  renderOrgMgmt();
+};
+
 // ===== AI Assistant =====
 let GEMINI_KEY = localStorage.getItem('gemini_api_key') || '';
 let _aiChatHistory = [];
@@ -2446,7 +2599,8 @@ const _pagePermMap = {
   'admin-materials': 'manage_orders', 'notify-settings': 'manage_orders', 'order-stats': 'view_prices',
   'customize': 'change_background', 'daily-summary': 'daily_changes',
   'admin-clinics': 'manage_clinics', 'user-list': 'manage_users', 'role-mgmt': 'manage_roles',
-  'ai-assistant': 'use_ai'
+  'ai-assistant': 'use_ai',
+  'org-mgmt': 'manage_roles'
 };
 
 function applyBrowseMask() {
@@ -2951,7 +3105,7 @@ async function renderDailyChange(container) {
   const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
 
-  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
+  const myClinics = canSeeAdmin() ? getVisibleClinics() : getVisibleClinics().filter(c => window._userClinicIds.includes(c.id));
   dailyClinicId = dailyClinicId || (myClinics[0] ? myClinics[0].id : null);
 
   if (dailyClinicId) {
@@ -3492,7 +3646,7 @@ async function renderOrdering(container) {
   await Promise.all([loadClinics(), loadMaterials()]);
   orderConfirmItems = [];
 
-  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
+  const myClinics = canSeeAdmin() ? getVisibleClinics() : getVisibleClinics().filter(c => window._userClinicIds.includes(c.id));
   orderClinicId = orderClinicId || (myClinics[0] ? myClinics[0].id : null);
 
   // Load inventory for selected clinic
@@ -4756,7 +4910,7 @@ let receiveClinicId = null;
 async function renderReceiving(container) {
   const mc = container || (['material-mgmt','daily-change','ordering','receiving'].includes(currentPage) ? document.getElementById('matMgmtContent') : null) || document.getElementById('mainContent');
   await Promise.all([loadClinics(), loadMaterials()]);
-  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
+  const myClinics = canSeeAdmin() ? getVisibleClinics() : getVisibleClinics().filter(c => window._userClinicIds.includes(c.id));
   receiveClinicId = receiveClinicId || (myClinics[0] ? myClinics[0].id : null);
   const clinicIds = receiveClinicId ? [receiveClinicId] : myClinics.map(c => c.id);
 
@@ -5255,7 +5409,7 @@ function rerenderClinicBody() {
       <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveClinic(${c.id},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
       <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:.8rem" onclick="moveClinic(${c.id},1)" ${i === allClinics.length - 1 ? 'disabled' : ''}>▼</button>
     </td>
-    <td>${escHtml(c.name)}</td><td>${escHtml(c.address || '-')}</td><td>${escHtml(c.phone || '-')}</td><td>${escHtml(c.notes || '-')}</td>
+    <td>${escHtml(c.name)}</td><td style="font-size:.78rem;color:var(--text-light)">${allOrganizations.find(o=>o.id===c.org_id)?.name || '-'}</td><td>${escHtml(c.address || '-')}</td><td>${escHtml(c.phone || '-')}</td><td>${escHtml(c.notes || '-')}</td>
     <td>
       <button class="btn btn-ghost btn-sm" onclick="editClinic(${c.id})">編輯</button>
       <button class="btn btn-danger btn-sm" onclick="deleteClinic(${c.id})">刪除</button>
@@ -5278,8 +5432,10 @@ async function cancelClinicSort() {
 
 function editClinic(id) {
   const c = id ? allClinics.find(x => x.id === id) : {};
+  const orgOptions = allOrganizations.map(o => `<option value="${o.id}" ${c.org_id === o.id ? 'selected' : ''}>${escHtml(o.name)}</option>`).join('');
   openModal(id ? '編輯診所' : '新增診所', `
     <div class="form-group"><label>名稱 *</label><input id="fClinicName" value="${escHtml(c.name || '')}"></div>
+    <div class="form-group"><label>所屬組織</label><select id="fClinicOrg"><option value="">未指定</option>${orgOptions}</select></div>
     <div class="form-group"><label>地址</label><input id="fClinicAddr" value="${escHtml(c.address || '')}"></div>
     <div class="form-group"><label>電話</label><input id="fClinicPhone" value="${escHtml(c.phone || '')}"></div>
     <div class="form-group"><label>備註</label><textarea id="fClinicNotes">${escHtml(c.notes || '')}</textarea></div>
@@ -5288,7 +5444,8 @@ function editClinic(id) {
 }
 
 async function saveClinic(id) {
-  const obj = { name: document.getElementById('fClinicName').value.trim(), address: document.getElementById('fClinicAddr').value.trim(), phone: document.getElementById('fClinicPhone').value.trim(), notes: document.getElementById('fClinicNotes').value.trim() };
+  const orgVal = document.getElementById('fClinicOrg')?.value;
+  const obj = { name: document.getElementById('fClinicName').value.trim(), address: document.getElementById('fClinicAddr').value.trim(), phone: document.getElementById('fClinicPhone').value.trim(), notes: document.getElementById('fClinicNotes').value.trim(), org_id: orgVal ? parseInt(orgVal) : null };
   if (!obj.name) { toast('請輸入診所名稱', 'error'); return; }
   let err;
   if (id) { ({ error: err } = await withTimeout(sb.from('clinics').update(obj).eq('id', id))); }
@@ -6495,7 +6652,7 @@ async function renderTutorials(container) {
   if (error) { mc.innerHTML = '<div class="empty-state">載入失敗：' + escHtml(error.message) + '</div>'; return; }
 
   const canManageAll = hasPermission('manage_materials') || hasPermission('all');
-  const myClinics = canSeeAdmin() ? allClinics : allClinics.filter(c => window._userClinicIds.includes(c.id));
+  const myClinics = canSeeAdmin() ? getVisibleClinics() : getVisibleClinics().filter(c => window._userClinicIds.includes(c.id));
 
   // Filter by clinic
   const filterClinicId = window._tutorialFilterClinic || '';

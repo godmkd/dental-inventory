@@ -1064,8 +1064,8 @@ function canEditOwned(createdBy) { return !!(currentUser && createdBy === curren
 
 function hasPermission(perm) {
   if (!userProfile) return false;
-  // org_admin gets all permissions within their org, except use_ai (needs explicit grant)
-  if (isOrgAdmin() && perm !== 'use_ai') return true;
+  // org_admin gets all permissions within their org, except use_ai and arrange_layout
+  if (isOrgAdmin() && perm !== 'use_ai' && perm !== 'arrange_layout') return true;
   if (userProfile.role_id) {
     const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
     if (role && role.permissions) {
@@ -5518,7 +5518,7 @@ function editClinic(id) {
   const orgOptions = allOrganizations.map(o => `<option value="${o.id}" ${c.org_id === o.id ? 'selected' : ''}>${escHtml(o.name)}</option>`).join('');
   openModal(id ? '編輯診所' : '新增診所', `
     <div class="form-group"><label>名稱 *</label><input id="fClinicName" value="${escHtml(c.name || '')}"></div>
-    <div class="form-group"><label>所屬組織</label><select id="fClinicOrg"><option value="">未指定</option>${orgOptions}</select></div>
+    ${isSystemAdmin() ? `<div class="form-group"><label>所屬組織</label><select id="fClinicOrg"><option value="">未指定</option>${orgOptions}</select></div>` : ''}
     <div class="form-group"><label>地址</label><input id="fClinicAddr" value="${escHtml(c.address || '')}"></div>
     <div class="form-group"><label>電話</label><input id="fClinicPhone" value="${escHtml(c.phone || '')}"></div>
     <div class="form-group"><label>備註</label><textarea id="fClinicNotes">${escHtml(c.notes || '')}</textarea></div>
@@ -5528,7 +5528,12 @@ function editClinic(id) {
 
 async function saveClinic(id) {
   const orgVal = document.getElementById('fClinicOrg')?.value;
-  const obj = { name: document.getElementById('fClinicName').value.trim(), address: document.getElementById('fClinicAddr').value.trim(), phone: document.getElementById('fClinicPhone').value.trim(), notes: document.getElementById('fClinicNotes').value.trim(), org_id: orgVal ? parseInt(orgVal) : null };
+  // org_admin: auto-assign to their org if not specified
+  let orgId = orgVal ? parseInt(orgVal) : null;
+  if (!orgId && !isSystemAdmin() && window._userOrgIds.length > 0) {
+    orgId = window._userOrgIds[0];
+  }
+  const obj = { name: document.getElementById('fClinicName').value.trim(), address: document.getElementById('fClinicAddr').value.trim(), phone: document.getElementById('fClinicPhone').value.trim(), notes: document.getElementById('fClinicNotes').value.trim(), org_id: orgId };
   if (!obj.name) { toast('請輸入診所名稱', 'error'); return; }
   let err;
   if (id) { ({ error: err } = await withTimeout(sb.from('clinics').update(obj).eq('id', id))); }

@@ -3312,20 +3312,91 @@ async function queryDailyHistory() {
         </div>
         <div style="display:none">
           <table style="width:100%;font-size:.82rem"><thead><tr><th>品項</th><th>數量</th><th>操作者</th><th>時間</th></tr></thead>
+          <thead><tr><th>品項</th><th>數量</th><th>操作者</th><th>時間</th>${isSystemAdmin()?'<th>管理</th>':''}</tr></thead>
           <tbody>${dateLogs.map(log => {
             const isIn = log.type === 'in';
             const time = new Date(log.created_at).toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
+            const adminBtns = isSystemAdmin() ? `<td style="white-space:nowrap">
+              <button class="btn btn-ghost" style="font-size:.7rem;padding:2px 6px" onclick="editDailyLog(${log.id},${log.quantity},'${log.type}')">✏️</button>
+              <button class="btn btn-ghost" style="font-size:.7rem;padding:2px 6px" onclick="changeDailyLogDate(${log.id},'${log.created_at}')">📅</button>
+              <button class="btn btn-danger" style="font-size:.65rem;padding:2px 6px" onclick="adminCancelDailyLog(${log.id})">✕</button>
+            </td>` : '';
             return `<tr>
               <td>${escHtml(materialName(log.material_id))}</td>
               <td style="color:${isIn ? 'var(--success)' : 'var(--danger)'};font-weight:600">${isIn ? '+' : '-'}${log.quantity}</td>
               <td style="font-size:.8rem;color:var(--text-light)">${escHtml(log.operator_name || '')}</td>
               <td style="font-size:.8rem;color:var(--text-light)">${time}</td>
+              ${adminBtns}
             </tr>`;
           }).join('')}</tbody></table>
         </div>
       </div>`;
     }).join('');
 }
+
+// Admin: edit quantity
+window.editDailyLog = async function(logId, currentQty, currentType) {
+  const newQty = prompt(`修改數量（目前：${currentType==='in'?'+':''}${currentQty}）\n輸入新的數量（正整數）：`, currentQty);
+  if (newQty === null) return;
+  const qty = parseInt(newQty);
+  if (isNaN(qty) || qty <= 0) { toast('請輸入正整數', 'error'); return; }
+  if (qty === currentQty) return;
+
+  try {
+    // Get log to adjust inventory
+    const { data: log } = await withTimeout(sb.from('inventory_logs').select('*').eq('id', logId).single());
+    if (!log) { toast('找不到紀錄', 'error'); return; }
+
+    // Adjust inventory: reverse old, apply new
+    const diff = (currentType === 'in') ? (qty - currentQty) : (currentQty - qty);
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', log.clinic_id).eq('material_id', log.material_id).maybeSingle());
+    if (inv) {
+      await withTimeout(sb.from('clinic_inventory').update({ quantity: Math.max(0, inv.quantity + diff) }).eq('id', inv.id));
+    }
+
+    // Update log
+    await withTimeout(sb.from('inventory_logs').update({ quantity: qty }).eq('id', logId));
+    toast('已修改數量');
+    queryDailyHistory();
+  } catch(e) { toast('修改失敗：' + e.message, 'error'); }
+};
+
+// Admin: change date
+window.changeDailyLogDate = async function(logId, currentDate) {
+  const current = currentDate.slice(0, 10);
+  const newDate = prompt('修改日期（YYYY-MM-DD）：', current);
+  if (!newDate || newDate === current) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { toast('日期格式錯誤', 'error'); return; }
+
+  try {
+    // Keep original time, change date
+    const origTime = new Date(currentDate);
+    const newDt = new Date(newDate + 'T' + origTime.toTimeString().slice(0, 8));
+    await withTimeout(sb.from('inventory_logs').update({ created_at: newDt.toISOString() }).eq('id', logId));
+    toast('已修改日期');
+    queryDailyHistory();
+  } catch(e) { toast('修改失敗：' + e.message, 'error'); }
+};
+
+// Admin: cancel any date log (with inventory adjustment)
+window.adminCancelDailyLog = async function(logId) {
+  if (!await showConfirm('取消變動', '確定要取消這筆變動？庫存將反向調整。')) return;
+  try {
+    const { data: log } = await withTimeout(sb.from('inventory_logs').select('*').eq('id', logId).single());
+    if (!log) { toast('找不到紀錄', 'error'); return; }
+
+    // Reverse inventory
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', log.clinic_id).eq('material_id', log.material_id).maybeSingle());
+    if (inv) {
+      const adj = log.type === 'in' ? -log.quantity : log.quantity;
+      await withTimeout(sb.from('clinic_inventory').update({ quantity: Math.max(0, inv.quantity + adj) }).eq('id', inv.id));
+    }
+
+    await withTimeout(sb.from('inventory_logs').delete().eq('id', logId));
+    toast('已取消變動');
+    queryDailyHistory();
+  } catch(e) { toast('取消失敗：' + e.message, 'error'); }
+};
 
 async function loadDailyConfirmedLogs() {
   const titleEl = document.getElementById('dailyConfirmedTitle');

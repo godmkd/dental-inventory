@@ -2241,7 +2241,7 @@ async function renderOrgMgmt() {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <h3 style="font-size:1rem;color:var(--accent)">${escHtml(org.name)}</h3>
           <div style="display:flex;gap:4px">
-            ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="font-size:.75rem" onclick="editOrg(${org.id},'${escHtml(org.name)}','${escHtml(org.code||'')}')">✏️</button>` : ''}
+            ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="font-size:.75rem" onclick="editOrg(${org.id},'${escHtml(org.name)}','${escHtml(org.code||'')}')">✏️ 名稱/代碼</button>` : ''}
             ${isSystemAdmin() ? `<button class="btn btn-danger" style="font-size:.65rem;padding:2px 6px" onclick="deleteOrg(${org.id})">刪除</button>` : ''}
           </div>
         </div>
@@ -2262,9 +2262,9 @@ async function renderOrgMgmt() {
               return `<div style="padding:4px 8px;font-size:.82rem;display:flex;align-items:center;gap:6px">
                 <span style="color:var(--text-light)">• ${escHtml(u.display_name)}</span>
                 ${isOA ? '<span style="font-size:.7rem;background:var(--accent);color:#fff;padding:1px 6px;border-radius:4px">主管</span>' : ''}
-                ${isAdmin && !isOA ? `<button class="btn btn-ghost" style="font-size:.65rem;padding:1px 4px" onclick="setOrgAdmin(${org.id},'${u.id}')">👑 設為主管</button>` : ''}
-                ${isAdmin && isOA && u.id !== currentUser.id ? `<button class="btn btn-ghost" style="font-size:.65rem;padding:1px 4px" onclick="removeOrgAdmin(${org.id},'${u.id}')">取消主管</button>` : ''}
-                ${isAdmin ? `<button class="btn btn-danger" style="font-size:.6rem;padding:1px 4px" onclick="removeOrgMember(${org.id},'${u.id}')">移除</button>` : ''}
+                ${isSystemAdmin() && !isOA ? `<button class="btn btn-ghost" style="font-size:.65rem;padding:1px 4px" onclick="setOrgAdmin(${org.id},'${u.id}')">👑 設為主管</button>` : ''}
+                ${isSystemAdmin() && isOA && u.id !== currentUser.id ? `<button class="btn btn-ghost" style="font-size:.65rem;padding:1px 4px" onclick="removeOrgAdmin(${org.id},'${u.id}')">取消主管</button>` : ''}
+                ${isSystemAdmin() ? `<button class="btn btn-danger" style="font-size:.6rem;padding:1px 4px" onclick="removeOrgMember(${org.id},'${u.id}')">移除</button>` : ''}
               </div>`;
             }).join('');
         })()}

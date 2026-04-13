@@ -669,17 +669,11 @@ async function init() {
   });
 
   // Auto refresh session when page becomes visible (after tab switch or phone wake)
-  let _lastVisible = Date.now();
-  document.addEventListener('visibilitychange', () => {
+  // Refresh session silently when returning to app
+  document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser) {
-      const elapsed = Date.now() - _lastVisible;
-      if (elapsed > 3000) {
-        // Away > 3 seconds — reload immediately, no waiting
-        location.reload();
-        return;
-      }
+      try { await sb.auth.refreshSession(); } catch(e) {}
     }
-    if (document.visibilityState === 'hidden') _lastVisible = Date.now();
   });
 }
 
@@ -1285,7 +1279,7 @@ async function navigateTo(pageId) {
 }
 
 // ===================== UTILS =====================
-async function withTimeout(promise, ms = 8000) {
+async function withTimeout(promise, ms = 3000) {
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("請求逾時")), ms));
   return Promise.race([promise, timeout]);
 }

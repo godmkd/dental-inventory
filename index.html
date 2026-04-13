@@ -2307,6 +2307,12 @@ async function renderOrgMgmt() {
         </div>
         <div style="font-size:.78rem;color:var(--text-light);margin-bottom:8px">
           代碼：<strong>${escHtml(org.code || '未設定')}</strong>
+          | 模式：<strong>${org.mode === 'simple' ? '簡易版' : org.mode === 'hybrid' ? '結合版' : '完整版'}</strong>
+          ${isSystemAdmin() ? `<select onchange="setOrgMode(${org.id},this.value)" style="font-size:.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);margin-left:4px">
+            <option value="full" ${org.mode==='full'?'selected':''}>完整版</option>
+            <option value="simple" ${org.mode==='simple'?'selected':''}>簡易版</option>
+            <option value="hybrid" ${org.mode==='hybrid'?'selected':''}>結合版</option>
+          </select>` : ''}
           ${isAdmin ? `<br>邀請連結：<input value="${inviteLink}" readonly style="width:100%;margin-top:4px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:.75rem" onclick="this.select();document.execCommand('copy');toast('已複製')">` : ''}
         </div>
         <div style="font-size:.85rem;margin-bottom:4px">📋 診所（${orgClinics.length}）：</div>
@@ -2389,6 +2395,13 @@ window.removeOrgMember = async function(orgId, userId) {
   if (!await showConfirm('移除成員', '確定要將此成員從組織中移除？')) return;
   await withTimeout(sb.from('user_organizations').delete().eq('org_id', orgId).eq('user_id', userId));
   toast('已移除');
+  renderOrgMgmt();
+};
+
+window.setOrgMode = async function(orgId, mode) {
+  await withTimeout(sb.from('organizations').update({ mode }).eq('id', orgId));
+  toast(`已切換為${mode === 'simple' ? '簡易版' : mode === 'hybrid' ? '結合版' : '完整版'}`);
+  await loadOrganizations();
   renderOrgMgmt();
 };
 
@@ -4061,7 +4074,7 @@ function updateOrderConfirmArea() {
     <h3>叫貨清單 (${orderConfirmItems.length} 項)${canSeePrice() ? ' | 總計 ' + fmtMoney(total) : ''}</h3>
     ${orderConfirmItems.map((it, i) => `<div class="order-confirm-item">
       <span><strong>${escHtml(it.name)}</strong> x${it.quantity}${canSeePrice() ? ' <small class="text-muted">' + fmtMoney(it.unit_price * it.quantity) + '</small>' : ''}</span>
-      <label style="font-size:.78rem;color:var(--danger);display:flex;align-items:center;gap:3px;cursor:pointer;margin:0 8px"><input type="checkbox" onchange="orderConfirmItems[${i}].is_urgent=this.checked" ${it.is_urgent?'checked':''}> 急件</label>
+      ${!isSimpleMode() ? `<label style="font-size:.78rem;color:var(--danger);display:flex;align-items:center;gap:3px;cursor:pointer;margin:0 8px"><input type="checkbox" onchange="orderConfirmItems[${i}].is_urgent=this.checked" ${it.is_urgent?'checked':''}> 急件</label>` : ''}
       <button class="btn btn-danger btn-xs" onclick="removeOrderConfirmItem(${i})">✕</button>
     </div>`).join('')}
     <div class="order-confirm-actions">
@@ -4285,13 +4298,14 @@ async function renderOrderMgmt() {
   const isDirect = ['order-list','order-summary','rush-mgmt'].includes(currentPage);
   await loadMaterials();
 
-  const directTitle = {'order-list':'📋 各單管理 <span class=\"help-tip\">!<span class=\"help-text\">狀態流程：待確認→已確認→已出貨→已到貨</span></span>','order-summary':'📊 叫貨總覽 <span class=\"help-tip\">!<span class=\"help-text\">待出貨＝已確認未出貨，已出貨＝在途中，已到貨會從列表移除</span></span>','rush-mgmt':'🚨 催貨管理 <span class=\"help-tip\">!<span class=\"help-text\">對遲未到貨的品項發送催貨 LINE 通知</span></span>'};
+  const statusFlow = isSimpleMode() ? '待確認→已確認→已收貨' : '待確認→已確認→已出貨→已到貨';
+  const directTitle = {'order-list':`📋 貨單管理 <span class="help-tip">!<span class="help-text">狀態流程：${statusFlow}</span></span>`,'order-summary':'📊 叫貨總覽 <span class=\"help-tip\">!<span class=\"help-text\">待出貨＝已確認未出貨，已出貨＝在途中，已到貨會從列表移除</span></span>','rush-mgmt':'🚨 催貨管理 <span class=\"help-tip\">!<span class=\"help-text\">對遲未到貨的品項發送催貨 LINE 通知</span></span>'};
   mc.innerHTML = `
     ${isDirect ? `<div class="page-title">${directTitle[currentPage]||''}</div>` : `<div class="page-title">📋 貨單管理</div>${usageHint('order-mgmt')}`}
     ${!isDirect ? `<div class="sub-tabs" style="margin-bottom:4px">
-      <div class="sub-tab ${orderMgmtTab === 'list' ? 'active' : ''}" onclick="orderMgmtTab='list';renderOrderMgmt()">各單管理</div>
+      <div class="sub-tab ${orderMgmtTab === 'list' ? 'active' : ''}" onclick="orderMgmtTab='list';renderOrderMgmt()">貨單管理</div>
       <div class="sub-tab ${orderMgmtTab === 'summary' ? 'active' : ''}" onclick="orderMgmtTab='summary';renderOrderMgmt()">叫貨總覽</div>
-      <div class="sub-tab ${orderMgmtTab === 'rush' ? 'active' : ''}" onclick="orderMgmtTab='rush';renderOrderMgmt()">催貨管理</div>
+      ${!isSimpleMode() ? `<div class="sub-tab ${orderMgmtTab === 'rush' ? 'active' : ''}" onclick="orderMgmtTab='rush';renderOrderMgmt()">催貨管理</div>` : ''}
     </div>` : ''}
     <div id="orderMgmtTabContent"></div>`;
 
@@ -4304,7 +4318,7 @@ async function renderOrderMgmt() {
     return;
   }
 
-  // === 各單管理 ===
+  // === 貨單管理 ===
   const tabContent = document.getElementById('orderMgmtTabContent');
   const { data: orders } = await withTimeout(sb.from('orders').select('*').order('created_at', { ascending: false }));
 
@@ -4688,11 +4702,13 @@ async function toggleOrderCard(orderId) {
           <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>
         ` : ''}
         ${itemStatus === 'confirmed' ? `
-          <button class="btn btn-primary btn-xs" onclick="setItemStatus(${it.id},${orderId},'shipped')">📦 出貨</button>
+          ${isSimpleMode()
+            ? `<button class="btn btn-primary btn-xs" onclick="receiveItem(${it.id},${orderId})">📦 收貨</button>`
+            : `<button class="btn btn-primary btn-xs" onclick="setItemStatus(${it.id},${orderId},'shipped')">📦 出貨</button>`}
           <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'pending')">↩ 回待確認</button>
           <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>
         ` : ''}
-        ${itemStatus === 'shipped' ? `
+        ${itemStatus === 'shipped' && !isSimpleMode() ? `
           <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'confirmed')">↩ 回已確認</button>
           <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>
         ` : ''}
@@ -4708,7 +4724,8 @@ async function toggleOrderCard(orderId) {
   if (hasPending || hasConfirmed) {
     html += '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border)">';
     if (hasPending) html += `<button class="btn btn-success btn-sm" onclick="confirmAllItems(${orderId})">✓ 全部確認</button>`;
-    if (hasConfirmed) html += `<button class="btn btn-primary btn-sm" onclick="shipAllItems(${orderId})">📦 全部出貨</button>`;
+    if (hasConfirmed && isSimpleMode()) html += `<button class="btn btn-primary btn-sm" onclick="receiveAllItems(${orderId})">📦 全部收貨</button>`;
+    else if (hasConfirmed) html += `<button class="btn btn-primary btn-sm" onclick="shipAllItems(${orderId})">📦 全部出貨</button>`;
     html += '</div>';
   }
 
@@ -4755,6 +4772,49 @@ window.shipAllItems = async function(orderId) {
     toast(`已出貨 ${confirmedItems.length} 個品項`);
     renderOrderMgmt();
   } catch (e) { toast('全部出貨失敗: ' + e.message, 'error'); }
+};
+
+// Simple mode: receive item directly (confirmed → received + update inventory)
+window.receiveItem = async function(itemId, orderId) {
+  try {
+    const { data: it } = await withTimeout(sb.from('order_items').select('*').eq('id', itemId).single());
+    if (!it) return;
+    // Mark as received
+    await withTimeout(sb.from('order_items').update({ item_status: 'received' }).eq('id', itemId));
+    // Update inventory
+    const clinicId = it.clinic_id || dailyClinicId;
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
+    if (inv) {
+      await withTimeout(sb.from('clinic_inventory').update({ quantity: inv.quantity + it.quantity }).eq('id', inv.id));
+    } else {
+      await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, quantity: it.quantity }));
+    }
+    await recomputeOrderStatus(orderId);
+    toast('已收貨');
+    renderOrderMgmt();
+  } catch(e) { toast('收貨失敗: ' + e.message, 'error'); }
+};
+
+window.receiveAllItems = async function(orderId) {
+  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
+  if (!items) return;
+  const confirmedItems = items.filter(i => (i.item_status || 'pending') === 'confirmed');
+  if (!confirmedItems.length) { toast('沒有已確認品項'); return; }
+  try {
+    for (const it of confirmedItems) {
+      await withTimeout(sb.from('order_items').update({ item_status: 'received' }).eq('id', it.id));
+      const clinicId = it.clinic_id || dailyClinicId;
+      const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
+      if (inv) {
+        await withTimeout(sb.from('clinic_inventory').update({ quantity: inv.quantity + it.quantity }).eq('id', inv.id));
+      } else {
+        await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, quantity: it.quantity }));
+      }
+    }
+    await recomputeOrderStatus(orderId);
+    toast(`已收貨 ${confirmedItems.length} 個品項`);
+    renderOrderMgmt();
+  } catch(e) { toast('全部收貨失敗: ' + e.message, 'error'); }
 };
 
 // Supplier selection in order management

@@ -1064,8 +1064,8 @@ function canEditOwned(createdBy) { return !!(currentUser && createdBy === curren
 
 function hasPermission(perm) {
   if (!userProfile) return false;
-  // org_admin gets all permissions within their org
-  if (isOrgAdmin()) return true;
+  // org_admin gets all permissions within their org, except use_ai (needs explicit grant)
+  if (isOrgAdmin() && perm !== 'use_ai') return true;
   if (userProfile.role_id) {
     const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
     if (role && role.permissions) {

@@ -6540,28 +6540,31 @@ async function renderUserMgmt() {
 
 async function renderUsersList(el) {
   await Promise.all([loadUsers(), loadOrganizations()]);
+  const { data: allUserOrgs } = await withTimeout(sb.from('user_organizations').select('user_id,org_id'));
   // Filter users by organization
   let visibleUsers = allUsers;
   if (!isSystemAdmin()) {
-    // Load all user_organizations to filter
-    const { data: allUserOrgs } = await withTimeout(sb.from('user_organizations').select('user_id,org_id'));
     const myOrgIds = getVisibleOrgIds();
     const usersInMyOrgs = new Set((allUserOrgs || []).filter(uo => myOrgIds.includes(uo.org_id)).map(uo => uo.user_id));
     visibleUsers = allUsers.filter(u => usersInMyOrgs.has(u.id));
   }
   el.innerHTML = `
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>姓名</th><th>角色</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
-      <tbody>${visibleUsers.map(u => `<tr>
+      <thead><tr><th>姓名</th><th>角色</th><th>組織</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
+      <tbody>${visibleUsers.map(u => {
+        const uOrgs = (allUserOrgs || []).filter(uo => uo.user_id === u.id);
+        const orgNames = uOrgs.map(uo => allOrganizations.find(o=>o.id===uo.org_id)?.name).filter(Boolean).join('、');
+        return `<tr>
         <td>${escHtml(u.display_name)}</td>
         <td>${roleLabel(u.role, u.role_id)}</td>
+        <td style="font-size:.8rem">${orgNames || '<span class="text-muted">無</span>'}</td>
         <td>${u.clinic_id ? escHtml(allClinics.filter(c => c.id === u.clinic_id).map(c => c.name).join(', ') || clinicName(u.clinic_id)) : '<span class="text-muted">未指派</span>'}</td>
         <td>${u.is_active ? '<span class="text-success">啟用</span>' : '<span class="text-danger">停用</span>'}</td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">編輯</button>
           <button class="btn ${u.is_active ? 'btn-warning' : 'btn-success'} btn-sm" onclick="toggleUserActive('${u.id}',${!u.is_active})">${u.is_active ? '停用' : '啟用'}</button>
         </td>
-      </tr>`).join('')}</tbody>
+      </tr>`; }).join('')}</tbody>
     </table></div></div>`;
 }
 
@@ -6594,7 +6597,21 @@ async function editUser(id) {
   const clinicCheckboxes = allClinics.map(c =>
     `<label style="display:flex;align-items:center;gap:8px;padding:5px 14px 5px 2px;cursor:pointer;font-size:.88rem">
       <input type="checkbox" class="fUserClinicCb" value="${c.id}" style="width:18px;height:18px;min-width:18px;flex-shrink:0" ${userClinicIds.includes(c.id) ? 'checked' : ''}>
-      <span style="white-space:nowrap">${escHtml(c.name)}</span>
+      <span style="white-space:nowrap">${escHtml(c.name)}${c.org_id ? ` <span style="font-size:.7rem;color:var(--text-lighter)">(${allOrganizations.find(o=>o.id===c.org_id)?.name||''})</span>` : ''}</span>
+    </label>`
+  ).join('');
+
+  // Load user's organizations
+  let userOrgIds = [];
+  try {
+    const { data: uoData } = await sb.from('user_organizations').select('org_id').eq('user_id', u.id);
+    userOrgIds = (uoData || []).map(uo => uo.org_id);
+  } catch(e) {}
+
+  const orgCheckboxes = allOrganizations.map(o =>
+    `<label style="display:flex;align-items:center;gap:8px;padding:5px 14px 5px 2px;cursor:pointer;font-size:.88rem">
+      <input type="checkbox" class="fUserOrgCb" value="${o.id}" style="width:18px;height:18px;min-width:18px;flex-shrink:0" ${userOrgIds.includes(o.id) ? 'checked' : ''}>
+      <span style="white-space:nowrap">${escHtml(o.name)}</span>
     </label>`
   ).join('');
 
@@ -6602,6 +6619,11 @@ async function editUser(id) {
     <div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>
     <div class="form-row">
       <div class="form-group"><label>角色</label>${roleDropdown}</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>所屬組織（可複選）</label>
+        <div id="fUserOrgs" style="display:flex;flex-wrap:wrap;padding:4px">${orgCheckboxes}</div>
+      </div>
       <div class="form-group"><label>所屬診所（可複選）</label>
         <div id="fUserClinics" style="display:flex;flex-wrap:wrap;padding:4px">${clinicCheckboxes}</div>
       </div>
@@ -6631,9 +6653,26 @@ async function saveUser(id) {
   if (selectedClinicIds.length) {
     await sb.from('user_clinics').insert(selectedClinicIds.map(cid => ({ user_id: id, clinic_id: cid })));
   }
+  // Update user_organizations table
+  const selectedOrgIds = Array.from(document.querySelectorAll('.fUserOrgCb:checked')).map(cb => parseInt(cb.value));
+  // Keep existing roles (org_admin etc), only add/remove memberships
+  const { data: existingUO } = await sb.from('user_organizations').select('org_id,role').eq('user_id', id);
+  const existingMap = {};
+  (existingUO || []).forEach(uo => { existingMap[uo.org_id] = uo.role; });
+  // Remove orgs no longer selected
+  const toRemove = Object.keys(existingMap).map(Number).filter(oid => !selectedOrgIds.includes(oid));
+  for (const oid of toRemove) {
+    await sb.from('user_organizations').delete().eq('user_id', id).eq('org_id', oid);
+  }
+  // Add new orgs
+  const toAdd = selectedOrgIds.filter(oid => !existingMap[oid]);
+  if (toAdd.length) {
+    await sb.from('user_organizations').insert(toAdd.map(oid => ({ user_id: id, org_id: oid, role: 'member' })));
+  }
   // If editing self, update local cache
   if (id === currentUser.id) {
     window._userClinicIds = selectedClinicIds;
+    window._userOrgIds = selectedOrgIds;
   }
   toast('已更新'); closeModal(); await loadUsers(); renderUserMgmt();
 }

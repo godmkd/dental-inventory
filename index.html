@@ -1066,6 +1066,17 @@ function hasPermission(perm) {
   if (!userProfile) return false;
   // org_admin gets all permissions within their org, except use_ai and arrange_layout
   if (isOrgAdmin() && perm !== 'use_ai' && perm !== 'arrange_layout') return true;
+  // Check per-org role first
+  const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
+  if (orgRoleId) {
+    const role = allRoles.find(r => r.id === orgRoleId);
+    if (role && role.permissions) {
+      const perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions;
+      if (Array.isArray(perms)) return perms.includes(perm);
+      if (typeof perms === 'object') return perms.all === true || perms[perm] === true;
+    }
+  }
+  // Fallback to profile role_id
   if (userProfile.role_id) {
     const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
     if (role && role.permissions) {
@@ -1102,12 +1113,16 @@ function canSeePrice() { return hasPermission('view_prices'); }
 async function loadOrganizations() {
   const { data } = await withTimeout(sb.from('organizations').select('*').order('id'));
   allOrganizations = data || [];
-  // Load user's orgs
+  // Load user's orgs with per-org role
   if (currentUser) {
-    const { data: userOrgs } = await withTimeout(sb.from('user_organizations').select('org_id,role').eq('user_id', currentUser.id));
+    const { data: userOrgs } = await withTimeout(sb.from('user_organizations').select('org_id,role,role_id').eq('user_id', currentUser.id));
     window._userOrgIds = (userOrgs || []).map(uo => uo.org_id);
     window._userOrgRoles = {};
-    (userOrgs || []).forEach(uo => { window._userOrgRoles[uo.org_id] = uo.role; });
+    window._userOrgRoleIds = {};
+    (userOrgs || []).forEach(uo => {
+      window._userOrgRoles[uo.org_id] = uo.role;
+      if (uo.role_id) window._userOrgRoleIds[uo.org_id] = uo.role_id;
+    });
     // Set current org from URL param, localStorage, or first org
     const urlOrg = new URLSearchParams(location.search).get('org');
     if (urlOrg) {
@@ -1117,6 +1132,15 @@ async function loadOrganizations() {
     if (!window._currentOrgId) window._currentOrgId = parseInt(localStorage.getItem('current_org_id')) || window._userOrgIds[0] || null;
     if (window._currentOrgId) localStorage.setItem('current_org_id', window._currentOrgId);
   }
+}
+
+function getCurrentOrgMode() {
+  const org = allOrganizations.find(o => o.id === window._currentOrgId);
+  return org?.mode || 'full';
+}
+
+function isSimpleMode() {
+  return getCurrentOrgMode() === 'simple';
 }
 
 function isOrgAdmin(orgId) {
@@ -1140,14 +1164,39 @@ function getVisibleClinics() {
   );
 }
 
-async function loadClinics() { const { data } = await withTimeout(sb.from('clinics').select('*').order('sort_order').order('id')); allClinics = data || []; }
-async function loadCategories() { const { data } = await withTimeout(sb.from('categories').select('*').order('sort_order')); allCategories = data || []; }
-async function loadSuppliers() { const { data } = await withTimeout(sb.from('suppliers').select('*').order('name')); allSuppliers = data || []; }
-async function loadMaterials() { const { data } = await withTimeout(sb.from('materials').select('*').order('sort_order').order('name')); allMaterials = data || []; }
+async function loadClinics() {
+  let q = sb.from('clinics').select('*').order('sort_order').order('id');
+  if (window._currentOrgId && !isSystemAdmin()) q = q.eq('org_id', window._currentOrgId);
+  const { data } = await withTimeout(q);
+  allClinics = data || [];
+}
+async function loadCategories() {
+  let q = sb.from('categories').select('*').order('sort_order');
+  if (window._currentOrgId && !isSystemAdmin()) q = q.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  const { data } = await withTimeout(q);
+  allCategories = data || [];
+}
+async function loadSuppliers() {
+  let q = sb.from('suppliers').select('*').order('name');
+  if (window._currentOrgId && !isSystemAdmin()) q = q.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  const { data } = await withTimeout(q);
+  allSuppliers = data || [];
+}
+async function loadMaterials() {
+  let q = sb.from('materials').select('*').order('sort_order').order('name');
+  if (window._currentOrgId && !isSystemAdmin()) q = q.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  const { data } = await withTimeout(q);
+  allMaterials = data || [];
+}
 async function loadUsers() { const { data } = await withTimeout(sb.from('user_profiles').select('*').order('created_at')); allUsers = data || []; }
 async function loadRoles() { const { data } = await withTimeout(sb.from('roles').select('*').order('sort_order').order('id')); allRoles = data || []; }
 
 function clinicName(id) { return allClinics.find(c => c.id === id)?.name || '-'; }
+// Helper: add org filter to a Supabase query
+function orgFilter(query, orgCol = 'org_id') {
+  if (window._currentOrgId && !isSystemAdmin()) return query.eq(orgCol, window._currentOrgId);
+  return query;
+}
 function categoryName(id) { return allCategories.find(c => c.id === id)?.name || '-'; }
 function supplierName(id) { return allSuppliers.find(s => s.id === id)?.name || '-'; }
 function materialName(id) { return allMaterials.find(m => m.id === id)?.name || '-'; }
@@ -1230,13 +1279,19 @@ function buildBubbles() {
     { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '68%', ll: '82%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
     { id: 'ai-assistant',     icon: '🤖', label: 'AI 助手', size: 'large',  top: '55%', left: '50%', pt: '45%', pl: '50%', lt: '55%', ll: '45%',  delay: '1.5s', duration: '7s',   anim: 'float2', perm: 'use_ai' },
     { id: 'org-mgmt',         icon: '🏢', label: '組織管理', size: 'small', top: '70%', left: '50%', pt: '58%', pl: '85%', lt: '72%', ll: '50%',  delay: '4s',   duration: '6.5s', anim: 'float3', perm: 'manage_roles' },
+    { id: 'switch-org',       icon: '🔄', label: '切換組織', size: 'medium', top: '75%', left: '40%', pt: '60%', pl: '40%', lt: '75%', ll: '40%',  delay: '2s',   duration: '7s',   anim: 'float', special: 'switch-org' },
   ];
   const container = document.getElementById('bubbleContainer');
   let html = '';
   const hasBrowse = hasPermission('browse');
+  const simpleMode = isSimpleMode();
+  const showSwitchOrg = isSystemAdmin() || window._userOrgIds.length > 1;
   bubbleConfig.forEach(b => {
+    // Switch org bubble: only show for multi-org users or admin
+    if (b.special === 'switch-org' && !showSwitchOrg) return;
+    // Simple mode: hide rush-mgmt
+    if (simpleMode && ['rush-mgmt'].includes(b.id)) return;
     if (hasBrowse) {
-      // Browse mode: show all except admin-only
       if (['role-mgmt', 'user-list'].includes(b.id) && !hasPermission(b.perm)) return;
     } else {
       if (b.perm && !hasPermission(b.perm)) return;
@@ -1253,6 +1308,11 @@ function buildBubbles() {
       idAttr = 'id="userBubble"'; onclick = 'handleUserBubbleClick()';
       iconId = 'id="userBubbleIcon"';
       labelHtml = `<span class="bubble-label" id="userBubbleLabel">帳號</span>`;
+    } else if (b.special === 'switch-org') {
+      idAttr = 'id="switchOrgBubble"';
+      onclick = 'showOrgSwitcher()';
+      const curOrg = allOrganizations.find(o => o.id === window._currentOrgId);
+      labelHtml = `<span class="bubble-label" id="switchOrgLabel">${curOrg ? escHtml(curOrg.name) : '切換組織'}</span>`;
     } else {
       onclick = `navigateToBubble('${b.id}')`;
     }
@@ -2336,8 +2396,25 @@ window.switchOrg = function(orgId) {
   window._currentOrgId = orgId;
   localStorage.setItem('current_org_id', orgId);
   toast('已切換到：' + (allOrganizations.find(o=>o.id===orgId)?.name || ''));
-  renderOrgMgmt();
+  // Reload all data for new org context
+  location.reload();
 };
+
+function showOrgSwitcher() {
+  const visOrgs = isSystemAdmin() ? allOrganizations : allOrganizations.filter(o => window._userOrgIds.includes(o.id));
+  if (visOrgs.length === 0) { toast('尚無組織'); return; }
+  const curId = window._currentOrgId;
+  openModal('🔄 切換組織', `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${visOrgs.map(o => `
+        <button onclick="switchOrg(${o.id});closeModal()" class="btn ${o.id === curId ? 'btn-primary' : 'btn-ghost'}" style="padding:12px 16px;text-align:left;font-size:.95rem;display:flex;justify-content:space-between;align-items:center">
+          <span>${escHtml(o.name)} ${o.mode === 'simple' ? '<span style="font-size:.7rem;opacity:.6">簡易</span>' : ''}</span>
+          ${o.id === curId ? '<span style="font-size:.8rem">✓ 目前</span>' : ''}
+        </button>
+      `).join('')}
+    </div>
+  `, '<button class="btn btn-ghost" onclick="closeModal()">取消</button>');
+}
 
 // ===== AI Assistant =====
 let GEMINI_KEY = localStorage.getItem('gemini_api_key') || '';
@@ -4016,7 +4093,7 @@ async function submitOrdering() {
     });
     const totalAmount = roundedItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
     const { data: order, error: e1 } = await withTimeout(sb.from('orders').insert({
-      status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes: ''
+      status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes: '', org_id: window._currentOrgId || null
     }).select().single());
     if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
 
@@ -5586,7 +5663,7 @@ async function saveSupplier(id) {
   if (!obj.name) { toast('請輸入名稱', 'error'); return; }
   let err;
   if (id) { ({ error: err } = await withTimeout(sb.from('suppliers').update(obj).eq('id', id))); }
-  else { ({ error: err } = await withTimeout(sb.from('suppliers').insert(obj))); }
+  else { obj.org_id = window._currentOrgId || null; ({ error: err } = await withTimeout(sb.from('suppliers').insert(obj))); }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }
   toast('已儲存'); closeModal(); await loadSuppliers(); renderAdminContent();
 }
@@ -6044,7 +6121,7 @@ async function saveMaterial(id) {
     let err, savedId = id;
     if (id) { ({ error: err } = await withTimeout(sb.from('materials').update(obj).eq('id', id))); }
     else {
-      const { data: ins, error: insErr } = await withTimeout(sb.from('materials').insert({ ...obj, created_by: currentUser?.id }).select('id').single());
+      const { data: ins, error: insErr } = await withTimeout(sb.from('materials').insert({ ...obj, created_by: currentUser?.id, org_id: window._currentOrgId || null }).select('id').single());
       err = insErr; if (ins) savedId = ins.id;
     }
     if (err) { toast('儲存失敗: ' + err.message, 'error'); btn.disabled = false; btn.textContent = '儲存'; return; }
@@ -6222,6 +6299,7 @@ async function saveCategory(id) {
   else {
     const maxSort = allCategories.length > 0 ? Math.max(...allCategories.map(c => c.sort_order || 0)) : -1;
     obj.sort_order = maxSort + 1;
+    obj.org_id = window._currentOrgId || null;
     ({ error: err } = await withTimeout(sb.from('categories').insert(obj)));
   }
   if (err) { toast('儲存失敗: ' + err.message, 'error'); return; }

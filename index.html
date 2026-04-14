@@ -6777,10 +6777,12 @@ async function renderUsersList(el) {
   const usersInOrgs = new Set((allUserOrgs || []).map(uo => uo.user_id));
   const noOrgUsers = visibleUsers.filter(u => !usersInOrgs.has(u.id));
 
-  // Load user clinics
+  // Load user clinics + all clinics (unfiltered for name lookup)
   const { data: allUC } = await withTimeout(sb.from('user_clinics').select('user_id,clinic_id'));
   const ucMap = {};
   (allUC || []).forEach(uc => { if (!ucMap[uc.user_id]) ucMap[uc.user_id] = []; ucMap[uc.user_id].push(uc.clinic_id); });
+  const { data: allClinicsRaw } = await withTimeout(sb.from('clinics').select('id,name,org_id').order('id'));
+  const clinicNameAll = (id) => (allClinicsRaw || []).find(c => c.id === id)?.name || '-';
 
   el.innerHTML = `
     <div class="card"><div class="table-wrap"><table>
@@ -6793,7 +6795,7 @@ async function renderUsersList(el) {
           members.map(u => {
             const orgRoleLabel = u._orgRoleId ? (allRoles.find(r => r.id === u._orgRoleId)?.display_name || '') : roleLabel(u.role, u.role_id);
             const clinicIds = ucMap[u.id] || (u.clinic_id ? [u.clinic_id] : []);
-            const clinicNames = clinicIds.map(cid => clinicName(cid)).filter(n => n !== '-').join('、');
+            const clinicNames = clinicIds.map(cid => clinicNameAll(cid)).filter(n => n !== '-').join('、');
             return `<tr class="${ogId}">
               <td>${escHtml(u.display_name)}</td>
               <td style="font-size:.8rem">${escHtml(org.name)}${u._orgRole === 'org_admin' ? ' 👑' : ''}</td>

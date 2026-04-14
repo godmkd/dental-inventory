@@ -1012,8 +1012,7 @@ async function loadProfile() {
   await enterApp();
   } catch(fatalErr) {
     console.error('loadProfile fatal:', fatalErr);
-    // Don't logout on timeout, just show error
-    toast('載入較慢，請稍候...', 'info');
+    toast('載入失敗，請重新整理', 'error');
   }
 }
 
@@ -1022,20 +1021,18 @@ async function enterApp() {
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  // Load orgs first (need _currentOrgId for filtering), then rest in parallel
-  // Retry on timeout (Supabase free tier cold start can be slow)
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      await loadOrganizations();
-      await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
-      break; // success
-    } catch(e) {
-      if (attempt === 0) {
-        console.warn('Initial load failed, retrying...', e);
-        toast('載入中，請稍候...', 'info');
-      }
-    }
-  }
+  // Initial load uses longer timeout (Supabase free tier cold start)
+  const initTimeout = 15000;
+  await loadOrganizations();
+  await Promise.all([
+    withTimeout(sb.from('clinics').select('*').order('sort_order').order('id').then(r => { allClinics = (window._currentOrgId ? (r.data||[]).filter(c => c.org_id === window._currentOrgId) : r.data) || []; }), initTimeout),
+    withTimeout(sb.from('categories').select('*').order('sort_order').then(r => { allCategories = (window._currentOrgId ? (r.data||[]).filter(c => c.org_id === window._currentOrgId) : r.data) || []; }), initTimeout),
+    withTimeout(sb.from('suppliers').select('*').order('name').then(r => { allSuppliers = (window._currentOrgId ? (r.data||[]).filter(s => s.org_id === window._currentOrgId) : r.data) || []; }), initTimeout),
+    withTimeout(sb.from('materials').select('*').order('sort_order').order('name').then(r => { allMaterials = (window._currentOrgId ? (r.data||[]).filter(m => m.org_id === window._currentOrgId) : r.data) || []; }), initTimeout),
+    withTimeout(sb.from('user_profiles').select('*').order('created_at').then(r => { allUsers = r.data || []; }), initTimeout),
+    withTimeout(sb.from('roles').select('*').order('sort_order').order('id').then(r => { allRoles = r.data || []; }), initTimeout),
+    loadBubblePositions()
+  ]);
   // Display role: per-org role > profile role
   const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
   const displayRoleId = orgRoleId || userProfile.role_id;

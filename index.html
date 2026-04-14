@@ -1022,8 +1022,8 @@ async function enterApp() {
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  await loadOrganizations(); // Must load first to set _currentOrgId
-  // Use longer timeout for initial data loading (3s default may be too short for batch)
+  // Load orgs first (need _currentOrgId for filtering), then rest in parallel
+  await loadOrganizations();
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
   // Display role: per-org role > profile role
   const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
@@ -1134,11 +1134,14 @@ function canSeePrice() { return hasPermission('view_prices'); }
 
 // ===================== DATA =====================
 async function loadOrganizations() {
-  const { data } = await withTimeout(sb.from('organizations').select('*').order('id'));
-  allOrganizations = data || [];
-  // Load user's orgs with per-org role
+  // Load both in parallel
+  const [orgRes, uoRes] = await Promise.all([
+    withTimeout(sb.from('organizations').select('*').order('id')),
+    currentUser ? withTimeout(sb.from('user_organizations').select('org_id,role,role_id').eq('user_id', currentUser.id)) : { data: [] }
+  ]);
+  allOrganizations = orgRes.data || [];
   if (currentUser) {
-    const { data: userOrgs } = await withTimeout(sb.from('user_organizations').select('org_id,role,role_id').eq('user_id', currentUser.id));
+    const userOrgs = uoRes.data;
     window._userOrgIds = (userOrgs || []).map(uo => uo.org_id);
     window._userOrgRoles = {};
     window._userOrgRoleIds = {};

@@ -4373,10 +4373,12 @@ async function renderOrderMgmtList(orders) {
   const { data: allOI } = await withTimeout(sb.from('order_items').select('order_id, clinic_id, item_status').in('order_id', orderIds));
   const orderClinicMap = {};
   const orderHasShipped = {};
+  const orderHasReceived = {};
   (allOI || []).forEach(oi => {
     if (!orderClinicMap[oi.order_id]) orderClinicMap[oi.order_id] = new Set();
     if (oi.clinic_id) orderClinicMap[oi.order_id].add(oi.clinic_id);
     if (oi.item_status === 'delivered' || oi.item_status === 'shipped') orderHasShipped[oi.order_id] = true;
+    if (oi.item_status === 'received') orderHasReceived[oi.order_id] = true;
   });
 
   const sortBtnHtml = `<div style="margin-bottom:8px;display:flex;gap:6px">
@@ -4396,8 +4398,8 @@ async function renderOrderMgmtList(orders) {
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:.85rem">${userName(o.created_by)} | ${fmtMoney(o.total_amount)}</span>
-          ${orderHasShipped[o.id]
-            ? `<button class="btn btn-danger btn-xs" disabled style="opacity:0.4;cursor:not-allowed;pointer-events:none">取消整單（有品項已出貨）</button>`
+          ${orderHasShipped[o.id] || orderHasReceived[o.id]
+            ? `<button class="btn btn-danger btn-xs" disabled style="opacity:0.4;cursor:not-allowed;pointer-events:none">取消整單（${orderHasReceived[o.id]?'有品項已到貨':'有品項已出貨'}）</button>`
             : `<button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelWholeOrder(${o.id})">取消整單</button>`}
           <span>▼</span>
         </div>
@@ -4793,19 +4795,25 @@ window.receiveItem = async function(itemId, orderId) {
     if (upErr) { toast('更新失敗: ' + upErr.message, 'error'); return; }
     // Update inventory
     const clinicId = it.clinic_id || dailyClinicId;
-    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
+    console.log(`[receiveItem] clinicId=${clinicId}, materialId=${it.material_id}, qty=${it.quantity}`);
+    const { data: inv, error: invErr } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
+    console.log(`[receiveItem] current inv:`, inv, invErr);
     if (inv) {
-      await withTimeout(sb.from('clinic_inventory').update({ quantity: inv.quantity + it.quantity }).eq('id', inv.id));
+      const newQty = (inv.quantity || 0) + it.quantity;
+      const { error: updErr } = await withTimeout(sb.from('clinic_inventory').update({ quantity: newQty }).eq('id', inv.id));
+      console.log(`[receiveItem] updated qty to ${newQty}`, updErr);
     } else {
-      await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, quantity: it.quantity }));
+      const { error: insErr } = await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, quantity: it.quantity }));
+      console.log(`[receiveItem] inserted new inv`, insErr);
     }
     // Log to inventory_logs (顯示在日常變更)
-    await withTimeout(sb.from('inventory_logs').insert({
+    const { error: logErr } = await withTimeout(sb.from('inventory_logs').insert({
       clinic_id: clinicId, material_id: it.material_id,
       type: 'in', quantity: it.quantity,
       operator_id: currentUser.id, operator_name: userProfile.display_name,
       notes: '叫貨收貨'
     }));
+    console.log(`[receiveItem] log inserted`, logErr);
     await recomputeOrderStatus(orderId);
     // Check if all items received
     const { data: remainItems } = await withTimeout(sb.from('order_items').select('item_status').eq('order_id', orderId));

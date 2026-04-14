@@ -745,7 +745,8 @@ window._customBubblePositions = null;
 
 async function loadBubblePositions() {
   try {
-    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key','bubble_positions').maybeSingle());
+    const posKey = 'bubble_positions_' + (isSimpleMode() ? 'simple' : 'full');
+    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', posKey).maybeSingle());
     window._customBubblePositions = data?.value || null;
   } catch(e) { window._customBubblePositions = null; }
 }
@@ -832,7 +833,8 @@ async function saveLayoutAndExit() {
   const merged = { ...(window._customBubblePositions || {}) };
   merged[viewport] = positions;
   try {
-    await withTimeout(sb.from('app_settings').upsert({ key: 'bubble_positions', value: merged, updated_at: new Date().toISOString() }));
+    const posKey = 'bubble_positions_' + (isSimpleMode() ? 'simple' : 'full');
+    await withTimeout(sb.from('app_settings').upsert({ key: posKey, value: merged, updated_at: new Date().toISOString() }, { onConflict: 'key' }));
     window._customBubblePositions = merged;
     toast('版面已儲存，所有人重整後生效', 'success');
   } catch(e) { toast('儲存失敗：' + e.message, 'error'); }

@@ -1023,8 +1023,19 @@ async function enterApp() {
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   // Load orgs first (need _currentOrgId for filtering), then rest in parallel
-  await loadOrganizations();
-  await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
+  // Retry on timeout (Supabase free tier cold start can be slow)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await loadOrganizations();
+      await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
+      break; // success
+    } catch(e) {
+      if (attempt === 0) {
+        console.warn('Initial load failed, retrying...', e);
+        toast('載入中，請稍候...', 'info');
+      }
+    }
+  }
   // Display role: per-org role > profile role
   const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
   const displayRoleId = orgRoleId || userProfile.role_id;

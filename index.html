@@ -6780,7 +6780,7 @@ async function renderUserMgmt() {
 
 async function renderUsersList(el) {
   await Promise.all([loadUsers(), loadOrganizations()]);
-  const { data: allUserOrgs } = await withTimeout(sb.from('user_organizations').select('user_id,org_id'));
+  const { data: allUserOrgs } = await withTimeout(sb.from('user_organizations').select('user_id,org_id,role,role_id'));
   // Filter users by organization
   let visibleUsers = allUsers;
   if (!isSystemAdmin()) {

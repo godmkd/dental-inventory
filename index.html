@@ -1020,9 +1020,14 @@ async function enterApp() {
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  document.getElementById('userMenuName').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
   await loadOrganizations(); // Must load first to set _currentOrgId
+  // Use longer timeout for initial data loading (3s default may be too short for batch)
   await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
+  // Display role: per-org role > profile role
+  const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
+  const displayRoleId = orgRoleId || userProfile.role_id;
+  const orgName = allOrganizations.find(o => o.id === window._currentOrgId)?.name;
+  document.getElementById('userMenuName').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, displayRoleId)})${orgName ? ' - ' + orgName : ''}`;
   buildBubbles(); // logo+user bubbles now rendered inside container
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   applyUserAvatar();
@@ -1461,7 +1466,7 @@ async function navigateTo(pageId) {
 }
 
 // ===================== UTILS =====================
-async function withTimeout(promise, ms = 8000) {
+async function withTimeout(promise, ms = 3000) {
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("請求逾時")), ms));
   return Promise.race([promise, timeout]);
 }

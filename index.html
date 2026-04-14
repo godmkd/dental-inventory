@@ -1995,7 +1995,7 @@ function optionsHTML(arr, valKey, labelKey, selected) {
 function fmtDate(d) { if (!d) return '-'; const dt = new Date(d); return dt.toLocaleDateString('zh-TW') + ' ' + dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }); }
 function fmtMoney(n) { return '<span class="money">' + '$' + Number(n || 0).toLocaleString() + '</span>'; }
 function statusBadge(s) {
-  const map = { pending: '待確認', confirmed: '已確認', shipped: '已出貨', delivered: '已到貨', received: '已收貨', cancelled: '已取消' };
+  const map = { pending: '待確認', confirmed: '已確認', shipped: '已出貨', delivered: '已到貨', received: '已到貨', cancelled: '已取消' };
   return `<span class="badge badge-${s}">${map[s] || s}</span>`;
 }
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -4330,7 +4330,7 @@ async function renderOrderMgmt() {
       <div class="sub-tab ${orderMgmtFilter === 'pending' ? 'active' : ''}" onclick="orderMgmtFilter='pending';renderOrderMgmt()">待確認</div>
       <div class="sub-tab ${orderMgmtFilter === 'confirmed' ? 'active' : ''}" onclick="orderMgmtFilter='confirmed';renderOrderMgmt()">已確認</div>
       ${isSimpleMode()
-        ? `<div class="sub-tab ${orderMgmtFilter === 'received' ? 'active' : ''}" onclick="orderMgmtFilter='received';renderOrderMgmt()">已收貨</div>`
+        ? `<div class="sub-tab ${orderMgmtFilter === 'received' ? 'active' : ''}" onclick="orderMgmtFilter='received';renderOrderMgmt()">已到貨</div>`
         : `<div class="sub-tab ${orderMgmtFilter === 'shipped' ? 'active' : ''}" onclick="orderMgmtFilter='shipped';renderOrderMgmt()">已出貨</div>
            <div class="sub-tab ${orderMgmtFilter === 'delivered' ? 'active' : ''}" onclick="orderMgmtFilter='delivered';renderOrderMgmt()">已到貨</div>`}
     </div>
@@ -4806,8 +4806,11 @@ window.receiveItem = async function(itemId, orderId) {
       notes: '叫貨收貨'
     }));
     await recomputeOrderStatus(orderId);
-    toast('已收貨');
-    orderMgmtFilter = 'received';
+    // Check if all items received
+    const { data: remainItems } = await withTimeout(sb.from('order_items').select('item_status').eq('order_id', orderId));
+    const allReceived = remainItems && remainItems.every(i => i.item_status === 'received' || i.item_status === 'cancelled');
+    if (allReceived) orderMgmtFilter = 'received';
+    toast('已到貨');
     renderOrderMgmt();
   } catch(e) { toast('收貨失敗: ' + e.message, 'error'); }
 };
@@ -4837,7 +4840,7 @@ window.receiveAllItems = async function(orderId) {
       }));
     }
     await recomputeOrderStatus(orderId);
-    toast(`已收貨 ${confirmedItems.length} 個品項`);
+    toast(`已到貨 ${confirmedItems.length} 個品項`);
     orderMgmtFilter = 'received';
     renderOrderMgmt();
   } catch(e) { toast('全部收貨失敗: ' + e.message, 'error'); }

@@ -1067,7 +1067,7 @@ function hasPermission(perm) {
   if (!userProfile) return false;
   // org_admin gets all permissions within their org, except use_ai and arrange_layout
   if (isOrgAdmin() && perm !== 'use_ai' && perm !== 'arrange_layout') return true;
-  // Check per-org role first
+  // Check per-org role
   const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
   if (orgRoleId) {
     const role = allRoles.find(r => r.id === orgRoleId);
@@ -1076,8 +1076,11 @@ function hasPermission(perm) {
       if (Array.isArray(perms)) return perms.includes(perm);
       if (typeof perms === 'object') return perms.all === true || perms[perm] === true;
     }
+    return false; // Has org role but no matching permission
   }
-  // Fallback to profile role_id
+  // No per-org role: if in an org, default to visitor (no permissions)
+  if (window._currentOrgId && window._userOrgIds?.includes(window._currentOrgId)) return false;
+  // Fallback to profile role_id (only when no org context)
   if (userProfile.role_id) {
     const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
     if (role && role.permissions) {
@@ -6885,9 +6888,7 @@ async function editUser(id) {
 
   openModal('編輯人員', `
     <div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>
-    <div class="form-row">
-      <div class="form-group"><label>預設角色</label>${roleDropdown}</div>
-    </div>
+    <input type="hidden" id="fUserRole" value="">
     <div class="form-row">
       <div class="form-group"><label>所屬組織 + 各組織角色</label>
         <div id="fUserOrgs" style="padding:4px">${orgRows}</div>

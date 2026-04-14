@@ -1010,8 +1010,8 @@ async function loadProfile() {
   await enterApp();
   } catch(fatalErr) {
     console.error('loadProfile fatal:', fatalErr);
-    toast('載入失敗，請重新整理', 'error');
-    showLogin();
+    // Don't logout on timeout, just show error
+    toast('載入較慢，請稍候...', 'info');
   }
 }
 

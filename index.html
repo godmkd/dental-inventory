@@ -1166,25 +1166,25 @@ function getVisibleClinics() {
 
 async function loadClinics() {
   let q = sb.from('clinics').select('*').order('sort_order').order('id');
-  if (window._currentOrgId && !isSystemAdmin()) q = q.eq('org_id', window._currentOrgId);
+  if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allClinics = data || [];
 }
 async function loadCategories() {
   let q = sb.from('categories').select('*').order('sort_order');
-  if (window._currentOrgId && !isSystemAdmin()) q = q.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allCategories = data || [];
 }
 async function loadSuppliers() {
   let q = sb.from('suppliers').select('*').order('name');
-  if (window._currentOrgId && !isSystemAdmin()) q = q.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allSuppliers = data || [];
 }
 async function loadMaterials() {
   let q = sb.from('materials').select('*').order('sort_order').order('name');
-  if (window._currentOrgId && !isSystemAdmin()) q = q.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allMaterials = data || [];
 }

@@ -1011,7 +1011,8 @@ async function enterApp() {
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('userMenuName').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, userProfile.role_id)})`;
-  await Promise.all([loadOrganizations(), loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
+  await loadOrganizations(); // Must load first to set _currentOrgId
+  await Promise.all([loadClinics(), loadCategories(), loadSuppliers(), loadMaterials(), loadUsers(), loadRoles(), loadBubblePositions()]);
   buildBubbles(); // logo+user bubbles now rendered inside container
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   applyUserAvatar();
@@ -4714,7 +4715,7 @@ async function toggleOrderCard(orderId) {
              <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>`)
         : ''}
         ${itemStatus === 'received' && isSimpleMode() ? `
-          <button class="btn btn-warning btn-xs" onclick="unreceiveItem(${it.id},${orderId})">↩ 反悔</button>
+          <button class="btn btn-warning btn-xs" onclick="unreceiveItem(${it.id},${orderId})">↩</button>
         ` : ''}
         ${itemStatus === 'shipped' && !isSimpleMode() ? `
           <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'confirmed')">↩ 回已確認</button>
@@ -5048,10 +5049,12 @@ async function recomputeOrderStatus(orderId) {
   const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
   if (!items) return;
   const newStatus = slowestItemStatus(items);
-  const update = { status: newStatus };
-  if (newStatus === 'shipped' && !items._shipped_at) update.shipped_at = new Date().toISOString();
-  if (newStatus === 'delivered' && !items._delivered_at) update.delivered_at = new Date().toISOString();
-  await withTimeout(sb.from('orders').update(update).eq('id', orderId));
+  // Map 'received' to 'delivered' for orders table (may have CHECK constraint)
+  const dbStatus = newStatus === 'received' ? 'delivered' : newStatus;
+  const update = { status: dbStatus };
+  if (dbStatus === 'shipped') update.shipped_at = new Date().toISOString();
+  if (dbStatus === 'delivered') update.delivered_at = new Date().toISOString();
+  await withTimeout(sb.from('orders').update(update).eq('id', orderId)).catch(() => {});
 }
 
 async function setItemStatus(itemId, orderId, newStatus) {

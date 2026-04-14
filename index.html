@@ -1289,8 +1289,8 @@ function buildBubbles() {
   bubbleConfig.forEach(b => {
     // Switch org bubble: only show for multi-org users or admin
     if (b.special === 'switch-org' && !showSwitchOrg) return;
-    // Simple mode: hide rush-mgmt
-    if (simpleMode && ['rush-mgmt'].includes(b.id)) return;
+    // Simple mode: hide rush-mgmt and receiving (收貨在貨單管理裡完成)
+    if (simpleMode && ['rush-mgmt', 'receiving'].includes(b.id)) return;
     if (hasBrowse) {
       if (['role-mgmt', 'user-list'].includes(b.id) && !hasPermission(b.perm)) return;
     } else {
@@ -4779,10 +4779,11 @@ window.shipAllItems = async function(orderId) {
 // Simple mode: receive item directly (confirmed → received + update inventory)
 window.receiveItem = async function(itemId, orderId) {
   try {
-    const { data: it } = await withTimeout(sb.from('order_items').select('*').eq('id', itemId).single());
-    if (!it) return;
+    const { data: it, error: itErr } = await withTimeout(sb.from('order_items').select('*').eq('id', itemId).single());
+    if (itErr || !it) { toast('找不到品項: ' + (itErr?.message||''), 'error'); return; }
     // Mark as received
-    await withTimeout(sb.from('order_items').update({ item_status: 'received' }).eq('id', itemId));
+    const { error: upErr } = await withTimeout(sb.from('order_items').update({ item_status: 'received' }).eq('id', itemId));
+    if (upErr) { toast('更新失敗: ' + upErr.message, 'error'); return; }
     // Update inventory
     const clinicId = it.clinic_id || dailyClinicId;
     const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
@@ -4791,6 +4792,13 @@ window.receiveItem = async function(itemId, orderId) {
     } else {
       await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, quantity: it.quantity }));
     }
+    // Log to inventory_logs (顯示在日常變更)
+    await withTimeout(sb.from('inventory_logs').insert({
+      clinic_id: clinicId, material_id: it.material_id,
+      type: 'in', quantity: it.quantity,
+      operator_id: currentUser.id, operator_name: userProfile.display_name,
+      notes: '叫貨收貨'
+    }));
     await recomputeOrderStatus(orderId);
     toast('已收貨');
     renderOrderMgmt();
@@ -4798,7 +4806,8 @@ window.receiveItem = async function(itemId, orderId) {
 };
 
 window.receiveAllItems = async function(orderId) {
-  const { data: items } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
+  const { data: items, error: qErr } = await withTimeout(sb.from('order_items').select('*').eq('order_id', orderId));
+  if (qErr) { toast('查詢失敗: ' + qErr.message, 'error'); return; }
   if (!items) return;
   const confirmedItems = items.filter(i => (i.item_status || 'pending') === 'confirmed');
   if (!confirmedItems.length) { toast('沒有已確認品項'); return; }
@@ -4812,6 +4821,13 @@ window.receiveAllItems = async function(orderId) {
       } else {
         await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, quantity: it.quantity }));
       }
+      // Log to inventory_logs
+      await withTimeout(sb.from('inventory_logs').insert({
+        clinic_id: clinicId, material_id: it.material_id,
+        type: 'in', quantity: it.quantity,
+        operator_id: currentUser.id, operator_name: userProfile.display_name,
+        notes: '叫貨收貨'
+      }));
     }
     await recomputeOrderStatus(orderId);
     toast(`已收貨 ${confirmedItems.length} 個品項`);

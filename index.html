@@ -3644,10 +3644,12 @@ async function queryDailyHistory() {
           <tbody>${dateLogs.map(log => {
             const isIn = log.type === 'in';
             const time = new Date(log.created_at).toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
+            const isOrderReceive = log.notes === '叫貨收貨';
             const adminBtns = isSystemAdmin() ? `<td style="white-space:nowrap">
+              ${isOrderReceive ? '<span style="font-size:.7rem;color:var(--text-lighter)">叫貨到貨</span>' : `
               <button class="btn btn-ghost" style="font-size:.7rem;padding:2px 6px" onclick="editDailyLog(${log.id},${log.quantity},'${log.type}')">✏️</button>
               <button class="btn btn-ghost" style="font-size:.7rem;padding:2px 6px" onclick="changeDailyLogDate(${log.id},'${log.created_at}')">📅</button>
-              <button class="btn btn-danger" style="font-size:.65rem;padding:2px 6px" onclick="adminCancelDailyLog(${log.id})">✕</button>
+              <button class="btn btn-danger" style="font-size:.65rem;padding:2px 6px" onclick="adminCancelDailyLog(${log.id})">✕</button>`}
             </td>` : '';
             return `<tr>
               <td>${escHtml(materialName(log.material_id))}</td>
@@ -3775,7 +3777,7 @@ async function loadDailyConfirmedLogs() {
             <span style="font-size:.75rem;color:var(--text-lighter)">${escHtml(log.operator_name || '')}</span>
             <span class="cp-item-time">${time}</span>
           </div>
-          ${isToday ? `<button class="cp-item-cancel" onclick="cancelDailyLog(${log.id})">取消</button>` : ''}
+          ${isToday && log.notes !== '叫貨收貨' ? `<button class="cp-item-cancel" onclick="cancelDailyLog(${log.id})">取消</button>` : (log.notes === '叫貨收貨' ? '<span style="font-size:.7rem;color:var(--text-lighter)">叫貨到貨</span>' : '')}
         </div>`;
       }).join('')}
     </div>`;
@@ -4799,11 +4801,12 @@ window.receiveItem = async function(itemId, orderId) {
     const { data: inv, error: invErr } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
     console.log(`[receiveItem] current inv:`, inv, invErr);
     if (inv) {
-      const newQty = (inv.quantity || 0) + it.quantity;
-      const { error: updErr } = await withTimeout(sb.from('clinic_inventory').update({ quantity: newQty }).eq('id', inv.id));
-      console.log(`[receiveItem] updated qty to ${newQty}`, updErr);
+      const curStock = inv.current_stock ?? inv.quantity ?? 0;
+      const newStock = curStock + it.quantity;
+      const { error: updErr } = await withTimeout(sb.from('clinic_inventory').update({ current_stock: newStock }).eq('id', inv.id));
+      console.log(`[receiveItem] updated stock ${curStock} → ${newStock}`, updErr);
     } else {
-      const { error: insErr } = await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, quantity: it.quantity }));
+      const { error: insErr } = await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5, notify_level: 0 }));
       console.log(`[receiveItem] inserted new inv`, insErr);
     }
     // Log to inventory_logs (顯示在日常變更)
@@ -4836,9 +4839,10 @@ window.receiveAllItems = async function(orderId) {
       const clinicId = it.clinic_id || dailyClinicId;
       const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
       if (inv) {
-        await withTimeout(sb.from('clinic_inventory').update({ quantity: inv.quantity + it.quantity }).eq('id', inv.id));
+        const newStock = (inv.current_stock ?? inv.quantity ?? 0) + it.quantity;
+        await withTimeout(sb.from('clinic_inventory').update({ current_stock: newStock }).eq('id', inv.id));
       } else {
-        await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, quantity: it.quantity }));
+        await withTimeout(sb.from('clinic_inventory').insert({ clinic_id: clinicId, material_id: it.material_id, current_stock: it.quantity, safety_stock: 5, notify_level: 0 }));
       }
       // Log to inventory_logs
       await withTimeout(sb.from('inventory_logs').insert({
@@ -4864,7 +4868,8 @@ window.unreceiveItem = async function(itemId, orderId) {
     const clinicId = it.clinic_id || dailyClinicId;
     const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
     if (inv) {
-      await withTimeout(sb.from('clinic_inventory').update({ quantity: Math.max(0, inv.quantity - it.quantity) }).eq('id', inv.id));
+      const curStock = inv.current_stock ?? inv.quantity ?? 0;
+      await withTimeout(sb.from('clinic_inventory').update({ current_stock: Math.max(0, curStock - it.quantity) }).eq('id', inv.id));
     }
     // Delete the inventory log
     await withTimeout(sb.from('inventory_logs').delete()

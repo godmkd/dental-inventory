@@ -6795,7 +6795,9 @@ async function renderUsersList(el) {
           members.map(u => {
             const orgRoleLabel = u._orgRoleId ? (allRoles.find(r => r.id === u._orgRoleId)?.display_name || '') : roleLabel(u.role, u.role_id);
             const clinicIds = ucMap[u.id] || (u.clinic_id ? [u.clinic_id] : []);
-            const clinicNames = clinicIds.map(cid => clinicNameAll(cid)).filter(n => n !== '-').join('、');
+            const orgClinicIds = (allClinicsRaw || []).filter(c => c.org_id === org.id).map(c => c.id);
+            const relevantClinics = clinicIds.filter(cid => orgClinicIds.includes(cid));
+            const clinicNames = relevantClinics.map(cid => clinicNameAll(cid)).filter(n => n !== '-').join('、');
             return `<tr class="${ogId}">
               <td>${escHtml(u.display_name)}</td>
               <td style="font-size:.8rem">${escHtml(org.name)}${u._orgRole === 'org_admin' ? ' 👑' : ''}</td>

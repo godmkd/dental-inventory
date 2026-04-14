@@ -6785,12 +6785,13 @@ async function renderUsersList(el) {
       <tbody>
       ${allOrganizations.filter(o => orgGroups[o.id]?.length > 0).map(org => {
         const members = orgGroups[org.id] || [];
-        return `<tr style="background:rgba(99,179,237,0.08)"><td colspan="6" style="font-weight:600;color:var(--accent);padding:8px 12px">🏢 ${escHtml(org.name)} (${members.length}人)</td></tr>` +
+        const ogId = 'userOrgGroup_' + org.id;
+        return `<tr style="background:rgba(99,179,237,0.08);cursor:pointer" onclick="document.querySelectorAll('.${ogId}').forEach(r=>r.style.display=r.style.display==='none'?'':'none');this.querySelector('.ug-arr').textContent=document.querySelector('.${ogId}')?.style.display==='none'?'▶':'▼'"><td colspan="6" style="font-weight:600;color:var(--accent);padding:8px 12px"><span class="ug-arr" style="font-size:.7em;margin-right:6px">▼</span>🏢 ${escHtml(org.name)} (${members.length}人)</td></tr>` +
           members.map(u => {
             const orgRoleLabel = u._orgRoleId ? (allRoles.find(r => r.id === u._orgRoleId)?.display_name || '') : roleLabel(u.role, u.role_id);
             const clinicIds = ucMap[u.id] || (u.clinic_id ? [u.clinic_id] : []);
             const clinicNames = clinicIds.map(cid => clinicName(cid)).filter(n => n !== '-').join('、');
-            return `<tr>
+            return `<tr class="${ogId}">
               <td>${escHtml(u.display_name)}</td>
               <td style="font-size:.8rem">${escHtml(org.name)}${u._orgRole === 'org_admin' ? ' 👑' : ''}</td>
               <td>${orgRoleLabel}</td>

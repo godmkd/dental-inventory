@@ -1153,7 +1153,12 @@ async function loadOrganizations() {
       if (org) window._currentOrgId = org.id;
     }
     if (!window._currentOrgId) window._currentOrgId = parseInt(localStorage.getItem('current_org_id')) || window._userOrgIds[0] || null;
+    // Validate: if stored org is no longer in user's orgs, reset to first valid
+    if (window._currentOrgId && !window._userOrgIds.includes(window._currentOrgId)) {
+      window._currentOrgId = window._userOrgIds[0] || null;
+    }
     if (window._currentOrgId) localStorage.setItem('current_org_id', window._currentOrgId);
+    else localStorage.removeItem('current_org_id');
   }
 }
 

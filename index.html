@@ -890,6 +890,7 @@ async function setWaitEmail() {
 }
 
 async function loadProfile() {
+  try {
   const authTimeout = 15000; // 15s for auth/profile operations
   const { data, error } = await withTimeout(sb.from('user_profiles').select('*, roles(*)').eq('id', currentUser.id).single(), authTimeout);
   if (error && error.code === 'PGRST116') {
@@ -933,7 +934,7 @@ async function loadProfile() {
       role_id: visitorRoleId, org_id: newUserOrgId,
       line_user_id: lineId, is_active: true, clinic_id: defaultClinicId
     }).select().single(), authTimeout);
-    if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); console.error('Profile insert error:', e2); showLogin(); return; }
+    if (e2) { alert('建立個人資料失敗: ' + e2.message + '\n\norg_id=' + newUserOrgId + ' clinic_id=' + defaultClinicId + ' role_id=' + visitorRoleId); console.error('Profile insert error:', e2); showLogin(); return; }
     userProfile = newP;
     // Insert into user_clinics for multi-clinic support
     if (defaultClinicId) {
@@ -948,7 +949,7 @@ async function loadProfile() {
     await enterApp();
     return;
   }
-  if (error) { toast('載入資料失敗: ' + error.message, 'error'); console.error('loadProfile error:', error); showLogin(); return; }
+  if (error) { alert('載入資料失敗: ' + error.message); console.error('loadProfile error:', error); showLogin(); return; }
   userProfile = data;
   // Sync avatar from Supabase to localStorage
   if (data.avatar_url) localStorage.setItem('user_avatar', data.avatar_url);
@@ -1007,6 +1008,11 @@ async function loadProfile() {
   }
 
   await enterApp();
+  } catch(fatalErr) {
+    alert('loadProfile 嚴重錯誤: ' + fatalErr.message);
+    console.error('loadProfile fatal:', fatalErr);
+    showLogin();
+  }
 }
 
 async function enterApp() {

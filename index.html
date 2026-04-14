@@ -5034,15 +5034,15 @@ async function saveItemPrice(itemId) {
 
 // 計算整單最慢狀態：pending > confirmed > shipped > delivered
 function slowestItemStatus(items) {
-  const priority = { pending: 0, confirmed: 1, shipped: 2, delivered: 3, received: 3 };
+  const priority = { pending: 0, confirmed: 1, shipped: 2, delivered: 3, received: 4 };
   const activeItems = items.filter(i => (i.item_status || 'pending') !== 'cancelled');
   if (!activeItems.length) return 'cancelled';
-  let slowest = 'delivered';
+  let slowest = null;
   for (const it of activeItems) {
     const s = it.item_status || 'pending';
-    if ((priority[s] ?? 0) < (priority[slowest] ?? 3)) slowest = s;
+    if (slowest === null || (priority[s] ?? 0) < (priority[slowest] ?? 4)) slowest = s;
   }
-  return slowest;
+  return slowest || 'pending';
 }
 
 async function recomputeOrderStatus(orderId) {

@@ -645,16 +645,18 @@ async function init() {
   const code = params.get('code');
   if (code) {
     try {
-      const { data, error } = await withTimeout(sb.auth.exchangeCodeForSession(code));
+      const { data, error } = await withTimeout(sb.auth.exchangeCodeForSession(code), 15000);
       if (error) console.error('Code exchange error:', error);
     } catch(e) { console.error('Exchange error:', e); }
-    history.replaceState(null, '', window.location.pathname);
+    // Preserve org param if present
+    const orgParam = params.get('org');
+    history.replaceState(null, '', window.location.pathname + (orgParam ? '?org=' + orgParam : ''));
   }
   if (window.location.hash && window.location.hash.includes('access_token')) {
-    await withTimeout(sb.auth.getSession());
+    await withTimeout(sb.auth.getSession(), 15000);
     history.replaceState(null, '', window.location.pathname);
   }
-  const { data: { session } } = await withTimeout(sb.auth.getSession());
+  const { data: { session } } = await withTimeout(sb.auth.getSession(), 15000);
   if (session) {
     currentUser = session.user;
     await loadProfile();

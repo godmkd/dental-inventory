@@ -4418,7 +4418,7 @@ async function renderOrderSummary() {
   // 讀取 confirmed / shipped 的 order_items（已收貨 delivered 不顯示）
   const { data: items } = await withTimeout(sb.from('order_items').select('*').in('item_status', ['confirmed', 'shipped']));
   if (!items || !items.length) {
-    el.innerHTML = '<div class="card"><div class="empty-state"><span>📭</span>目前沒有待出貨或已出貨的品項</div></div>';
+    el.innerHTML = `<div class="card"><div class="empty-state"><span>📭</span>${isSimpleMode() ? '目前沒有已叫貨的品項' : '目前沒有待出貨或已出貨的品項'}</div></div>`;
     return;
   }
 
@@ -4460,10 +4460,10 @@ async function renderOrderSummary() {
       <div id="${osId}"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9rem">
       <thead><tr style="border-bottom:2px solid var(--border);text-align:left">
         <th style="padding:10px 12px">品項名</th>
-        <th style="padding:10px 12px;color:var(--danger)">急件</th>
-        <th style="padding:10px 12px">待出貨</th><th style="padding:10px 12px">已出貨</th>
-        <th style="padding:10px 12px">已叫貨數量</th>
-        <th style="padding:10px 12px">差額</th></tr></thead><tbody>`;
+        ${isSimpleMode() ? '' : '<th style="padding:10px 12px;color:var(--danger)">急件</th>'}
+        <th style="padding:10px 12px">${isSimpleMode() ? '已叫貨' : '待出貨'}</th>
+        ${isSimpleMode() ? '' : '<th style="padding:10px 12px">已出貨</th><th style="padding:10px 12px">已叫貨數量</th><th style="padding:10px 12px">差額</th>'}
+        </tr></thead><tbody>`;
 
     mats.forEach(({ mid, g, mat }) => {
       const name = mat ? escHtml(mat.name) : `#${mid}`;
@@ -4480,16 +4480,16 @@ async function renderOrderSummary() {
 
       html += `<tr style="border-bottom:1px solid var(--border-light)">
         <td style="padding:10px 12px"><strong>${name}</strong></td>
-        <td style="padding:10px 12px;color:var(--danger);font-weight:700">${urgentQty > 0 ? urgentQty + ' ' + escHtml(orderUnit) : ''}</td>
+        ${isSimpleMode() ? '' : `<td style="padding:10px 12px;color:var(--danger);font-weight:700">${urgentQty > 0 ? urgentQty + ' ' + escHtml(orderUnit) : ''}</td>`}
         <td style="padding:10px 12px">${confirmedQty} ${escHtml(orderUnit)}</td>
-        <td style="padding:10px 12px">${shippedQty} ${escHtml(orderUnit)}</td>
+        ${isSimpleMode() ? '' : `<td style="padding:10px 12px">${shippedQty} ${escHtml(orderUnit)}</td>
         <td style="padding:10px 12px">
           <input type="number" value="${actualQty}" min="0" step="0.01"
             style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:.88rem"
             onchange="onSummaryActualChange(this.value,${ratio},'${itemIds}')">
           ${escHtml(orderUnit)}
         </td>
-        <td style="padding:10px 12px;color:${diffColor};font-weight:600">${diff > 0 ? '+' : ''}${diff} ${escHtml(orderUnit)}</td>
+        <td style="padding:10px 12px;color:${diffColor};font-weight:600">${diff > 0 ? '+' : ''}${diff} ${escHtml(orderUnit)}</td>`}
       </tr>`;
     });
 

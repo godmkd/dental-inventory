@@ -6750,28 +6750,39 @@ async function editUser(id) {
     </label>`
   ).join('');
 
-  // Load user's organizations
-  let userOrgIds = [];
+  // Load user's organizations with per-org role
+  let userOrgData = [];
   try {
-    const { data: uoData } = await sb.from('user_organizations').select('org_id').eq('user_id', u.id);
-    userOrgIds = (uoData || []).map(uo => uo.org_id);
+    const { data: uoData } = await sb.from('user_organizations').select('org_id,role_id').eq('user_id', u.id);
+    userOrgData = uoData || [];
   } catch(e) {}
+  const userOrgIds = userOrgData.map(uo => uo.org_id);
+  const userOrgRoleMap = {};
+  userOrgData.forEach(uo => { if (uo.role_id) userOrgRoleMap[uo.org_id] = uo.role_id; });
 
-  const orgCheckboxes = visibleOrgsForEdit.map(o =>
-    `<label style="display:flex;align-items:center;gap:8px;padding:5px 14px 5px 2px;cursor:pointer;font-size:.88rem">
-      <input type="checkbox" class="fUserOrgCb" value="${o.id}" style="width:18px;height:18px;min-width:18px;flex-shrink:0" ${userOrgIds.includes(o.id) ? 'checked' : ''}>
-      <span style="white-space:nowrap">${escHtml(o.name)}</span>
-    </label>`
-  ).join('');
+  const roleOpts = allRoles.filter(r => !r.is_system || isSystemAdmin())
+    .map(r => `<option value="${r.id}">${escHtml(r.display_name)}</option>`).join('');
+
+  const orgRows = visibleOrgsForEdit.map(o => {
+    const inOrg = userOrgIds.includes(o.id);
+    const orgRoleId = userOrgRoleMap[o.id] || u.role_id || '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:.88rem">
+      <input type="checkbox" class="fUserOrgCb" value="${o.id}" style="width:18px;height:18px;min-width:18px;flex-shrink:0" ${inOrg ? 'checked' : ''}>
+      <span style="min-width:60px">${escHtml(o.name)}</span>
+      <select class="fUserOrgRole" data-orgid="${o.id}" style="flex:1;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:.82rem">
+        <option value="">-- 角色 --</option>${roleOpts}
+      </select>
+    </div>`;
+  }).join('');
 
   openModal('編輯人員', `
     <div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>
     <div class="form-row">
-      <div class="form-group"><label>角色</label>${roleDropdown}</div>
+      <div class="form-group"><label>預設角色</label>${roleDropdown}</div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>所屬組織（可複選）</label>
-        <div id="fUserOrgs" style="display:flex;flex-wrap:wrap;padding:4px">${orgCheckboxes}</div>
+      <div class="form-group"><label>所屬組織 + 各組織角色</label>
+        <div id="fUserOrgs" style="padding:4px">${orgRows}</div>
       </div>
       <div class="form-group"><label>所屬診所（可複選）</label>
         <div id="fUserClinics" style="display:flex;flex-wrap:wrap;padding:4px">${clinicCheckboxes}</div>
@@ -6779,6 +6790,14 @@ async function editUser(id) {
     </div>
   `, `<button class="btn btn-ghost" onclick="closeModal()">取消</button>
      <button class="btn btn-primary" onclick="saveUser('${u.id}')">儲存</button>`);
+
+  // Set per-org role values after modal renders
+  setTimeout(() => {
+    document.querySelectorAll('.fUserOrgRole').forEach(sel => {
+      const oid = parseInt(sel.dataset.orgid);
+      if (userOrgRoleMap[oid]) sel.value = userOrgRoleMap[oid];
+    });
+  }, 50);
 }
 
 async function saveUser(id) {
@@ -6802,21 +6821,35 @@ async function saveUser(id) {
   if (selectedClinicIds.length) {
     await sb.from('user_clinics').insert(selectedClinicIds.map(cid => ({ user_id: id, clinic_id: cid })));
   }
-  // Update user_organizations table
+  // Update user_organizations table with per-org roles
   const selectedOrgIds = Array.from(document.querySelectorAll('.fUserOrgCb:checked')).map(cb => parseInt(cb.value));
-  // Keep existing roles (org_admin etc), only add/remove memberships
-  const { data: existingUO } = await sb.from('user_organizations').select('org_id,role').eq('user_id', id);
+  // Collect per-org role selections
+  const orgRoleSelections = {};
+  document.querySelectorAll('.fUserOrgRole').forEach(sel => {
+    const oid = parseInt(sel.dataset.orgid);
+    const rid = sel.value ? parseInt(sel.value) : null;
+    orgRoleSelections[oid] = rid;
+  });
+  const { data: existingUO } = await sb.from('user_organizations').select('org_id,role,role_id').eq('user_id', id);
   const existingMap = {};
-  (existingUO || []).forEach(uo => { existingMap[uo.org_id] = uo.role; });
+  (existingUO || []).forEach(uo => { existingMap[uo.org_id] = uo; });
   // Remove orgs no longer selected
   const toRemove = Object.keys(existingMap).map(Number).filter(oid => !selectedOrgIds.includes(oid));
   for (const oid of toRemove) {
     await sb.from('user_organizations').delete().eq('user_id', id).eq('org_id', oid);
   }
-  // Add new orgs
-  const toAdd = selectedOrgIds.filter(oid => !existingMap[oid]);
-  if (toAdd.length) {
-    await sb.from('user_organizations').insert(toAdd.map(oid => ({ user_id: id, org_id: oid, role: 'member' })));
+  // Add or update orgs
+  for (const oid of selectedOrgIds) {
+    const roleId = orgRoleSelections[oid] || null;
+    if (existingMap[oid]) {
+      // Update role_id if changed
+      if (existingMap[oid].role_id !== roleId) {
+        await sb.from('user_organizations').update({ role_id: roleId }).eq('user_id', id).eq('org_id', oid);
+      }
+    } else {
+      // New org membership
+      await sb.from('user_organizations').insert({ user_id: id, org_id: oid, role: 'member', role_id: roleId });
+    }
   }
   // If editing self, update local cache
   if (id === currentUser.id) {
@@ -7104,8 +7137,14 @@ async function renderNotifyConfig(el) {
   const cfg = await loadNotifyConfig();
   await Promise.all([loadUsers(), loadClinics()]);
 
-  const activeUsers = allUsers.filter(u => u.is_active !== false);
-  window._notifyActiveUsers = activeUsers; // cache for chip helpers
+  // Filter users by current org
+  let activeUsers = allUsers.filter(u => u.is_active !== false);
+  if (window._currentOrgId) {
+    const { data: orgMembers } = await withTimeout(sb.from('user_organizations').select('user_id').eq('org_id', window._currentOrgId));
+    const orgUserIds = new Set((orgMembers || []).map(m => m.user_id));
+    if (orgUserIds.size > 0) activeUsers = activeUsers.filter(u => orgUserIds.has(u.id));
+  }
+  window._notifyActiveUsers = activeUsers;
 
   // 低庫存：per-clinic collapsible rows
   const lowStockHtml = allClinics.map(c => {

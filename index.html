@@ -6841,8 +6841,14 @@ async function editUser(id) {
   // Fallback to legacy clinic_id
   if (!userClinicIds.length && u.clinic_id) userClinicIds = [u.clinic_id];
 
-  // Filter clinics and orgs by visibility
-  const visibleClinicsForEdit = isSystemAdmin() ? allClinics : getVisibleClinics();
+  // Filter clinics and orgs by visibility — super admin sees ALL clinics across all orgs
+  let visibleClinicsForEdit;
+  if (isSystemAdmin()) {
+    const { data: allClinicsRaw } = await withTimeout(sb.from('clinics').select('*').order('sort_order').order('id'));
+    visibleClinicsForEdit = allClinicsRaw || [];
+  } else {
+    visibleClinicsForEdit = getVisibleClinics();
+  }
   const visibleOrgsForEdit = isSystemAdmin() ? allOrganizations : allOrganizations.filter(o => window._userOrgIds.includes(o.id));
 
   const clinicCheckboxes = visibleClinicsForEdit.map(c =>

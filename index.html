@@ -4704,11 +4704,16 @@ async function toggleOrderCard(orderId) {
           <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>
         ` : ''}
         ${itemStatus === 'confirmed' ? (isSimpleMode()
-          ? `<button class="btn btn-primary btn-xs" onclick="receiveItem(${it.id},${orderId})">📦 到貨</button>`
+          ? `<button class="btn btn-primary btn-xs" onclick="receiveItem(${it.id},${orderId})">📦 到貨</button>
+             <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'pending')">↩ 回待確認</button>
+             <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>`
           : `<button class="btn btn-primary btn-xs" onclick="setItemStatus(${it.id},${orderId},'shipped')">📦 出貨</button>
              <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'pending')">↩ 回待確認</button>
              <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>`)
         : ''}
+        ${itemStatus === 'received' && isSimpleMode() ? `
+          <button class="btn btn-warning btn-xs" onclick="unreceiveItem(${it.id},${orderId})">↩ 反悔</button>
+        ` : ''}
         ${itemStatus === 'shipped' && !isSimpleMode() ? `
           <button class="btn btn-warning btn-xs" onclick="setItemStatus(${it.id},${orderId},'confirmed')">↩ 回已確認</button>
           <button class="btn btn-danger btn-xs" onclick="cancelOrderItemMgmt(${orderId},${it.id})">✕ 取消</button>
@@ -4832,6 +4837,30 @@ window.receiveAllItems = async function(orderId) {
     toast(`已收貨 ${confirmedItems.length} 個品項`);
     renderOrderMgmt();
   } catch(e) { toast('全部收貨失敗: ' + e.message, 'error'); }
+};
+
+// Simple mode: undo receive (反悔)
+window.unreceiveItem = async function(itemId, orderId) {
+  try {
+    const { data: it } = await withTimeout(sb.from('order_items').select('*').eq('id', itemId).single());
+    if (!it) { toast('找不到品項', 'error'); return; }
+    // Reverse inventory
+    const clinicId = it.clinic_id || dailyClinicId;
+    const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', clinicId).eq('material_id', it.material_id).maybeSingle());
+    if (inv) {
+      await withTimeout(sb.from('clinic_inventory').update({ quantity: Math.max(0, inv.quantity - it.quantity) }).eq('id', inv.id));
+    }
+    // Delete the inventory log
+    await withTimeout(sb.from('inventory_logs').delete()
+      .eq('clinic_id', clinicId).eq('material_id', it.material_id)
+      .eq('quantity', it.quantity).eq('notes', '叫貨收貨')
+      .order('created_at', { ascending: false }).limit(1));
+    // Set back to confirmed
+    await withTimeout(sb.from('order_items').update({ item_status: 'confirmed' }).eq('id', itemId));
+    await recomputeOrderStatus(orderId);
+    toast('已反悔，庫存已扣回');
+    renderOrderMgmt();
+  } catch(e) { toast('反悔失敗: ' + e.message, 'error'); }
 };
 
 // Supplier selection in order management

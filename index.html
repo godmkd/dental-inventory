@@ -890,7 +890,8 @@ async function setWaitEmail() {
 }
 
 async function loadProfile() {
-  const { data, error } = await withTimeout(sb.from('user_profiles').select('*, roles(*)').eq('id', currentUser.id).single());
+  const authTimeout = 15000; // 15s for auth/profile operations
+  const { data, error } = await withTimeout(sb.from('user_profiles').select('*, roles(*)').eq('id', currentUser.id).single(), authTimeout);
   if (error && error.code === 'PGRST116') {
     const meta = currentUser.user_metadata || {};
     const displayName = meta.full_name || meta.name || meta.preferred_username || currentUser.email || '新使用者';
@@ -898,40 +899,41 @@ async function loadProfile() {
     // 查找「測試」診所作為預設
     let defaultClinicId = null;
     try {
-      const { data: clinics } = await withTimeout(sb.from('clinics').select('id,name'));
+      const { data: clinics } = await withTimeout(sb.from('clinics').select('id,name'), authTimeout);
       const testClinic = (clinics || []).find(c => c.name === '測試');
       if (testClinic) defaultClinicId = testClinic.id;
-    } catch(e) {}
+    } catch(e) { console.warn('loadProfile: clinics error', e); }
     // Find '訪客' role for new users
     let visitorRoleId = null;
     try {
-      const { data: roles } = await withTimeout(sb.from('roles').select('id,name'));
+      const { data: roles } = await withTimeout(sb.from('roles').select('id,name'), authTimeout);
       const visitorRole = (roles || []).find(r => r.name === '訪客');
       if (visitorRole) visitorRoleId = visitorRole.id;
-    } catch(e) {}
+    } catch(e) { console.warn('loadProfile: roles error', e); }
     // Determine org from URL param, or fallback to '測試' org
     let newUserOrgId = null;
     const urlOrg = new URLSearchParams(location.search).get('org');
     if (urlOrg) {
       try {
-        const { data: orgs } = await withTimeout(sb.from('organizations').select('id').or(`code.eq.${urlOrg},id.eq.${parseInt(urlOrg)||0}`));
+        const { data: orgs } = await withTimeout(sb.from('organizations').select('id').or(`code.eq.${urlOrg},id.eq.${parseInt(urlOrg)||0}`), authTimeout);
         if (orgs && orgs.length > 0) newUserOrgId = orgs[0].id;
       } catch(e) {}
     }
     // No invite link → assign to '測試' org
     if (!newUserOrgId) {
       try {
-        const { data: testOrgs } = await withTimeout(sb.from('organizations').select('id').eq('name', '測試'));
+        const { data: testOrgs } = await withTimeout(sb.from('organizations').select('id').eq('name', '測試'), authTimeout);
         if (testOrgs && testOrgs.length > 0) newUserOrgId = testOrgs[0].id;
-      } catch(e) {}
+      } catch(e) { console.warn('loadProfile: test org error', e); }
     }
 
+    console.log('[loadProfile] Creating new user:', displayName, 'org:', newUserOrgId, 'clinic:', defaultClinicId);
     const { data: newP, error: e2 } = await withTimeout(sb.from('user_profiles').insert({
       id: currentUser.id, display_name: displayName, role: 'visitor',
       role_id: visitorRoleId, org_id: newUserOrgId,
       line_user_id: lineId, is_active: true, clinic_id: defaultClinicId
-    }).select().single());
-    if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); showLogin(); return; }
+    }).select().single(), authTimeout);
+    if (e2) { toast('建立個人資料失敗: ' + e2.message, 'error'); console.error('Profile insert error:', e2); showLogin(); return; }
     userProfile = newP;
     // Insert into user_clinics for multi-clinic support
     if (defaultClinicId) {
@@ -946,7 +948,7 @@ async function loadProfile() {
     await enterApp();
     return;
   }
-  if (error) { toast('載入資料失敗: ' + error.message, 'error'); showLogin(); return; }
+  if (error) { toast('載入資料失敗: ' + error.message, 'error'); console.error('loadProfile error:', error); showLogin(); return; }
   userProfile = data;
   // Sync avatar from Supabase to localStorage
   if (data.avatar_url) localStorage.setItem('user_avatar', data.avatar_url);

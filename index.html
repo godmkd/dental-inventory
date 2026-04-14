@@ -3119,8 +3119,10 @@ async function queryDailySummary() {
 
   if (clinicId) {
     query = query.eq('clinic_id', parseInt(clinicId));
-  } else if (!canSeeAdmin()) {
-    query = query.in('clinic_id', window._userClinicIds);
+  } else {
+    // Filter by visible clinics (org-filtered)
+    const visClinicIds = allClinics.map(c => c.id);
+    if (visClinicIds.length > 0) query = query.in('clinic_id', visClinicIds);
   }
 
   const { data: logs, error } = await withTimeout(query);
@@ -6760,23 +6762,55 @@ async function renderUsersList(el) {
     const usersInMyOrgs = new Set((allUserOrgs || []).filter(uo => myOrgIds.includes(uo.org_id)).map(uo => uo.user_id));
     visibleUsers = allUsers.filter(u => usersInMyOrgs.has(u.id));
   }
+  // Build rows grouped by org, users in multiple orgs appear multiple times
+  const rows = [];
+  const orgGroups = {};
+  (allUserOrgs || []).forEach(uo => {
+    if (!orgGroups[uo.org_id]) orgGroups[uo.org_id] = [];
+    const u = visibleUsers.find(x => x.id === uo.user_id);
+    if (u) orgGroups[uo.org_id].push({ ...u, _orgRoleId: uo.role_id, _orgRole: uo.role });
+  });
+  // Also add users not in any org
+  const usersInOrgs = new Set((allUserOrgs || []).map(uo => uo.user_id));
+  const noOrgUsers = visibleUsers.filter(u => !usersInOrgs.has(u.id));
+
+  // Load user clinics
+  const { data: allUC } = await withTimeout(sb.from('user_clinics').select('user_id,clinic_id'));
+  const ucMap = {};
+  (allUC || []).forEach(uc => { if (!ucMap[uc.user_id]) ucMap[uc.user_id] = []; ucMap[uc.user_id].push(uc.clinic_id); });
+
   el.innerHTML = `
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>姓名</th><th>角色</th><th>組織</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
-      <tbody>${visibleUsers.map(u => {
-        const uOrgs = (allUserOrgs || []).filter(uo => uo.user_id === u.id);
-        const orgNames = uOrgs.map(uo => allOrganizations.find(o=>o.id===uo.org_id)?.name).filter(Boolean).join('、');
-        return `<tr>
-        <td>${escHtml(u.display_name)}</td>
-        <td>${roleLabel(u.role, u.role_id)}</td>
-        <td style="font-size:.8rem">${orgNames || '<span class="text-muted">無</span>'}</td>
-        <td>${u.clinic_id ? escHtml(allClinics.filter(c => c.id === u.clinic_id).map(c => c.name).join(', ') || clinicName(u.clinic_id)) : '<span class="text-muted">未指派</span>'}</td>
-        <td>${u.is_active ? '<span class="text-success">啟用</span>' : '<span class="text-danger">停用</span>'}</td>
-        <td>
-          <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">編輯</button>
-          <button class="btn ${u.is_active ? 'btn-warning' : 'btn-success'} btn-sm" onclick="toggleUserActive('${u.id}',${!u.is_active})">${u.is_active ? '停用' : '啟用'}</button>
-        </td>
-      </tr>`; }).join('')}</tbody>
+      <thead><tr><th>姓名</th><th>組織</th><th>角色</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
+      <tbody>
+      ${allOrganizations.filter(o => orgGroups[o.id]?.length > 0).map(org => {
+        const members = orgGroups[org.id] || [];
+        return `<tr style="background:rgba(99,179,237,0.08)"><td colspan="6" style="font-weight:600;color:var(--accent);padding:8px 12px">🏢 ${escHtml(org.name)} (${members.length}人)</td></tr>` +
+          members.map(u => {
+            const orgRoleLabel = u._orgRoleId ? (allRoles.find(r => r.id === u._orgRoleId)?.display_name || '') : roleLabel(u.role, u.role_id);
+            const clinicIds = ucMap[u.id] || (u.clinic_id ? [u.clinic_id] : []);
+            const clinicNames = clinicIds.map(cid => clinicName(cid)).filter(n => n !== '-').join('、');
+            return `<tr>
+              <td>${escHtml(u.display_name)}</td>
+              <td style="font-size:.8rem">${escHtml(org.name)}${u._orgRole === 'org_admin' ? ' 👑' : ''}</td>
+              <td>${orgRoleLabel}</td>
+              <td style="font-size:.85rem">${clinicNames || '<span class="text-muted">未指派</span>'}</td>
+              <td>${u.is_active ? '<span class="text-success">啟用</span>' : '<span class="text-danger">停用</span>'}</td>
+              <td>
+                <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">編輯</button>
+                <button class="btn ${u.is_active ? 'btn-warning' : 'btn-success'} btn-sm" onclick="toggleUserActive('${u.id}',${!u.is_active})">${u.is_active ? '停用' : '啟用'}</button>
+              </td>
+            </tr>`;
+          }).join('');
+      }).join('')}
+      ${noOrgUsers.length > 0 ? `<tr style="background:rgba(150,150,150,0.08)"><td colspan="6" style="font-weight:600;color:var(--text-light);padding:8px 12px">未分配組織 (${noOrgUsers.length}人)</td></tr>` +
+        noOrgUsers.map(u => `<tr>
+          <td>${escHtml(u.display_name)}</td><td style="font-size:.8rem"><span class="text-muted">無</span></td>
+          <td>${roleLabel(u.role, u.role_id)}</td><td><span class="text-muted">未指派</span></td>
+          <td>${u.is_active ? '<span class="text-success">啟用</span>' : '<span class="text-danger">停用</span>'}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">編輯</button>
+          <button class="btn ${u.is_active ? 'btn-warning' : 'btn-success'} btn-sm" onclick="toggleUserActive('${u.id}',${!u.is_active})">${u.is_active ? '停用' : '啟用'}</button></td>
+        </tr>`).join('') : ''}</tbody>
     </table></div></div>`;
 }
 
@@ -7259,7 +7293,7 @@ async function renderNotifyConfig(el) {
       <p style="font-size:.8rem;color:var(--text-light);margin:0 0 12px">點選各診所旁的「＋ 選人」加入通知對象，點 × 移除（需已綁 LINE ✅）</p>
       ${lowStockHtml || '<span style="font-size:.83rem;color:var(--text-lighter)">尚無診所資料</span>'}
     </div>
-    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    ${!isSimpleMode() ? `<div class="card" style="padding:16px 20px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
         <h4 style="margin:0">🚨 催貨通知</h4>
         ${swHtml('nc-rush-enabled', cfg.rush_order.enabled !== false, "_notifyConfig.rush_order.enabled=this.checked", '啟用')}
@@ -7271,7 +7305,7 @@ async function renderNotifyConfig(el) {
         <p style="font-size:.78rem;color:var(--text-lighter);margin:0 0 6px">每行一個 LINE User ID（U 開頭）</p>
         <textarea id="rushExtraLineIds" rows="3" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:inherit;padding:6px 8px;font-size:.8rem;resize:vertical">${escHtml(extraIds)}</textarea>
       </div>
-    </div>
+    </div>` : ''}
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="saveNotifyConfig()">儲存設定</button>
       <button class="btn btn-ghost" onclick="testLineNotify()">📨 測試發送（發給自己）</button>

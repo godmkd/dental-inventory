@@ -1065,6 +1065,8 @@ function canEditOwned(createdBy) { return !!(currentUser && createdBy === curren
 
 function hasPermission(perm) {
   if (!userProfile) return false;
+  // System admin always has all permissions
+  if (isSystemAdmin()) return true;
   // org_admin gets all permissions within their org, except use_ai and arrange_layout
   if (isOrgAdmin() && perm !== 'use_ai' && perm !== 'arrange_layout') return true;
   // Check per-org role
@@ -4113,8 +4115,14 @@ async function submitOrdering() {
       return { ...it, quantity: qty };
     });
     const totalAmount = roundedItems.reduce((s, it) => s + (it.unit_price || 0) * it.quantity, 0);
+    // Generate per-org order number
+    let orgOrderNum = 1;
+    if (window._currentOrgId) {
+      const { data: maxOrder } = await withTimeout(sb.from('orders').select('org_order_number').eq('org_id', window._currentOrgId).order('org_order_number', { ascending: false }).limit(1));
+      if (maxOrder && maxOrder.length > 0 && maxOrder[0].org_order_number) orgOrderNum = maxOrder[0].org_order_number + 1;
+    }
     const { data: order, error: e1 } = await withTimeout(sb.from('orders').insert({
-      status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes: '', org_id: window._currentOrgId || null
+      status: 'pending', created_by: currentUser.id, total_amount: totalAmount, notes: '', org_id: window._currentOrgId || null, org_order_number: orgOrderNum
     }).select().single());
     if (e1) { toast('建立失敗: ' + e1.message, 'error'); return; }
 
@@ -4203,7 +4211,7 @@ async function loadConfirmedOrders() {
     }).join('');
     return `<div class="cp-item" style="flex-direction:column;align-items:stretch;gap:0">
       <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid var(--border)">
-        <span class="cp-item-name">#${o.id} ${statusBadge(o.status)} <span style="font-size:.75rem;color:var(--text-lighter)">${creatorName}</span> <span class="cp-item-time">${dateStr} ${time}</span></span>
+        <span class="cp-item-name">#${o.org_order_number || o.id} ${statusBadge(o.status)} <span style="font-size:.75rem;color:var(--text-lighter)">${creatorName}</span> <span class="cp-item-time">${dateStr} ${time}</span></span>
         ${o.status === 'pending' && !ois.some(oi => (oi.item_status === 'shipped' || oi.item_status === 'delivered')) ? `<button class="cp-item-cancel" onclick="cancelOrder(${o.id})">整單取消</button>` : ''}
       </div>
       <div style="margin-top:4px">${itemsHtml}</div>
@@ -4401,7 +4409,7 @@ async function renderOrderMgmtList(orders) {
     <div class="order-card" id="oc_${o.id}">
       <div class="order-card-header" onclick="toggleOrderCard(${o.id})">
         <div>
-          <strong>#${o.id}</strong> - ${escHtml(clinicLabel)} - ${fmtDate(o.created_at)} ${statusBadge(realStatus)}
+          <strong>#${o.org_order_number || o.id}</strong> - ${escHtml(clinicLabel)} - ${fmtDate(o.created_at)} ${statusBadge(realStatus)}
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:.85rem">${userName(o.created_by)} | ${fmtMoney(o.total_amount)}</span>

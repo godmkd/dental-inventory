@@ -4460,7 +4460,7 @@ async function renderOrderSummary() {
       <div id="${osId}"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9rem">
       <thead><tr style="border-bottom:2px solid var(--border);text-align:left">
         <th style="padding:10px 12px">品項名</th>
-        ${isSimpleMode() ? '' : '<th style="padding:10px 12px;color:var(--danger)">急件</th>'}
+        <th style="padding:10px 12px;color:var(--danger)">急件</th>
         <th style="padding:10px 12px">${isSimpleMode() ? '已叫貨' : '待出貨'}</th>
         ${isSimpleMode() ? '' : '<th style="padding:10px 12px">已出貨</th><th style="padding:10px 12px">已叫貨數量</th><th style="padding:10px 12px">差額</th>'}
         </tr></thead><tbody>`;
@@ -4480,7 +4480,7 @@ async function renderOrderSummary() {
 
       html += `<tr style="border-bottom:1px solid var(--border-light)">
         <td style="padding:10px 12px"><strong>${name}</strong></td>
-        ${isSimpleMode() ? '' : `<td style="padding:10px 12px;color:var(--danger);font-weight:700">${urgentQty > 0 ? urgentQty + ' ' + escHtml(orderUnit) : ''}</td>`}
+        <td style="padding:10px 12px;color:var(--danger);font-weight:700">${urgentQty > 0 ? urgentQty + ' ' + escHtml(orderUnit) : ''}</td>
         <td style="padding:10px 12px">${confirmedQty} ${escHtml(orderUnit)}</td>
         ${isSimpleMode() ? '' : `<td style="padding:10px 12px">${shippedQty} ${escHtml(orderUnit)}</td>
         <td style="padding:10px 12px">

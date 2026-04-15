@@ -745,8 +745,15 @@ window._customBubblePositions = null;
 
 async function loadBubblePositions() {
   try {
-    const posKey = 'bubble_positions_' + (isSimpleMode() ? 'simple' : 'full');
-    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', posKey).maybeSingle());
+    // Try user's own positions first
+    const userPosKey = currentUser ? 'bubble_positions_' + currentUser.id : null;
+    if (userPosKey) {
+      const { data: userData } = await withTimeout(sb.from('app_settings').select('value').eq('key', userPosKey).maybeSingle());
+      if (userData?.value) { window._customBubblePositions = userData.value; return; }
+    }
+    // Fallback: mode-based default (simple/full)
+    const defaultKey = 'bubble_positions_' + (isSimpleMode() ? 'simple' : 'full');
+    const { data } = await withTimeout(sb.from('app_settings').select('value').eq('key', defaultKey).maybeSingle());
     window._customBubblePositions = data?.value || null;
   } catch(e) { window._customBubblePositions = null; }
 }
@@ -833,7 +840,7 @@ async function saveLayoutAndExit() {
   const merged = { ...(window._customBubblePositions || {}) };
   merged[viewport] = positions;
   try {
-    const posKey = 'bubble_positions_' + (isSimpleMode() ? 'simple' : 'full');
+    const posKey = currentUser ? 'bubble_positions_' + currentUser.id : 'bubble_positions_' + (isSimpleMode() ? 'simple' : 'full');
     await withTimeout(sb.from('app_settings').upsert({ key: posKey, value: merged, updated_at: new Date().toISOString() }, { onConflict: 'key' }));
     window._customBubblePositions = merged;
     toast('版面已儲存，所有人重整後生效', 'success');

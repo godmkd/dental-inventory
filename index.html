@@ -1045,7 +1045,8 @@ async function enterApp() {
   applyUserAvatar();
   loadBubbleImages().then(() => applyAllBubbleImages());
   // Browse mode flag (masking applied per-page in applyBrowseMask)
-  if (hasPermission('browse')) {
+  // System admin never in browse mode
+  if (!isSystemAdmin() && hasPermission('browse')) {
     window._hasBrowseMode = true;
   }
   setupLogoBubbleDoubleTap();

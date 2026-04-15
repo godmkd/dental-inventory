@@ -1127,11 +1127,14 @@ function hasPermission(perm) {
 
 function isSystemAdmin() {
   if (!userProfile) return false;
+  // Check role string first (owner always = system admin)
+  if (userProfile.role === 'owner') return true;
+  // Then check role_id for is_system flag
   if (userProfile.role_id) {
     const role = userProfile.roles || allRoles.find(r => r.id === userProfile.role_id);
     return !!(role && role.is_system);
   }
-  return userProfile.role === 'owner';
+  return false;
 }
 
 function isOwner() { return isSystemAdmin(); }

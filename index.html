@@ -7132,7 +7132,7 @@ async function renderTutorials(container) {
       <select class="search-box" style="flex:none;width:auto" onchange="window._tutorialFilterClinic=this.value;renderTutorials()">
         ${clinicOpts}
       </select>
-      ${canManageAll || isSystemAdmin() ? '<button class="btn btn-primary btn-sm" onclick="openTutorialModal()">＋ 新增教學</button>' : ''}
+      <button class="btn btn-primary btn-sm" onclick="openTutorialModal()">＋ 新增教學</button>
     </div>
     <div id="tutorialList"><div style="text-align:center;padding:20px;color:var(--text-light)">載入中...</div></div>`;
 

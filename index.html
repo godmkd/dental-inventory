@@ -764,7 +764,7 @@ function handleLogoBubbleClick() {
   if (_logoTapTimer) {
     clearTimeout(_logoTapTimer);
     _logoTapTimer = null;
-    if (hasPermission('arrange_layout')) enterEditMode();
+    enterEditMode();
   } else {
     _logoTapTimer = setTimeout(() => {
       _logoTapTimer = null;
@@ -1083,7 +1083,6 @@ const ALL_PERMISSIONS = [
   { key: 'manage_users', label: '管理人員' },
   { key: 'manage_roles', label: '管理角色' },
   { key: 'change_background', label: '更換頁面背景' },
-  { key: 'arrange_layout', label: '版面調整' },
   { key: 'browse', label: '瀏覽模式（只看不操作）' },
   { key: 'use_ai', label: 'AI 助手' }
 ];
@@ -1103,7 +1102,7 @@ function hasPermission(perm) {
   // System admin always has all permissions
   if (isSystemAdmin()) return true;
   // org_admin gets all permissions within their org, except use_ai and arrange_layout
-  if (isOrgAdmin() && perm !== 'use_ai' && perm !== 'arrange_layout') return true;
+  if (isOrgAdmin() && perm !== 'use_ai') return true;
   // Check per-org role
   const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
   if (orgRoleId) {

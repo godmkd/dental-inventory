@@ -7128,13 +7128,13 @@ async function renderTutorials(container) {
     clinicOpts += `<option value="${c.id}"${filterClinicId == c.id ? ' selected' : ''}>${escHtml(c.name)}</option>`;
   });
 
-  // Show toolbar immediately (before loading data)
+  // Show toolbar + add button immediately
   mc.innerHTML = `<div class="page-title">📖 教學</div>
-    <div class="toolbar">
-      <select class="search-box" style="flex:none;width:auto" onchange="window._tutorialFilterClinic=this.value;renderTutorials()">
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <select style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:.85rem" onchange="window._tutorialFilterClinic=this.value;renderTutorials()">
         ${clinicOpts}
       </select>
-      <button class="btn btn-primary btn-sm" onclick="openTutorialModal()">＋ 新增教學</button>
+      <button style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:.85rem;font-weight:600;cursor:pointer" onclick="openTutorialModal()">＋ 新增教學</button>
     </div>
     <div id="tutorialList"><div style="text-align:center;padding:20px;color:var(--text-light)">載入中...</div></div>`;
 

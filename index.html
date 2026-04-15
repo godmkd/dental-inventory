@@ -7113,26 +7113,9 @@ async function renderTutorials(container) {
   const mc = container || document.getElementById('mainContent');
   mc.innerHTML = '<div class="loading" style="padding:40px;text-align:center">載入中...</div>';
 
-  let tutQ = sb.from('tutorials').select('*').order('created_at', { ascending: false });
-  if (window._currentOrgId) {
-    tutQ = tutQ.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
-  }
-  const { data: tutorials, error } = await withTimeout(tutQ);
-  console.log('[tutorials] loaded:', tutorials?.length, 'error:', error?.message);
-  if (error) { mc.innerHTML = '<div class="empty-state">載入失敗：' + escHtml(error.message) + '</div>'; return; }
-
   const canManageAll = hasPermission('manage_materials') || hasPermission('all');
   const myClinics = canSeeAdmin() ? getVisibleClinics() : getVisibleClinics().filter(c => window._userClinicIds.includes(c.id));
-
-  // Filter by clinic
   const filterClinicId = window._tutorialFilterClinic || '';
-  let filtered = tutorials;
-  if (filterClinicId !== '') {
-    const cid = parseInt(filterClinicId);
-    filtered = tutorials.filter(t => !t.clinic_id || t.clinic_id === cid);
-  } else if (!canSeeAdmin()) {
-    filtered = tutorials.filter(t => !t.clinic_id || window._userClinicIds.includes(t.clinic_id));
-  }
 
   let clinicOpts = '<option value="">全部診所</option>';
   const clinicList = canSeeAdmin() ? allClinics : myClinics;
@@ -7140,13 +7123,33 @@ async function renderTutorials(container) {
     clinicOpts += `<option value="${c.id}"${filterClinicId == c.id ? ' selected' : ''}>${escHtml(c.name)}</option>`;
   });
 
-  let html = `<div class="page-title">📖 教學</div>
+  // Show toolbar immediately (before loading data)
+  mc.innerHTML = `<div class="page-title">📖 教學</div>
     <div class="toolbar">
       <select class="search-box" style="flex:none;width:auto" onchange="window._tutorialFilterClinic=this.value;renderTutorials()">
         ${clinicOpts}
       </select>
-      <button class="btn btn-primary btn-sm" onclick="openTutorialModal()">＋ 新增教學</button>
-    </div>`;
+      ${canManageAll || isSystemAdmin() ? '<button class="btn btn-primary btn-sm" onclick="openTutorialModal()">＋ 新增教學</button>' : ''}
+    </div>
+    <div id="tutorialList"><div style="text-align:center;padding:20px;color:var(--text-light)">載入中...</div></div>`;
+
+  // Load tutorials
+  let tutQ = sb.from('tutorials').select('*').order('created_at', { ascending: false });
+  if (window._currentOrgId) {
+    tutQ = tutQ.or(`org_id.eq.${window._currentOrgId},org_id.is.null`);
+  }
+  const { data: tutorials, error } = await withTimeout(tutQ);
+  if (error) { document.getElementById('tutorialList').innerHTML = '<div class="empty-state">載入失敗：' + escHtml(error.message) + '</div>'; return; }
+
+  let filtered = tutorials || [];
+  if (filterClinicId !== '') {
+    const cid = parseInt(filterClinicId);
+    filtered = filtered.filter(t => !t.clinic_id || t.clinic_id === cid);
+  } else if (!canSeeAdmin()) {
+    filtered = filtered.filter(t => !t.clinic_id || window._userClinicIds.includes(t.clinic_id));
+  }
+
+  let html = '';
 
   if (filtered.length === 0) {
     html += '<div class="empty-state"><span>📖</span>尚無教學文章</div>';
@@ -7158,7 +7161,7 @@ async function renderTutorials(container) {
           <h4>${escHtml(t.title)}</h4>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="badge badge-confirmed" style="font-size:.72rem">${escHtml(clinicLabel)}</span>
-            ${(canManageAll || canEditOwned(t.created_by)) ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openTutorialModal('${t.id}')">✏️</button><button class="btn btn-danger btn-xs" onclick="event.stopPropagation();deleteTutorial('${t.id}')">🗑</button>` : ''}
+            ${(canManageAll || isSystemAdmin() || canEditOwned(t.created_by)) ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openTutorialModal('${t.id}')">✏️</button><button class="btn btn-danger btn-xs" onclick="event.stopPropagation();deleteTutorial('${t.id}')">🗑</button>` : ''}
           </div>
         </div>
         <div class="tutorial-card-body">
@@ -7169,7 +7172,8 @@ async function renderTutorials(container) {
       </div>`;
     });
   }
-  mc.innerHTML = html;
+  const listEl = document.getElementById('tutorialList');
+  if (listEl) listEl.innerHTML = html;
 }
 
 function openLightbox(src) {

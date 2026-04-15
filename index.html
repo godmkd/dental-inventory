@@ -1021,6 +1021,8 @@ async function enterApp() {
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  // Set user name immediately (before data loading)
+  document.getElementById('userMenuName').textContent = userProfile.display_name || '使用者';
   // Initial load uses longer timeout (Supabase free tier cold start)
   const initTimeout = 15000;
   await loadOrganizations();

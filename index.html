@@ -1915,11 +1915,19 @@ window.applyRecentBg = function(idx) {
 async function bgPickFile(input, type, key) {
   const file = input.files[0];
   if (!file) return;
+  input.value = '';
+  if (type.startsWith('global_')) {
+    // Open crop editor for viewport-specific backgrounds
+    const img = new Image();
+    img.onload = () => openBgCropEditor(img, type);
+    img.src = URL.createObjectURL(file);
+    return;
+  }
   try {
     toast('處理中...', 'info');
     const dataUrl = await compressBgImageToDataUrl(file);
-    if (type === 'global' || type.startsWith('global_')) {
-      localStorage.setItem('bg_' + type, dataUrl);
+    if (type === 'global') {
+      localStorage.setItem('bg_global', dataUrl);
       saveToRecentBgs(dataUrl);
       applyGlobalBg();
     } else if (type === 'page') {
@@ -1935,6 +1943,90 @@ async function bgPickFile(input, type, key) {
     console.error('bgPickFile error:', e);
     toast('背景設定失敗：' + (e.message || e), 'error');
   }
+}
+
+// Background crop editor
+let _bgCropImg = null, _bgCropOx = 0, _bgCropOy = 0, _bgCropScale = 1, _bgCropRot = 0, _bgCropDrag = null, _bgCropType = '';
+
+function openBgCropEditor(img, type) {
+  _bgCropImg = img;
+  _bgCropType = type;
+  _bgCropOx = 0; _bgCropOy = 0; _bgCropRot = 0;
+
+  // Aspect ratios for each viewport
+  const ratios = { global_portrait: 9/16, global_landscape: 16/9, global_desktop: 16/10 };
+  const ratio = ratios[type] || 16/9;
+  const frameW = Math.min(300, window.innerWidth - 40);
+  const frameH = Math.round(frameW / ratio);
+
+  _bgCropScale = Math.max(frameW / img.width, frameH / img.height);
+
+  const vpLabels = { global_portrait: '📱 直幅 (9:16)', global_landscape: '📱 橫幅 (16:9)', global_desktop: '💻 電腦 (16:10)' };
+
+  const overlay = document.createElement('div');
+  overlay.id = 'bgCropOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px';
+  overlay.innerHTML = `
+    <div style="color:#e2e8f0;font-size:.9rem;margin-bottom:4px">${vpLabels[type] || type} — 拖曳移動・滾輪縮放・滑桿旋轉</div>
+    <div style="width:${frameW}px;height:${frameH}px;overflow:hidden;border:3px solid var(--accent,#63b3ed);cursor:grab;position:relative;border-radius:8px" id="bgCropFrame">
+      <canvas id="bgCropCanvas" width="${frameW}" height="${frameH}" style="display:block"></canvas>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;color:#a0aec0;font-size:.82rem">
+      <label>旋轉</label>
+      <input type="range" id="bgCropRotSlider" value="0" min="-180" max="180" style="width:120px" oninput="_bgCropRot=parseInt(this.value);drawBgCropCanvas()">
+      <span id="bgCropRotVal">0°</span>
+      <label style="margin-left:8px">縮放</label>
+      <input type="range" id="bgCropScaleSlider" value="100" min="20" max="400" style="width:120px" oninput="_bgCropScale=parseInt(this.value)/100*Math.max(${frameW}/_bgCropImg.width,${frameH}/_bgCropImg.height);drawBgCropCanvas()">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeBgCropEditor()">取消</button>
+      <button class="btn btn-primary" onclick="saveBgCropEditor()">✅ 確認</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const frame = document.getElementById('bgCropFrame');
+  frame.onpointerdown = e => { _bgCropDrag = { sx: e.clientX, sy: e.clientY, ox: _bgCropOx, oy: _bgCropOy }; frame.setPointerCapture(e.pointerId); };
+  frame.onpointermove = e => { if (!_bgCropDrag) return; _bgCropOx = _bgCropDrag.ox + (e.clientX - _bgCropDrag.sx); _bgCropOy = _bgCropDrag.oy + (e.clientY - _bgCropDrag.sy); drawBgCropCanvas(); };
+  frame.onpointerup = () => { _bgCropDrag = null; };
+  frame.onwheel = e => { e.preventDefault(); const d = e.deltaY > 0 ? -0.05 : 0.05; _bgCropScale = Math.max(0.1, _bgCropScale + d * _bgCropScale); const sl = document.getElementById('bgCropScaleSlider'); if (sl) sl.value = Math.round(_bgCropScale / Math.max(frameW/_bgCropImg.width, frameH/_bgCropImg.height) * 100); drawBgCropCanvas(); };
+
+  drawBgCropCanvas();
+}
+
+function drawBgCropCanvas() {
+  const canvas = document.getElementById('bgCropCanvas');
+  if (!canvas || !_bgCropImg) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(w/2 + _bgCropOx, h/2 + _bgCropOy);
+  ctx.rotate(_bgCropRot * Math.PI / 180);
+  ctx.scale(_bgCropScale, _bgCropScale);
+  ctx.drawImage(_bgCropImg, -_bgCropImg.width/2, -_bgCropImg.height/2);
+  ctx.restore();
+  const rv = document.getElementById('bgCropRotVal');
+  if (rv) rv.textContent = _bgCropRot + '°';
+}
+
+function closeBgCropEditor() {
+  const ol = document.getElementById('bgCropOverlay');
+  if (ol) ol.remove();
+  if (_bgCropImg?.src?.startsWith('blob:')) URL.revokeObjectURL(_bgCropImg.src);
+}
+
+function saveBgCropEditor() {
+  const canvas = document.getElementById('bgCropCanvas');
+  if (!canvas) return;
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  localStorage.setItem('bg_' + _bgCropType, dataUrl);
+  saveToRecentBgs(dataUrl);
+  applyGlobalBg();
+  closeBgCropEditor();
+  toast('背景已更新');
+  openBgSettingModal();
 }
 
 async function compressBgImageToDataUrl(file) {

@@ -1632,8 +1632,8 @@ function openBgSettingModal() {
         <div style="font-size:.75rem;color:var(--text-lighter);margin-bottom:6px">新增 5~10 張照片，自動輪播更換背景</div>
         <div id="bgSlideshowList" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
           ${getBgSlideshowImages().map((url,i) => `<div style="position:relative;display:inline-block">
-            <img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
-            <button onclick="removeSlideshowImg(${i})" style="position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:.6rem;cursor:pointer;line-height:1">✕</button>
+            <img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="editSlideshowImg(${i})" title="點擊編輯">
+            <button onclick="event.stopPropagation();removeSlideshowImg(${i})" style="position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:.6rem;cursor:pointer;line-height:1">✕</button>
           </div>`).join('')}
         </div>
         ${getBgSlideshowImages().length < 10 ? `<label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:.78rem">＋ 新增照片
@@ -1835,20 +1835,50 @@ function saveBgSlideshowImages(imgs) {
 let _bgSlideshowTimer = null;
 let _bgSlideshowIdx = 0;
 
+window._slideshowCropQueue = [];
+window._slideshowCropResolve = null;
+
 window.addSlideshowImgs = async function(input) {
   const files = Array.from(input.files);
+  input.value = '';
   if (!files.length) return;
   const imgs = getBgSlideshowImages();
   for (const file of files) {
     if (imgs.length >= 10) break;
     try {
-      const dataUrl = await compressBgImageToDataUrl(file);
-      imgs.push(dataUrl);
+      const img = new Image();
+      const loadPromise = new Promise(r => { img.onload = () => r(img); });
+      img.src = URL.createObjectURL(file);
+      const loadedImg = await loadPromise;
+      // Open crop editor and wait for result
+      const croppedDataUrl = await new Promise(resolve => {
+        window._slideshowCropResolve = resolve;
+        openBgCropEditor(loadedImg, '_slideshow_crop');
+      });
+      if (croppedDataUrl) imgs.push(croppedDataUrl);
     } catch(e) { console.error(e); }
   }
   saveBgSlideshowImages(imgs);
-  toast(`已新增 ${files.length} 張，共 ${imgs.length} 張`);
+  toast(`共 ${imgs.length} 張輪播圖`);
   openBgSettingModal();
+};
+
+window.editSlideshowImg = async function(idx) {
+  const imgs = getBgSlideshowImages();
+  if (!imgs[idx]) return;
+  const img = new Image();
+  img.onload = () => {
+    window._slideshowCropResolve = (dataUrl) => {
+      if (dataUrl) {
+        imgs[idx] = dataUrl;
+        saveBgSlideshowImages(imgs);
+        toast('已更新');
+        openBgSettingModal();
+      }
+    };
+    openBgCropEditor(img, '_slideshow_crop');
+  };
+  img.src = imgs[idx];
 };
 
 window.removeSlideshowImg = function(idx) {
@@ -2015,6 +2045,11 @@ function closeBgCropEditor() {
   const ol = document.getElementById('bgCropOverlay');
   if (ol) ol.remove();
   if (_bgCropImg?.src?.startsWith('blob:')) URL.revokeObjectURL(_bgCropImg.src);
+  // If slideshow crop was cancelled, resolve with null
+  if (window._slideshowCropResolve) {
+    window._slideshowCropResolve(null);
+    window._slideshowCropResolve = null;
+  }
 }
 
 function editBgCrop(type) {
@@ -2029,12 +2064,21 @@ function saveBgCropEditor() {
   const canvas = document.getElementById('bgCropCanvas');
   if (!canvas) return;
   const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-  localStorage.setItem('bg_' + _bgCropType, dataUrl);
-  saveToRecentBgs(dataUrl);
-  applyGlobalBg();
-  closeBgCropEditor();
-  toast('背景已更新');
-  openBgSettingModal();
+  if (_bgCropType === '_slideshow_crop') {
+    // Return result to slideshow queue
+    closeBgCropEditor();
+    if (window._slideshowCropResolve) {
+      window._slideshowCropResolve(dataUrl);
+      window._slideshowCropResolve = null;
+    }
+  } else {
+    localStorage.setItem('bg_' + _bgCropType, dataUrl);
+    saveToRecentBgs(dataUrl);
+    applyGlobalBg();
+    closeBgCropEditor();
+    toast('背景已更新');
+    openBgSettingModal();
+  }
 }
 
 async function compressBgImageToDataUrl(file) {

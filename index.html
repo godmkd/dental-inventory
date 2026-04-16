@@ -1560,10 +1560,12 @@ function openBgSettingModal() {
   const pageName = getPageLabel(pageId);
   const pageBg = localStorage.getItem('bg_' + pageId);
   const sidebarBg = localStorage.getItem('bg_sidebar');
-  const globalBg = localStorage.getItem('bg_global');
+  const vp = getCurrentViewport();
+  const vpLabel = { portrait: '📱 直幅', landscape: '📱 橫幅', desktop: '💻 電腦' }[vp];
+  const globalBg = localStorage.getItem('bg_global_' + vp) || localStorage.getItem('bg_global');
   const pageOpacity = parseInt(localStorage.getItem('bg_opacity_' + pageId) || '15', 10);
   const sidebarOpacity = parseInt(localStorage.getItem('bg_opacity_sidebar') || '15', 10);
-  const globalOpacity = parseInt(localStorage.getItem('bg_opacity_global') || '30', 10);
+  const globalOpacity = parseInt(localStorage.getItem('bg_opacity_global_' + vp) || localStorage.getItem('bg_opacity_global') || '30', 10);
 
   function previewImg(url) {
     return url ? `<img src="${url}" class="bg-preview-thumb">` : '<span style="color:var(--text-lighter);font-size:.82rem">尚未設定</span>';
@@ -1599,17 +1601,18 @@ function openBgSettingModal() {
     </div>
 
     <div class="bg-section">
-      <h4>🌐 網頁背景圖</h4>
+      <h4>🌐 網頁背景圖 <span style="font-size:.78rem;color:var(--accent);font-weight:400">${vpLabel}</span></h4>
+      <div style="font-size:.72rem;color:var(--text-lighter);margin-bottom:6px">目前設定的是「${vpLabel}」的背景。切換裝置方向可設定其他幅面。</div>
       <div class="bg-preview-row">
         ${previewImg(globalBg)}
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖
-          <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'global','global')">
+          <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'global_${vp}','global_${vp}')">
         </label>
-        ${globalBg ? '<button class="btn btn-danger btn-sm" onclick="removeBg(\'global\',\'global\')">刪除</button>' : ''}
+        ${globalBg ? `<button class="btn btn-danger btn-sm" onclick="removeBg('global_${vp}','global_${vp}')">刪除</button>` : ''}
       </div>
       <div class="bg-opacity-row">
         <span style="font-size:.82rem">透明度</span>
-        <input type="range" min="0" max="100" value="${globalOpacity}" oninput="bgOpacityChange(this,'global','global')">
+        <input type="range" min="0" max="100" value="${globalOpacity}" oninput="bgOpacityChange(this,'global_${vp}','global_${vp}')">
         <span id="bgOpVal_global">${globalOpacity}%</span>
       </div>
       <div style="margin-top:8px">
@@ -2011,9 +2014,17 @@ function applySidebarBg() {
 }
 
 let _cachedBgUrl = null, _cachedBgBlob = null;
+function getCurrentViewport() {
+  const w = window.innerWidth, h = window.innerHeight;
+  if (w < h && w <= 900) return 'portrait';
+  if (w > h && h <= 500) return 'landscape';
+  return 'desktop';
+}
+
 function applyGlobalBg() {
-  const url = localStorage.getItem('bg_global');
-  const opacity = parseInt(localStorage.getItem('bg_opacity_global') || '30', 10);
+  const vp = getCurrentViewport();
+  const url = localStorage.getItem('bg_global_' + vp) || localStorage.getItem('bg_global');
+  const opacity = parseInt(localStorage.getItem('bg_opacity_global_' + vp) || localStorage.getItem('bg_opacity_global') || '30', 10);
   if (url) {
     // Cache blob URL to avoid re-parsing large data URLs
     if (url !== _cachedBgUrl) {
@@ -2056,6 +2067,17 @@ function applyAllBg() {
   applySidebarBg();
   applyGlobalBg();
 }
+
+// Re-apply background on orientation change
+let _lastVp = getCurrentViewport();
+window.addEventListener('resize', () => {
+  const newVp = getCurrentViewport();
+  if (newVp !== _lastVp) {
+    _lastVp = newVp;
+    _cachedBgUrl = null; // Force reload
+    applyGlobalBg();
+  }
+});
 
 function optionsHTML(arr, valKey, labelKey, selected) {
   return '<option value="">-- 請選擇 --</option>' +

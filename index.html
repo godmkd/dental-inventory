@@ -1608,7 +1608,7 @@ function openBgSettingModal() {
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">選圖
           <input type="file" accept="image/*" style="display:none" onchange="bgPickFile(this,'global_${vp}','global_${vp}')">
         </label>
-        ${globalBg ? `<button class="btn btn-danger btn-sm" onclick="removeBg('global_${vp}','global_${vp}')">刪除</button>` : ''}
+        ${globalBg ? `<button class="btn btn-ghost btn-sm" onclick="editBgCrop('global_${vp}')">✏️ 編輯</button><button class="btn btn-danger btn-sm" onclick="removeBg('global_${vp}','global_${vp}')">刪除</button>` : ''}
       </div>
       <div class="bg-opacity-row">
         <span style="font-size:.82rem">透明度</span>
@@ -2015,6 +2015,14 @@ function closeBgCropEditor() {
   const ol = document.getElementById('bgCropOverlay');
   if (ol) ol.remove();
   if (_bgCropImg?.src?.startsWith('blob:')) URL.revokeObjectURL(_bgCropImg.src);
+}
+
+function editBgCrop(type) {
+  const dataUrl = localStorage.getItem('bg_' + type);
+  if (!dataUrl) { toast('沒有背景圖', 'error'); return; }
+  const img = new Image();
+  img.onload = () => openBgCropEditor(img, type);
+  img.src = dataUrl;
 }
 
 function saveBgCropEditor() {

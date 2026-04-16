@@ -1613,7 +1613,7 @@ function openBgSettingModal() {
       <div class="bg-opacity-row">
         <span style="font-size:.82rem">透明度</span>
         <input type="range" min="0" max="100" value="${globalOpacity}" oninput="bgOpacityChange(this,'global_${vp}','global_${vp}')">
-        <span id="bgOpVal_global">${globalOpacity}%</span>
+        <span id="bgOpVal_global_${vp}">${globalOpacity}%</span>
       </div>
       <div style="margin-top:8px">
         <div style="font-size:.78rem;color:var(--text-lighter);margin-bottom:4px">最近使用：</div>
@@ -1819,8 +1819,8 @@ function bgOpacityChange(el, type, key) {
   } else if (type === 'sidebar') {
     localStorage.setItem('bg_opacity_sidebar', val);
     document.getElementById('sidebar').style.setProperty('--sidebar-bg-opacity', val / 100);
-  } else if (type === 'global') {
-    localStorage.setItem('bg_opacity_global', val);
+  } else if (type === 'global' || type.startsWith('global_')) {
+    localStorage.setItem('bg_opacity_' + type, val);
     applyGlobalBg();
   }
 }
@@ -1918,8 +1918,8 @@ async function bgPickFile(input, type, key) {
   try {
     toast('處理中...', 'info');
     const dataUrl = await compressBgImageToDataUrl(file);
-    if (type === 'global') {
-      localStorage.setItem('bg_global', dataUrl);
+    if (type === 'global' || type.startsWith('global_')) {
+      localStorage.setItem('bg_' + type, dataUrl);
       saveToRecentBgs(dataUrl);
       applyGlobalBg();
     } else if (type === 'page') {
@@ -1973,9 +1973,9 @@ function removeBg(type, key) {
     localStorage.removeItem('bg_sidebar');
     localStorage.removeItem('bg_opacity_sidebar');
     applySidebarBg();
-  } else if (type === 'global') {
-    localStorage.removeItem('bg_global');
-    localStorage.removeItem('bg_opacity_global');
+  } else if (type === 'global' || type.startsWith('global_')) {
+    localStorage.removeItem('bg_' + type);
+    localStorage.removeItem('bg_opacity_' + type);
     applyGlobalBg();
   }
   toast('背景已移除');

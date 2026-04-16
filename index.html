@@ -551,7 +551,8 @@ body[data-theme="light"] .content{background:transparent}
   <button class="btn btn-ghost" style="width:100%;font-size:.85rem;margin-bottom:6px;text-align:left" onclick="document.getElementById('userMenu').classList.remove('open');navigateToBubble('account-settings')">⚙️ 帳戶設定</button>
   <button class="btn btn-danger" style="width:100%;font-size:.85rem" onclick="doLogout()">登出</button>
 </div>
-<div id="editCancelBtn" onclick="exitEditMode()">✗ 取消調整</div>
+<div id="editCancelBtn" onclick="exitEditMode()" style="display:none">✗ 取消調整</div>
+<div id="editResetBtn" onclick="resetBubblePositions()" style="display:none;position:fixed;bottom:24px;left:calc(50% + 80px);z-index:300;background:rgba(239,68,68,.9);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:20px;padding:8px 20px;cursor:pointer;font-size:.85rem;white-space:nowrap">↩ 恢復預設</div>
 
 <!-- App -->
 <div id="app" class="app">
@@ -758,6 +759,21 @@ async function loadBubblePositions() {
   } catch(e) { window._customBubblePositions = null; }
 }
 
+async function resetBubblePositions() {
+  if (!confirm('確定恢復預設泡泡位置？你的自訂位置會被清除。')) return;
+  // Delete user's custom positions
+  if (currentUser) {
+    const userPosKey = 'bubble_positions_' + currentUser.id;
+    await sb.from('app_settings').delete().eq('key', userPosKey);
+  }
+  window._customBubblePositions = null;
+  // Reload default positions
+  await loadBubblePositions();
+  exitEditMode();
+  layoutBubbles();
+  toast('已恢復預設位置');
+}
+
 let _logoTapTimer = null;
 function handleLogoBubbleClick() {
   if (editMode) { saveLayoutAndExit(); return; }
@@ -794,6 +810,7 @@ function enterEditMode() {
   document.getElementById('logoBubbleLabel').textContent = '確定儲存';
   document.getElementById('logoBubble').classList.add('edit-mode');
   document.getElementById('editCancelBtn').style.display = 'block';
+  document.getElementById('editResetBtn').style.display = 'block';
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.add('edit-mode-bubble');
     el.style.touchAction = 'none';
@@ -815,6 +832,7 @@ function exitEditMode() {
   document.getElementById('logoBubbleLabel').textContent = '牙材採購系統';
   document.getElementById('logoBubble').classList.remove('edit-mode');
   document.getElementById('editCancelBtn').style.display = 'none';
+  document.getElementById('editResetBtn').style.display = 'none';
   document.querySelectorAll('#bubbleContainer .bubble').forEach(el => {
     el.classList.remove('edit-mode-bubble');
     el.style.touchAction = '';

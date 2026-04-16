@@ -1252,10 +1252,15 @@ async function loadSuppliers() {
   allSuppliers = data || [];
 }
 async function loadMaterials() {
-  let q = sb.from('materials').select('*').order('sort_order').order('name');
+  let q = sb.from('materials').select('*').or('is_deleted.eq.false,is_deleted.is.null').order('sort_order').order('name');
   if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allMaterials = data || [];
+  // Also load deleted materials for history name lookup
+  if (!window._allMaterialsIncDeleted) {
+    const { data: all } = await withTimeout(sb.from('materials').select('id,name').order('id'));
+    window._allMaterialsIncDeleted = all || [];
+  }
 }
 async function loadUsers() { const { data } = await withTimeout(sb.from('user_profiles').select('*').order('created_at')); allUsers = data || []; }
 async function loadRoles() { const { data } = await withTimeout(sb.from('roles').select('*').order('sort_order').order('id')); allRoles = data || []; }
@@ -1268,7 +1273,7 @@ function orgFilter(query, orgCol = 'org_id') {
 }
 function categoryName(id) { return allCategories.find(c => c.id === id)?.name || '-'; }
 function supplierName(id) { return allSuppliers.find(s => s.id === id)?.name || '-'; }
-function materialName(id) { return allMaterials.find(m => m.id === id)?.name || '-'; }
+function materialName(id) { return allMaterials.find(m => m.id === id)?.name || (window._allMaterialsIncDeleted || []).find(m => m.id === id)?.name || '-'; }
 function materialObj(id) { return allMaterials.find(m => m.id === id); }
 function userName(id) { return allUsers.find(u => u.id === id)?.display_name || '-'; }
 function matItemType(m) {
@@ -6510,9 +6515,26 @@ async function saveMaterial(id) {
 
 async function deleteMaterial(id) {
   if (!await showConfirm('刪除品項', '確定刪除此品項？')) return;
-  const { error } = await withTimeout(sb.from('materials').delete().eq('id', id));
-  if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
-  toast('已刪除'); await loadMaterials(); renderAdminContent();
+  // Check if material has any records
+  const [{ data: logs }, { data: items }, { data: inv }] = await Promise.all([
+    withTimeout(sb.from('inventory_logs').select('id').eq('material_id', id).limit(1)),
+    withTimeout(sb.from('order_items').select('id').eq('material_id', id).limit(1)),
+    withTimeout(sb.from('clinic_inventory').select('id').eq('material_id', id).limit(1))
+  ]);
+  const hasRecords = (logs?.length > 0) || (items?.length > 0) || (inv?.length > 0);
+
+  if (hasRecords) {
+    // Soft delete: mark as deleted, keep for history
+    const { error } = await withTimeout(sb.from('materials').update({ is_deleted: true }).eq('id', id));
+    if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+    toast('已隱藏（保留歷史紀錄）');
+  } else {
+    // Hard delete: no records, safe to remove
+    const { error } = await withTimeout(sb.from('materials').delete().eq('id', id));
+    if (error) { toast('刪除失敗: ' + error.message, 'error'); return; }
+    toast('已刪除');
+  }
+  await loadMaterials(); renderAdminContent();
 }
 
 // --- Categories CRUD ---

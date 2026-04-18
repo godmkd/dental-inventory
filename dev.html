@@ -1049,18 +1049,25 @@ async function enterApp() {
   document.getElementById('app').style.display = 'block';
   // Set user name immediately (before data loading)
   document.getElementById('userMenuName').textContent = userProfile.display_name || '使用者';
-  // Initial load uses longer timeout (Supabase free tier cold start)
+  // Initial load: all queries in parallel (including organizations)
   const initTimeout = 15000;
-  await loadOrganizations();
+  let _rawClinics, _rawCategories, _rawSuppliers, _rawMaterials;
   await Promise.all([
-    withTimeout(sb.from('clinics').select('*').order('sort_order').order('id').then(r => { allClinics = (window._currentOrgId ? (r.data||[]).filter(c => c.org_id === window._currentOrgId) : r.data) || []; }), initTimeout),
-    withTimeout(sb.from('categories').select('*').order('sort_order').then(r => { allCategories = (window._currentOrgId ? (r.data||[]).filter(c => c.org_id === window._currentOrgId) : r.data) || []; }), initTimeout),
-    withTimeout(sb.from('suppliers').select('*').order('name').then(r => { allSuppliers = (window._currentOrgId ? (r.data||[]).filter(s => s.org_id === window._currentOrgId) : r.data) || []; }), initTimeout),
-    withTimeout(sb.from('materials').select('*').order('sort_order').order('name').then(r => { allMaterials = (window._currentOrgId ? (r.data||[]).filter(m => m.org_id === window._currentOrgId) : r.data) || []; }), initTimeout),
+    loadOrganizations(),
+    withTimeout(sb.from('clinics').select('*').order('sort_order').order('id').then(r => { _rawClinics = r.data || []; }), initTimeout),
+    withTimeout(sb.from('categories').select('*').order('sort_order').then(r => { _rawCategories = r.data || []; }), initTimeout),
+    withTimeout(sb.from('suppliers').select('*').order('name').then(r => { _rawSuppliers = r.data || []; }), initTimeout),
+    withTimeout(sb.from('materials').select('*').order('sort_order').order('name').then(r => { _rawMaterials = r.data || []; }), initTimeout),
     withTimeout(sb.from('user_profiles').select('*').order('created_at').then(r => { allUsers = r.data || []; }), initTimeout),
     withTimeout(sb.from('roles').select('*').order('sort_order').order('id').then(r => { allRoles = r.data || []; }), initTimeout),
     loadBubblePositions()
   ]);
+  // Apply org_id filter after all data loaded (org is now known)
+  const orgId = window._currentOrgId;
+  allClinics = orgId ? _rawClinics.filter(c => c.org_id === orgId) : _rawClinics;
+  allCategories = orgId ? _rawCategories.filter(c => c.org_id === orgId) : _rawCategories;
+  allSuppliers = orgId ? _rawSuppliers.filter(s => s.org_id === orgId) : _rawSuppliers;
+  allMaterials = orgId ? _rawMaterials.filter(m => m.org_id === orgId) : _rawMaterials;
   // Display role: per-org role > profile role
   const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
   const displayRoleId = orgRoleId || userProfile.role_id;

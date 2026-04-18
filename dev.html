@@ -1544,10 +1544,7 @@ let _lastVisible = Date.now();
 let _connectionWarm = true;
 
 async function withTimeout(promise, ms) {
-  // After returning from background, use longer timeout (connection may be cold)
-  if (!ms) {
-    ms = _connectionWarm ? 10000 : 20000;
-  }
+  if (!ms) ms = 30000; // 30s default — Supabase free tier cold start can take 15-20s
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("請求逾時")), ms));
   return Promise.race([promise, timeout]);
 }

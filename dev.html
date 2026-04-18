@@ -1548,7 +1548,10 @@ async function navigateTo(pageId) {
   currentPage = pageId;
   hideFloatPanel();
   const mc = document.getElementById('mainContent');
-  mc.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent)"></div></div>';
+  // Only show spinner if no data loaded yet (first time)
+  if (allClinics.length === 0 && allMaterials.length === 0) {
+    mc.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner" style="border-color:var(--border);border-top-color:var(--accent)"></div></div>';
+  }
   const renderers = {
     // 直接頁面（新）
     'daily-change':     renderDailyChange,

@@ -1054,44 +1054,88 @@ async function loadProfile() {
   }
 }
 
+// localStorage cache helpers
+function cacheSet(key, data) { try { localStorage.setItem('cache_' + key, JSON.stringify(data)); } catch(e) {} }
+function cacheGet(key) { try { return JSON.parse(localStorage.getItem('cache_' + key) || 'null'); } catch(e) { return null; } }
+
+function applyOrgFilter(rawData, orgId) {
+  return orgId ? rawData.filter(d => d.org_id === orgId) : rawData;
+}
+
 async function enterApp() {
-  // Show app immediately with user name (data loads in background)
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('userMenuName').textContent = userProfile.display_name || '使用者';
 
-  // All queries in parallel (including organizations)
-  const initTimeout = 15000;
+  // Step 1: Load from localStorage cache immediately
+  const cachedOrgs = cacheGet('organizations');
+  const cachedUO = cacheGet('user_organizations');
+  if (cachedOrgs) {
+    allOrganizations = cachedOrgs;
+    if (cachedUO && currentUser) {
+      window._userOrgIds = cachedUO.filter(uo => uo.user_id === currentUser.id).map(uo => uo.org_id);
+      window._userOrgRoles = {}; window._userOrgRoleIds = {};
+      cachedUO.filter(uo => uo.user_id === currentUser.id).forEach(uo => {
+        window._userOrgRoles[uo.org_id] = uo.role;
+        if (uo.role_id) window._userOrgRoleIds[uo.org_id] = uo.role_id;
+      });
+      if (!window._currentOrgId) window._currentOrgId = parseInt(localStorage.getItem('current_org_id')) || window._userOrgIds[0] || null;
+    }
+  }
+  const orgId = window._currentOrgId;
+  allClinics = applyOrgFilter(cacheGet('clinics') || [], orgId);
+  allCategories = applyOrgFilter(cacheGet('categories') || [], orgId);
+  allSuppliers = applyOrgFilter(cacheGet('suppliers') || [], orgId);
+  allMaterials = applyOrgFilter(cacheGet('materials') || [], orgId);
+  allUsers = cacheGet('users') || [];
+  allRoles = cacheGet('roles') || [];
+
+  // Step 2: Show UI immediately with cached data
+  const hasCache = allClinics.length > 0 || allCategories.length > 0;
+  if (hasCache) {
+    finishEnterApp();
+  }
+
+  // Step 3: Refresh from Supabase in background
+  const initTimeout = 30000;
   let _rawClinics = [], _rawCategories = [], _rawSuppliers = [], _rawMaterials = [];
   await Promise.all([
     loadOrganizations(),
-    sb.from('clinics').select('*').order('sort_order').order('id').then(r => { _rawClinics = r.data || []; }).catch(() => {}),
-    sb.from('categories').select('*').order('sort_order').then(r => { _rawCategories = r.data || []; }).catch(() => {}),
-    sb.from('suppliers').select('*').order('name').then(r => { _rawSuppliers = r.data || []; }).catch(() => {}),
-    sb.from('materials').select('*').order('sort_order').order('name').then(r => { _rawMaterials = r.data || []; }).catch(() => {}),
-    sb.from('user_profiles').select('*').order('created_at').then(r => { allUsers = r.data || []; }).catch(() => {}),
-    sb.from('roles').select('*').order('sort_order').order('id').then(r => { allRoles = r.data || []; }).catch(() => {}),
+    sb.from('clinics').select('*').order('sort_order').order('id').then(r => { _rawClinics = r.data || []; cacheSet('clinics', _rawClinics); }).catch(() => {}),
+    sb.from('categories').select('*').order('sort_order').then(r => { _rawCategories = r.data || []; cacheSet('categories', _rawCategories); }).catch(() => {}),
+    sb.from('suppliers').select('*').order('name').then(r => { _rawSuppliers = r.data || []; cacheSet('suppliers', _rawSuppliers); }).catch(() => {}),
+    sb.from('materials').select('*').order('sort_order').order('name').then(r => { _rawMaterials = r.data || []; cacheSet('materials', _rawMaterials); }).catch(() => {}),
+    sb.from('user_profiles').select('*').order('created_at').then(r => { allUsers = r.data || []; cacheSet('users', allUsers); }).catch(() => {}),
+    sb.from('roles').select('*').order('sort_order').order('id').then(r => { allRoles = r.data || []; cacheSet('roles', allRoles); }).catch(() => {}),
     loadBubblePositions()
   ].map(p => withTimeout(p, initTimeout).catch(e => console.warn('Init query timeout:', e))));
-  // Apply org_id filter after all data loaded
-  const orgId = window._currentOrgId;
-  allClinics = orgId ? _rawClinics.filter(c => c.org_id === orgId) : _rawClinics;
-  allCategories = orgId ? _rawCategories.filter(c => c.org_id === orgId) : _rawCategories;
-  allSuppliers = orgId ? _rawSuppliers.filter(s => s.org_id === orgId) : _rawSuppliers;
-  allMaterials = orgId ? _rawMaterials.filter(m => m.org_id === orgId) : _rawMaterials;
-  // Display role: per-org role > profile role
+
+  // Cache organizations data
+  cacheSet('organizations', allOrganizations);
+
+  // Apply org filter with fresh data
+  const freshOrgId = window._currentOrgId;
+  allClinics = applyOrgFilter(_rawClinics.length ? _rawClinics : allClinics, freshOrgId);
+  allCategories = applyOrgFilter(_rawCategories.length ? _rawCategories : allCategories, freshOrgId);
+  allSuppliers = applyOrgFilter(_rawSuppliers.length ? _rawSuppliers : allSuppliers, freshOrgId);
+  allMaterials = applyOrgFilter(_rawMaterials.length ? _rawMaterials : allMaterials, freshOrgId);
+
+  // Step 4: Rebuild UI with fresh data
+  finishEnterApp();
+  if (hasCache) toast('資料已更新', 'success');
+}
+
+function finishEnterApp() {
   const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
   const displayRoleId = orgRoleId || userProfile.role_id;
   const orgName = allOrganizations.find(o => o.id === window._currentOrgId)?.name;
   document.getElementById('userMenuName').textContent = `${userProfile.display_name} (${roleLabel(userProfile.role, displayRoleId)})${orgName ? ' - ' + orgName : ''}`;
-  buildBubbles(); // logo+user bubbles now rendered inside container
+  buildBubbles();
   document.getElementById('userBubbleLabel').textContent = userProfile.display_name || '我';
   applyUserAvatar();
   loadBubbleImages().then(() => applyAllBubbleImages());
-  // Browse mode flag (masking applied per-page in applyBrowseMask)
-  // System admin never in browse mode
   if (!isSystemAdmin() && hasPermission('browse')) {
     window._hasBrowseMode = true;
   }
@@ -1099,7 +1143,6 @@ async function enterApp() {
   loadColorTheme();
   applyCustomFont();
   applyAllBg();
-  // Check email prompt
   if ((!currentUser.email || currentUser.email === '') && !localStorage.getItem('email_prompted')) {
     localStorage.setItem('email_prompted', '1');
     toast('建議到帳戶設定綁定電子信箱，方便日後登入', 'info');
@@ -1221,6 +1264,9 @@ async function loadOrganizations() {
     }
     if (window._currentOrgId) localStorage.setItem('current_org_id', window._currentOrgId);
     else localStorage.removeItem('current_org_id');
+    // Cache for next load
+    cacheSet('organizations', allOrganizations);
+    cacheSet('user_organizations', (userOrgs || []).map(uo => ({ ...uo, user_id: currentUser.id })));
   }
 }
 

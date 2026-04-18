@@ -1300,37 +1300,44 @@ function getVisibleClinics() {
   );
 }
 
-async function loadClinics() {
+async function loadClinics(force) {
+  if (!force && allClinics.length > 0) return;
   let q = sb.from('clinics').select('*').order('sort_order').order('id');
   if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allClinics = data || [];
+  cacheSet('clinics', allClinics);
 }
-async function loadCategories() {
+async function loadCategories(force) {
+  if (!force && allCategories.length > 0) return;
   let q = sb.from('categories').select('*').order('sort_order');
   if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allCategories = data || [];
+  cacheSet('categories', allCategories);
 }
-async function loadSuppliers() {
+async function loadSuppliers(force) {
+  if (!force && allSuppliers.length > 0) return;
   let q = sb.from('suppliers').select('*').order('name');
   if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allSuppliers = data || [];
+  cacheSet('suppliers', allSuppliers);
 }
-async function loadMaterials() {
+async function loadMaterials(force) {
+  if (!force && allMaterials.length > 0) return;
   let q = sb.from('materials').select('*').or('is_deleted.eq.false,is_deleted.is.null').order('sort_order').order('name');
   if (window._currentOrgId) q = q.eq('org_id', window._currentOrgId);
   const { data } = await withTimeout(q);
   allMaterials = data || [];
-  // Also load deleted materials for history name lookup
+  cacheSet('materials', allMaterials);
   if (!window._allMaterialsIncDeleted) {
     const { data: all } = await withTimeout(sb.from('materials').select('id,name').order('id'));
     window._allMaterialsIncDeleted = all || [];
   }
 }
-async function loadUsers() { const { data } = await withTimeout(sb.from('user_profiles').select('*').order('created_at')); allUsers = data || []; }
-async function loadRoles() { const { data } = await withTimeout(sb.from('roles').select('*').order('sort_order').order('id')); allRoles = data || []; }
+async function loadUsers(force) { if (!force && allUsers.length > 0) return; const { data } = await withTimeout(sb.from('user_profiles').select('*').order('created_at')); allUsers = data || []; cacheSet('users', allUsers); }
+async function loadRoles(force) { if (!force && allRoles.length > 0) return; const { data } = await withTimeout(sb.from('roles').select('*').order('sort_order').order('id')); allRoles = data || []; cacheSet('roles', allRoles); }
 
 function clinicName(id) { return allClinics.find(c => c.id === id)?.name || '-'; }
 // Helper: add org filter to a Supabase query

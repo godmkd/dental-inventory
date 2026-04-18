@@ -1043,26 +1043,27 @@ async function loadProfile() {
 }
 
 async function enterApp() {
+  // Show app immediately with user name (data loads in background)
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('waitingPage').style.display = 'none';
   document.getElementById('loginLoading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  // Set user name immediately (before data loading)
   document.getElementById('userMenuName').textContent = userProfile.display_name || '使用者';
-  // Initial load: all queries in parallel (including organizations)
+
+  // All queries in parallel (including organizations)
   const initTimeout = 15000;
-  let _rawClinics, _rawCategories, _rawSuppliers, _rawMaterials;
+  let _rawClinics = [], _rawCategories = [], _rawSuppliers = [], _rawMaterials = [];
   await Promise.all([
     loadOrganizations(),
-    withTimeout(sb.from('clinics').select('*').order('sort_order').order('id').then(r => { _rawClinics = r.data || []; }), initTimeout),
-    withTimeout(sb.from('categories').select('*').order('sort_order').then(r => { _rawCategories = r.data || []; }), initTimeout),
-    withTimeout(sb.from('suppliers').select('*').order('name').then(r => { _rawSuppliers = r.data || []; }), initTimeout),
-    withTimeout(sb.from('materials').select('*').order('sort_order').order('name').then(r => { _rawMaterials = r.data || []; }), initTimeout),
-    withTimeout(sb.from('user_profiles').select('*').order('created_at').then(r => { allUsers = r.data || []; }), initTimeout),
-    withTimeout(sb.from('roles').select('*').order('sort_order').order('id').then(r => { allRoles = r.data || []; }), initTimeout),
+    sb.from('clinics').select('*').order('sort_order').order('id').then(r => { _rawClinics = r.data || []; }).catch(() => {}),
+    sb.from('categories').select('*').order('sort_order').then(r => { _rawCategories = r.data || []; }).catch(() => {}),
+    sb.from('suppliers').select('*').order('name').then(r => { _rawSuppliers = r.data || []; }).catch(() => {}),
+    sb.from('materials').select('*').order('sort_order').order('name').then(r => { _rawMaterials = r.data || []; }).catch(() => {}),
+    sb.from('user_profiles').select('*').order('created_at').then(r => { allUsers = r.data || []; }).catch(() => {}),
+    sb.from('roles').select('*').order('sort_order').order('id').then(r => { allRoles = r.data || []; }).catch(() => {}),
     loadBubblePositions()
-  ]);
-  // Apply org_id filter after all data loaded (org is now known)
+  ].map(p => withTimeout(p, initTimeout).catch(e => console.warn('Init query timeout:', e))));
+  // Apply org_id filter after all data loaded
   const orgId = window._currentOrgId;
   allClinics = orgId ? _rawClinics.filter(c => c.org_id === orgId) : _rawClinics;
   allCategories = orgId ? _rawCategories.filter(c => c.org_id === orgId) : _rawCategories;

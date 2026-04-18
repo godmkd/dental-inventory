@@ -680,12 +680,20 @@ async function init() {
   // Auto refresh session + warm up connection when returning to app
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser) {
+      const away = Date.now() - _lastVisible;
+      if (away > 30000) {
+        _connectionWarm = false;
+        toast('重新連線中...', 'info');
+      }
       try {
-        // Refresh auth token
         await sb.auth.refreshSession();
-        // Warm up Supabase connection with a lightweight query (prevents timeout on next real query)
-        sb.from('roles').select('id', { count: 'exact', head: true }).then(() => {}).catch(() => {});
-      } catch(e) {}
+        await sb.from('roles').select('id', { count: 'exact', head: true });
+        _connectionWarm = true;
+      } catch(e) {
+        console.warn('Reconnect failed:', e);
+      }
+    } else if (document.visibilityState === 'hidden') {
+      _lastVisible = Date.now();
     }
   });
 }
@@ -1532,7 +1540,14 @@ async function navigateTo(pageId) {
 }
 
 // ===================== UTILS =====================
-async function withTimeout(promise, ms = 10000) {
+let _lastVisible = Date.now();
+let _connectionWarm = true;
+
+async function withTimeout(promise, ms) {
+  // After returning from background, use longer timeout (connection may be cold)
+  if (!ms) {
+    ms = _connectionWarm ? 10000 : 20000;
+  }
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("請求逾時")), ms));
   return Promise.race([promise, timeout]);
 }

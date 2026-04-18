@@ -677,11 +677,15 @@ async function init() {
     }
   });
 
-  // Auto refresh session when page becomes visible (after tab switch or phone wake)
-  // Refresh session silently when returning to app
+  // Auto refresh session + warm up connection when returning to app
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser) {
-      try { await sb.auth.refreshSession(); } catch(e) {}
+      try {
+        // Refresh auth token
+        await sb.auth.refreshSession();
+        // Warm up Supabase connection with a lightweight query (prevents timeout on next real query)
+        sb.from('roles').select('id', { count: 'exact', head: true }).then(() => {}).catch(() => {});
+      } catch(e) {}
     }
   });
 }

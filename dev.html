@@ -7235,8 +7235,13 @@ async function editUser(id) {
     </div>`;
   }).join('');
 
+  const isSelf = u.id === currentUser.id;
+  const isOwner = isSystemAdmin();
+  const nameField = (isSelf || isOwner)
+    ? `<div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>`
+    : `<div class="form-group"><label>姓名</label><div style="padding:8px 0;font-weight:600">${escHtml(u.display_name)}</div><input type="hidden" id="fUserName" value="${escHtml(u.display_name)}"></div>`;
   openModal('編輯人員', `
-    <div class="form-group"><label>姓名</label><input id="fUserName" value="${escHtml(u.display_name)}"></div>
+    ${nameField}
     <input type="hidden" id="fUserRole" value="">
     <div class="form-row">
       <div class="form-group"><label>所屬組織 + 各組織角色</label>

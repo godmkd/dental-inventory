@@ -1119,8 +1119,8 @@ function hasPermission(perm) {
   if (!userProfile) return false;
   // System admin always has all permissions
   if (isSystemAdmin()) return true;
-  // org_admin gets all permissions within their org, except use_ai and arrange_layout
-  if (isOrgAdmin() && perm !== 'use_ai') return true;
+  // org_admin gets all permissions within their org
+  if (isOrgAdmin()) return true;
   // Check per-org role
   const orgRoleId = window._userOrgRoleIds?.[window._currentOrgId];
   if (orgRoleId) {
@@ -1351,7 +1351,7 @@ function buildBubbles() {
     { id: 'admin-clinics',    icon: '🏥', label: '診所管理', size: 'small',  top: '64%', left: '76%', pt: '56%', pl: '12%', lt: '68%', ll: '65%',  delay: '3.7s', duration: '5.2s', anim: 'float' },
     { id: 'user-list',        icon: '👤', label: '人員管理', size: 'small',  top: '67%', left: '84%', pt: '57%', pl: '37%', lt: '70%', ll: '73%',  delay: '4.5s', duration: '7s',   anim: 'float2', perm: 'manage_users' },
     { id: 'role-mgmt',        icon: '🔐', label: '角色管理', size: 'small',  top: '64%', left: '92%', pt: '56%', pl: '62%', lt: '68%', ll: '82%',  delay: '3.3s', duration: '6s',   anim: 'float3', perm: 'manage_roles' },
-    { id: 'ai-assistant',     icon: '🤖', label: 'AI 助手', size: 'large',  top: '55%', left: '50%', pt: '45%', pl: '50%', lt: '55%', ll: '45%',  delay: '1.5s', duration: '7s',   anim: 'float2', perm: 'use_ai' },
+    { id: 'ai-assistant',     icon: '🤖', label: 'AI 助手', size: 'large',  top: '55%', left: '50%', pt: '45%', pl: '50%', lt: '55%', ll: '45%',  delay: '1.5s', duration: '7s',   anim: 'float2' },
     { id: 'org-mgmt',         icon: '🏢', label: '組織管理', size: 'small', top: '70%', left: '50%', pt: '58%', pl: '85%', lt: '72%', ll: '50%',  delay: '4s',   duration: '6.5s', anim: 'float3', perm: 'manage_roles' },
     { id: 'switch-org',       icon: '🔄', label: '切換組織', size: 'medium', top: '75%', left: '40%', pt: '60%', pl: '40%', lt: '75%', ll: '40%',  delay: '2s',   duration: '7s',   anim: 'float', special: 'switch-org' },
   ];
@@ -1706,7 +1706,7 @@ function openBgSettingModal() {
             { id:'admin-clinics', icon:'🏥', label:'診所管理', perm:'manage_clinics' },
             { id:'user-list', icon:'👤', label:'人員管理', perm:'manage_users' },
             { id:'role-mgmt', icon:'🔐', label:'角色管理', perm:'manage_roles' },
-            { id:'ai-assistant', icon:'🤖', label:'AI 助手', perm:'use_ai' },
+            { id:'ai-assistant', icon:'🤖', label:'AI 助手' },
           ];
           return config.filter(c => !c.perm || hasPermission(c.perm)).map(c => {
             const hasImg = imgs[c.id];
@@ -3012,7 +3012,6 @@ const _pagePermMap = {
   'admin-materials': 'manage_orders', 'notify-settings': 'manage_orders', 'order-stats': 'view_prices',
   'customize': 'change_background', 'daily-summary': 'daily_changes',
   'admin-clinics': 'manage_clinics', 'user-list': 'manage_users', 'role-mgmt': 'manage_roles',
-  'ai-assistant': 'use_ai',
   'org-mgmt': 'manage_roles'
 };
 
@@ -7015,25 +7014,32 @@ async function renderUserMgmt() {
 
 async function renderUsersList(el) {
   await Promise.all([loadUsers(), loadOrganizations()]);
-  const { data: allUserOrgs } = await withTimeout(sb.from('user_organizations').select('user_id,org_id,role,role_id'));
-  // Filter users by organization
+  const { data: allUserOrgsRaw } = await withTimeout(sb.from('user_organizations').select('user_id,org_id,role,role_id'));
+  // Filter users and org memberships by organization scope
   let visibleUsers = allUsers;
+  let visibleUserOrgs = allUserOrgsRaw || [];
+  let visibleOrgs = allOrganizations;
+  let showNoOrgUsers = true;
   if (!isSystemAdmin()) {
     const myOrgIds = getVisibleOrgIds();
-    const usersInMyOrgs = new Set((allUserOrgs || []).filter(uo => myOrgIds.includes(uo.org_id)).map(uo => uo.user_id));
+    // Only show org memberships within admin's own orgs
+    visibleUserOrgs = visibleUserOrgs.filter(uo => myOrgIds.includes(uo.org_id));
+    visibleOrgs = allOrganizations.filter(o => myOrgIds.includes(o.id));
+    const usersInMyOrgs = new Set(visibleUserOrgs.map(uo => uo.user_id));
     visibleUsers = allUsers.filter(u => usersInMyOrgs.has(u.id));
+    showNoOrgUsers = false;
   }
   // Build rows grouped by org, users in multiple orgs appear multiple times
   const rows = [];
   const orgGroups = {};
-  (allUserOrgs || []).forEach(uo => {
+  visibleUserOrgs.forEach(uo => {
     if (!orgGroups[uo.org_id]) orgGroups[uo.org_id] = [];
     const u = visibleUsers.find(x => x.id === uo.user_id);
     if (u) orgGroups[uo.org_id].push({ ...u, _orgRoleId: uo.role_id, _orgRole: uo.role });
   });
-  // Also add users not in any org
-  const usersInOrgs = new Set((allUserOrgs || []).map(uo => uo.user_id));
-  const noOrgUsers = visibleUsers.filter(u => !usersInOrgs.has(u.id));
+  // Also add users not in any org (only for system admin)
+  const usersInOrgs = new Set(visibleUserOrgs.map(uo => uo.user_id));
+  const noOrgUsers = showNoOrgUsers ? visibleUsers.filter(u => !usersInOrgs.has(u.id)) : [];
 
   // Load user clinics + all clinics (unfiltered for name lookup)
   const { data: allUC } = await withTimeout(sb.from('user_clinics').select('user_id,clinic_id'));
@@ -7046,7 +7052,7 @@ async function renderUsersList(el) {
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>姓名</th><th>組織</th><th>角色</th><th>所屬診所</th><th>狀態</th><th>操作</th></tr></thead>
       <tbody>
-      ${allOrganizations.filter(o => orgGroups[o.id]?.length > 0).map(org => {
+      ${visibleOrgs.filter(o => orgGroups[o.id]?.length > 0).map(org => {
         const members = orgGroups[org.id] || [];
         const ogId = 'userOrgGroup_' + org.id;
         return `<tr style="background:rgba(99,179,237,0.08);cursor:pointer" onclick="document.querySelectorAll('.${ogId}').forEach(r=>r.style.display=r.style.display==='none'?'':'none');this.querySelector('.ug-arr').textContent=document.querySelector('.${ogId}')?.style.display==='none'?'▶':'▼'"><td colspan="6" style="font-weight:600;color:var(--accent);padding:8px 12px"><span class="ug-arr" style="font-size:.7em;margin-right:6px">▼</span>🏢 ${escHtml(org.name)} (${members.length}人)</td></tr>` +

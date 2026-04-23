@@ -3198,7 +3198,7 @@ async function renderStockOverview() {
       </div>
       <div id="${scId}"><div class="table-wrap"><table style="min-width:max-content">
       <thead><tr><th style="white-space:nowrap">品項</th>${clinicsToShow.map(c => `<th style="white-space:nowrap;min-width:60px">${escHtml(c.name)}</th>`).join('')}<th style="white-space:nowrap">總計</th></tr></thead><tbody>`;
-    const canSetSafety = hasPermission('manage_orders') || hasPermission('create_orders');
+    const canSetSafety = hasPermission('manage_orders');
     mats.forEach(m => {
       let total = 0;
       const cells = clinicsToShow.map(c => {
@@ -3458,6 +3458,7 @@ async function exportDailySummary() {
 }
 
 async function saveGlobalSafety(materialId, value, inputEl) {
+  if (!hasPermission('manage_orders')) { toast('無權限修改安全庫存', 'error'); return; }
   const v = parseInt(value);
   if (isNaN(v) || v < 0) return;
   const { error } = await withTimeout(sb.from('materials').update({ default_safety_stock: v }).eq('id', materialId));
@@ -3474,6 +3475,7 @@ async function saveGlobalSafety(materialId, value, inputEl) {
 }
 
 async function saveClinicSafety(clinicId, materialId, value, globalDefault) {
+  if (!hasPermission('manage_orders')) { toast('無權限修改安全庫存', 'error'); return; }
   const raw = value.trim();
   const v = raw === '' ? globalDefault : parseInt(raw);
   if (isNaN(v) || v < 0) return;

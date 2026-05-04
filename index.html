@@ -3097,15 +3097,19 @@ const _pagePermMap = {
 
 function applyBrowseMask() {
   if (!window._hasBrowseMode) return;
-  // Check if user has actual permission for current page
   const pageId = typeof currentPage !== 'undefined' ? currentPage : '';
   const requiredPerm = _pagePermMap[pageId];
-  if (requiredPerm && hasPermission(requiredPerm)) {
-    // User has real permission — don't mask, allow full operation
+  // Pages with no permission requirement (e.g. account-settings,
+  // ai-assistant, tutorials) belong to everyone and must NOT be masked.
+  if (!requiredPerm) {
     document.body.classList.remove('browse-mode');
     return;
   }
-  // No real permission — apply browse masking
+  if (hasPermission(requiredPerm)) {
+    document.body.classList.remove('browse-mode');
+    return;
+  }
+  // User lacks the required permission → apply browse masking
   document.body.classList.add('browse-mode');
   // Mask numbers in table cells
   document.querySelectorAll('.content-section.active td').forEach(td => {

@@ -3657,6 +3657,26 @@ async function renderDailyChange(container) {
   loadDailyDraft();   // restore in-progress entries (after reset, before render)
   renderDailyContent();
   loadDailyConfirmedLogs();
+
+  // If there's a leftover draft from a previous session, alert the user
+  // once per page entry so they know to either continue or clear it.
+  const draftCount = Object.values(dailyQtyMap).filter(v => v).length;
+  if (draftCount > 0 && !window._dailyDraftPrompted) {
+    window._dailyDraftPrompted = true;
+    openModal(
+      '⚠️ 上次有未送出的變動',
+      `<p>目前表單載入了 <b>${draftCount}</b> 項上次還沒送出的調整。</p>
+       <ul style="margin:12px 0;padding-left:20px;line-height:1.6">
+         <li>要繼續上次的調整 → 按「<b>保留草稿</b>」</li>
+         <li>這次是新的盤點/變動 → 按「<b>清除全部</b>」重新開始</li>
+       </ul>
+       <p style="color:var(--danger);font-size:.88em;margin:12px 0 0">
+         ⚠️ 沒清除就直接送出會把上次的數量一起記入！
+       </p>`,
+      `<button class="btn btn-ghost" onclick="closeModal()">保留草稿</button>
+       <button class="btn btn-danger" onclick="clearAllDailyQty();toast('已清除上次草稿');closeModal()">清除全部</button>`
+    );
+  }
 }
 
 window.switchDailyView = function(mode) {

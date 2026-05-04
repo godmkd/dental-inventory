@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dental-inventory-v5';
+const CACHE_NAME = 'dental-inventory-v6';
 const ASSETS = [
   './',
   './index.html',

@@ -3579,8 +3579,6 @@ async function renderDailyChange(container) {
     const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId));
     dailyInvMap = {};
     (inv || []).forEach(i => { dailyInvMap[i.material_id] = i; });
-    // Restore in-progress draft so reload / accidental disconnect doesn't wipe input
-    loadDailyDraft();
   }
 
   if (!window._dailyTab) window._dailyTab = 'operate';
@@ -3656,6 +3654,7 @@ async function renderDailyChange(container) {
 
   window._dailyFilterCatId = 0;
   dailyQtyMap = {};
+  loadDailyDraft();   // restore in-progress entries (after reset, before render)
   renderDailyContent();
   loadDailyConfirmedLogs();
 }

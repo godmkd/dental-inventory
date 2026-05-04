@@ -659,6 +659,36 @@ let orderConfirmItems = []; // confirmed order items for 2-step ordering
 
 // Persistent qty maps (survive view mode switches)
 let dailyQtyMap = {}; // { materialId: qty }
+
+// Persist the daily-change form so a reload / disconnect doesn't wipe the user's input.
+const DAILY_DRAFT_KEY = 'dental_daily_draft';
+function saveDailyDraft() {
+  if (typeof dailyClinicId === 'undefined' || !dailyClinicId) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(DAILY_DRAFT_KEY) || '{}');
+    // Only keep non-zero entries
+    const trimmed = {};
+    for (const k in dailyQtyMap) if (dailyQtyMap[k]) trimmed[k] = dailyQtyMap[k];
+    if (Object.keys(trimmed).length === 0) delete all[dailyClinicId];
+    else all[dailyClinicId] = trimmed;
+    localStorage.setItem(DAILY_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) { console.warn('saveDailyDraft failed', e); }
+}
+function loadDailyDraft() {
+  if (typeof dailyClinicId === 'undefined' || !dailyClinicId) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(DAILY_DRAFT_KEY) || '{}');
+    if (all[dailyClinicId]) dailyQtyMap = { ...all[dailyClinicId] };
+  } catch {}
+}
+function clearDailyDraft() {
+  if (typeof dailyClinicId === 'undefined' || !dailyClinicId) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(DAILY_DRAFT_KEY) || '{}');
+    delete all[dailyClinicId];
+    localStorage.setItem(DAILY_DRAFT_KEY, JSON.stringify(all));
+  } catch {}
+}
 let orderQtyMap = {}; // { materialId: qty }
 
 // ===================== INIT =====================
@@ -3549,6 +3579,8 @@ async function renderDailyChange(container) {
     const { data: inv } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId));
     dailyInvMap = {};
     (inv || []).forEach(i => { dailyInvMap[i.material_id] = i; });
+    // Restore in-progress draft so reload / accidental disconnect doesn't wipe input
+    loadDailyDraft();
   }
 
   if (!window._dailyTab) window._dailyTab = 'operate';
@@ -3590,7 +3622,7 @@ async function renderDailyChange(container) {
       <button class="btn btn-sm ${window._dailyViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._dailyViewType='equipment';window._dailyFilterCatId=0;renderDailyChange()">非耗材</button>
     </div>
     <div class="toolbar">
-      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="dailyClinicId=parseInt(this.value);renderDailyChange()">
+      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="saveDailyDraft();dailyQtyMap={};dailyClinicId=parseInt(this.value);renderDailyChange()">
         ${myClinics.map(c => `<option value="${c.id}"${c.id === dailyClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(dailyClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterDailyItems(this.value)" id="dailySearch">
@@ -3658,7 +3690,7 @@ function dailyMatCard(m) {
       ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}" onclick="event.stopPropagation();showImgLightbox('${m.image_url}')" style="cursor:zoom-in">` : '<div class="mat-card-icon">📦</div>'}
       <div class="mat-card-name">${escHtml(m.name)}</div>
       <div class="mat-card-stock">庫存: ${stock}</div>
-      <input type="number" id="daily_${m.id}" value="${qty}" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
+      <input type="number" id="daily_${m.id}" value="${qty}" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);saveDailyDraft();updateDailySubmitBar()">
     </div>
     <button class="adj-right" onclick="adjDailyQty(${m.id},1)">+</button>
   </div>`;
@@ -3675,7 +3707,7 @@ function dailyMatRow(m) {
     <div class="item-row-right">
       <div class="inline-adjuster">
         <button class="adj-btn" onclick="adjDailyQty(${m.id},-1)">−</button>
-        <input type="number" id="daily_${m.id}" value="${qty}" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);updateDailySubmitBar()">
+        <input type="number" id="daily_${m.id}" value="${qty}" onchange="dailyQtyMap[${m.id}]=parseInt(this.value||0);saveDailyDraft();updateDailySubmitBar()">
         <button class="adj-btn" onclick="adjDailyQty(${m.id},1)">+</button>
       </div>
       <button class="btn-reset-item" onclick="resetDailyQty(${m.id})" title="重置">↺</button>
@@ -3720,6 +3752,7 @@ window.adjDailyQty = function(matId, delta) {
   const val = parseInt(el.value || 0) + delta;
   el.value = val;
   dailyQtyMap[matId] = val;
+  saveDailyDraft();
   updateDailySubmitBar();
 };
 
@@ -3727,11 +3760,13 @@ window.resetDailyQty = function(matId) {
   dailyQtyMap[matId] = 0;
   const el = document.getElementById('daily_' + matId);
   if (el) el.value = 0;
+  saveDailyDraft();
   updateDailySubmitBar();
 };
 
 window.clearAllDailyQty = function() {
   dailyQtyMap = {};
+  saveDailyDraft();
   allMaterials.forEach(m => {
     const el = document.getElementById('daily_' + m.id);
     if (el) el.value = 0;
@@ -3845,6 +3880,7 @@ async function submitDailyChanges() {
     }
     toast('所有變動已送出');
     dailyQtyMap = {};
+    clearDailyDraft();
     // Reload inventory
     const { data: invData } = await withTimeout(sb.from('clinic_inventory').select('*').eq('clinic_id', dailyClinicId));
     dailyInvMap = {};

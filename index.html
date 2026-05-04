@@ -691,6 +691,35 @@ function clearDailyDraft() {
 }
 let orderQtyMap = {}; // { materialId: qty }
 
+// Persist the ordering form so reload / disconnect doesn't wipe input.
+const ORDER_DRAFT_KEY = 'dental_order_draft';
+function saveOrderDraft() {
+  if (typeof orderClinicId === 'undefined' || !orderClinicId) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(ORDER_DRAFT_KEY) || '{}');
+    const trimmed = {};
+    for (const k in orderQtyMap) if (orderQtyMap[k]) trimmed[k] = orderQtyMap[k];
+    if (Object.keys(trimmed).length === 0) delete all[orderClinicId];
+    else all[orderClinicId] = trimmed;
+    localStorage.setItem(ORDER_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) { console.warn('saveOrderDraft failed', e); }
+}
+function loadOrderDraft() {
+  if (typeof orderClinicId === 'undefined' || !orderClinicId) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(ORDER_DRAFT_KEY) || '{}');
+    if (all[orderClinicId]) orderQtyMap = { ...all[orderClinicId] };
+  } catch {}
+}
+function clearOrderDraft() {
+  if (typeof orderClinicId === 'undefined' || !orderClinicId) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(ORDER_DRAFT_KEY) || '{}');
+    delete all[orderClinicId];
+    localStorage.setItem(ORDER_DRAFT_KEY, JSON.stringify(all));
+  } catch {}
+}
+
 // ===================== INIT =====================
 async function init() {
   const params = new URLSearchParams(window.location.search);
@@ -4158,7 +4187,7 @@ async function renderOrdering(container) {
       <button class="btn btn-sm ${window._orderViewType==='equipment'?'btn-primary':'btn-ghost'}" onclick="window._orderViewType='equipment';window._orderFilterCatId=0;renderOrdering()">非耗材</button>
     </div>
     <div class="toolbar">
-      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="orderClinicId=parseInt(this.value);loadConfirmedOrders()">
+      ${myClinics.length > 1 ? `<select class="search-box" style="flex:none;width:auto" onchange="saveOrderDraft();orderQtyMap={};orderClinicId=parseInt(this.value);renderOrdering()">
         ${myClinics.map(c => `<option value="${c.id}"${c.id === orderClinicId ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('')}
       </select>` : `<strong>${escHtml(clinicName(orderClinicId))}</strong>`}
       <input class="search-box" placeholder="搜尋品項..." oninput="filterOrderItems(this.value)">
@@ -4194,10 +4223,29 @@ async function renderOrdering(container) {
   document.getElementById('orderCatChips').innerHTML = chipHtml;
   window._orderFilterCatId = 0;
   orderQtyMap = {};
+  loadOrderDraft();   // restore in-progress entries
 
   renderOrderContent();
   updateOrderConfirmArea();
   loadConfirmedOrders();
+
+  const draftCount = Object.values(orderQtyMap).filter(v => v).length;
+  if (draftCount > 0 && !window._orderDraftPrompted) {
+    window._orderDraftPrompted = true;
+    openModal(
+      '⚠️ 上次有未送出的叫貨',
+      `<p>目前表單載入了 <b>${draftCount}</b> 項上次還沒送出的叫貨。</p>
+       <ul style="margin:12px 0;padding-left:20px;line-height:1.6">
+         <li>要繼續上次的叫貨 → 按「<b>保留草稿</b>」</li>
+         <li>這次是新的叫貨 → 按「<b>清除全部</b>」重新開始</li>
+       </ul>
+       <p style="color:var(--danger);font-size:.88em;margin:12px 0 0">
+         ⚠️ 沒清除就直接送出會把上次的數量一起加進新單！
+       </p>`,
+      `<button class="btn btn-ghost" onclick="closeModal()">保留草稿</button>
+       <button class="btn btn-danger" onclick="clearAllOrderQty();toast('已清除上次草稿');closeModal()">清除全部</button>`
+    );
+  }
 }
 
 window.switchOrderView = function(mode) {
@@ -4230,7 +4278,7 @@ function orderMatCard(m) {
       ${m.image_url ? `<img class="mat-card-img" src="${m.image_url}" onclick="event.stopPropagation();showImgLightbox('${m.image_url}')" style="cursor:zoom-in">` : '<div class="mat-card-icon">📦</div>'}
       <div class="mat-card-name">${escHtml(m.name)}</div>
       <div class="mat-card-stock">庫存:${stock} ${escHtml(m.unit)}${canSeePrice() ? ' ' + fmtMoney(m.unit_price) : ''}</div>
-      <input type="number" id="order_${m.id}" value="${qty}" min="0" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
+      <input type="number" id="order_${m.id}" value="${qty}" min="0" style="width:40px;height:24px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:.82rem;font-weight:600;background:var(--card);color:var(--text)" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;saveOrderDraft();updateOrderSubmitBar()">
     </div>
     <button class="adj-right" onclick="adjOrderQty(${m.id},1)">+</button>
   </div>`;
@@ -4249,7 +4297,7 @@ function orderMatRow(m) {
     <div class="item-row-right">
       <div class="inline-adjuster">
         <button class="adj-btn" onclick="adjOrderQty(${m.id},-1)">−</button>
-        <input type="number" id="order_${m.id}" value="${qty}" min="0" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;updateOrderSubmitBar()">
+        <input type="number" id="order_${m.id}" value="${qty}" min="0" onchange="var v=parseInt(this.value||0);if(v<0)v=0;this.value=v;orderQtyMap[${m.id}]=v;saveOrderDraft();updateOrderSubmitBar()">
         <button class="adj-btn" onclick="adjOrderQty(${m.id},1)">+</button>
       </div>
       <button class="btn-reset-item" onclick="resetOrderQty(${m.id})" title="重置">↺</button>
@@ -4294,6 +4342,7 @@ window.adjOrderQty = function(matId, delta) {
   if (val < 0) val = 0;
   el.value = val;
   orderQtyMap[matId] = val;
+  saveOrderDraft();
   updateOrderSubmitBar();
 };
 
@@ -4301,6 +4350,7 @@ window.resetOrderQty = function(matId) {
   orderQtyMap[matId] = 0;
   const el = document.getElementById('order_' + matId);
   if (el) el.value = 0;
+  saveOrderDraft();
   updateOrderSubmitBar();
 };
 
@@ -4310,6 +4360,7 @@ window.clearAllOrderQty = function() {
     const el = document.getElementById('order_' + m.id);
     if (el) el.value = 0;
   });
+  saveOrderDraft();
   updateOrderSubmitBar();
 };
 
@@ -4454,6 +4505,7 @@ async function submitOrdering() {
     toast('叫貨單已送出');
     orderConfirmItems = [];
     orderQtyMap = {};
+    clearOrderDraft();
     updateOrderConfirmArea();
     updateOrderSubmitBar();
     loadConfirmedOrders();

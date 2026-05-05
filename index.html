@@ -1441,6 +1441,8 @@ function buildBubbles() {
   const simpleMode = isSimpleMode();
   const showSwitchOrg = isSystemAdmin() || window._userOrgIds.length > 1;
   bubbleConfig.forEach(b => {
+    // AI assistant: system admin only
+    if (b.id === 'ai-assistant' && !isSystemAdmin()) return;
     // Switch org bubble: only show for multi-org users or admin
     if (b.special === 'switch-org' && !showSwitchOrg) return;
     // Simple mode: hide rush-mgmt and receiving (收貨在貨單管理裡完成)
@@ -1786,9 +1788,12 @@ function openBgSettingModal() {
             { id:'admin-clinics', icon:'🏥', label:'診所管理', perm:'manage_clinics' },
             { id:'user-list', icon:'👤', label:'人員管理', perm:'manage_users' },
             { id:'role-mgmt', icon:'🔐', label:'角色管理', perm:'manage_roles' },
-            { id:'ai-assistant', icon:'🤖', label:'AI 助手' },
+            { id:'ai-assistant', icon:'🤖', label:'AI 助手', adminOnly: true },
           ];
-          return config.filter(c => !c.perm || hasPermission(c.perm)).map(c => {
+          return config.filter(c => {
+            if (c.adminOnly && !isSystemAdmin()) return false;
+            return !c.perm || hasPermission(c.perm);
+          }).map(c => {
             const hasImg = imgs[c.id];
             const labelColor = colors[c.id] || '#ffffff';
             return '<div style="text-align:center">' +
@@ -2792,6 +2797,16 @@ async function saveGeminiKey() {
 
 function renderAIAssistant() {
   const mc = document.getElementById('mainContent');
+  // Gate: AI assistant is system-admin only
+  if (!isSystemAdmin()) {
+    mc.innerHTML = `
+      <div class="page-title">🔒 沒有權限</div>
+      <div class="card" style="text-align:center;padding:40px">
+        <div style="font-size:3rem;margin-bottom:16px">🔒</div>
+        <div style="font-size:1rem;color:var(--text-light)">AI 助手僅限系統管理員使用</div>
+      </div>`;
+    return;
+  }
   loadGeminiKey();
   mc.innerHTML = `
     <div class="page-title">🤖 AI 助手</div>
